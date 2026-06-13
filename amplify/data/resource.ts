@@ -1090,6 +1090,14 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(runHeatmapper)),
+    runPointFinder: a
+      .mutation()
+      .arguments({
+        projectId: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.group('sysadmin')])
+      .handler(a.handler.function(runPointFinder)),
     deleteProjectInFull: a
       .mutation()
       .arguments({
@@ -1359,6 +1367,7 @@ export type RunScoutbotHandler = MutationHandler<{ projectId: string; bucket: st
 export type RunMadDetectorHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string }>;
 export type RunStormflyDetectorHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string }>;
 export type RunHeatmapperHandler = MutationHandler<{ projectId: string; images?: string[] | null }>;
+export type RunPointFinderHandler = MutationHandler<{ projectId: string }>;
 
 export type GetJwtSecretHandler = MutationHandler<Record<string, never>, string>;
 

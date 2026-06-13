@@ -1,13 +1,12 @@
 import type { Handler } from 'aws-lambda';
 import { env } from '$amplify/env/runPointFinder';
 import { Amplify } from 'aws-amplify';
-import { SendMessageCommand, SQSClient } from '@aws-sdk/client-sqs';
-import { generateClient, GraphQLResult } from 'aws-amplify/data';
 import {
-  getProject,
-  imagesByProjectId,
-  locationSetsByProjectId,
-} from './graphql/queries';
+  SendMessageBatchCommand,
+  SQSClient,
+  type SendMessageBatchRequestEntry,
+} from '@aws-sdk/client-sqs';
+import { generateClient, GraphQLResult } from 'aws-amplify/data';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 
 Amplify.configure(
@@ -53,70 +52,176 @@ interface Image {
   originalPath: string;
 }
 
-async function fetchAllPages<T, K extends string>(
-  queryFn: (
-    nextToken?: string
-  ) => Promise<GraphQLResult<{ [key in K]: PagedList<T> }>>,
-  queryName: K
-): Promise<T[]> {
-  const allItems: T[] = [];
-  let nextToken: string | undefined;
-
-  do {
-    const response = await queryFn(nextToken);
-    const items = response.data?.[queryName]?.items ?? [];
-    allItems.push(...(items as T[]));
-    nextToken = response.data?.[queryName]?.nextToken ?? undefined;
-  } while (nextToken);
-
-  console.log(
-    `Completed fetching all ${queryName} pages. Total items: ${allItems.length}`
-  );
-  return allItems;
+interface LocationSet {
+  id: string;
+  name: string;
 }
 
-export const handler: Handler = async (event, context) => {
+const getPointFinderProject = /* GraphQL */ `
+  query GetPointFinderProject($id: ID!) {
+    getProject(id: $id) {
+      id
+      organizationId
+      tags
+    }
+  }
+`;
+
+const pointFinderImagesByProjectId = /* GraphQL */ `
+  query PointFinderImagesByProjectId(
+    $projectId: ID!
+    $limit: Int
+    $nextToken: String
+  ) {
+    imagesByProjectId(
+      projectId: $projectId
+      limit: $limit
+      nextToken: $nextToken
+    ) {
+      items {
+        id
+        projectId
+        originalPath
+      }
+      nextToken
+    }
+  }
+`;
+
+const pointFinderLocationSetsByProjectId = /* GraphQL */ `
+  query PointFinderLocationSetsByProjectId($projectId: ID!) {
+    locationSetsByProjectId(projectId: $projectId, limit: 100) {
+      items {
+        id
+        name
+      }
+    }
+  }
+`;
+
+const IMAGE_PAGE_SIZE = 1000;
+const SQS_BATCH_SIZE = 10;
+const SQS_BATCH_CONCURRENCY = 10;
+const MAX_BATCH_ATTEMPTS = 3;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+async function sendBatchWithRetry(
+  sqsClient: SQSClient,
+  queueUrl: string,
+  entries: SendMessageBatchRequestEntry[]
+): Promise<void> {
+  let pending = entries;
+
+  for (let attempt = 1; attempt <= MAX_BATCH_ATTEMPTS; attempt++) {
+    const result = await sqsClient.send(
+      new SendMessageBatchCommand({
+        QueueUrl: queueUrl,
+        Entries: pending,
+      })
+    );
+    const failedIds = new Set((result.Failed ?? []).map((item) => item.Id));
+
+    if (failedIds.size === 0) {
+      return;
+    }
+
+    pending = pending.filter((entry) => failedIds.has(entry.Id!));
+    console.warn(
+      `Point-finder SQS batch attempt ${attempt} failed for ${pending.length} message(s)`
+    );
+  }
+
+  throw new Error(
+    `Failed to submit ${pending.length} point-finder message(s) after ${MAX_BATCH_ATTEMPTS} attempts`
+  );
+}
+
+async function enqueueImagePage(
+  sqsClient: SQSClient,
+  queueUrl: string,
+  images: Image[],
+  options: {
+    isLegacyProject: boolean;
+    organizationId: string;
+    projectId: string;
+    locationSetId: string;
+  }
+): Promise<void> {
+  const entries = images.map(
+    (image, index): SendMessageBatchRequestEntry => ({
+      Id: index.toString(),
+      MessageBody: JSON.stringify({
+        imageId: image.id,
+        projectId: image.projectId,
+        key: options.isLegacyProject
+          ? `heatmaps/${image.originalPath}.h5`
+          : `heatmaps/${options.organizationId}/${options.projectId}/${image.originalPath}.h5`,
+        width: 1024,
+        height: 1024,
+        threshold: 0.95,
+        bucket: env.OUTPUTS_BUCKET_NAME,
+        setId: options.locationSetId,
+      }),
+    })
+  );
+  const batches = chunk(entries, SQS_BATCH_SIZE);
+
+  for (let i = 0; i < batches.length; i += SQS_BATCH_CONCURRENCY) {
+    await Promise.all(
+      batches
+        .slice(i, i + SQS_BATCH_CONCURRENCY)
+        .map((batch) => sendBatchWithRetry(sqsClient, queueUrl, batch))
+    );
+  }
+}
+
+export const handler: Handler = async (event) => {
   const projectId = event.arguments?.projectId ?? (event.projectId as string);
   if (!projectId) {
     console.error('projectId not provided');
     throw new Error('projectId not provided');
   }
   try {
-    const projectResponse = await client.graphql({
-      query: getProject,
+    const projectResponse = (await client.graphql({
+      query: getPointFinderProject,
       variables: { id: projectId },
-    });
+    })) as GraphQLResult<{
+      getProject: {
+        id: string;
+        organizationId: string;
+        tags?: string[] | null;
+      } | null;
+    }>;
 
-    const organizationId = projectResponse.data?.getProject?.organizationId;
+    const project = projectResponse.data?.getProject;
+    if (!project) {
+      throw new Error(`Project ${projectId} not found`);
+    }
+
+    const organizationId = project.organizationId;
     const tagsRaw = projectResponse.data?.getProject?.tags ?? [];
     const tags = Array.isArray(tagsRaw)
       ? tagsRaw.filter((t): t is string => typeof t === 'string')
       : [];
     const isLegacyProject = tags.includes('legacy');
 
-    const images = await fetchAllPages<Image, 'imagesByProjectId'>(
-      (nextToken) =>
-        client.graphql({
-          query: imagesByProjectId,
-          variables: {
-            projectId,
-            limit: 10000,
-            nextToken,
-          },
-        }) as Promise<GraphQLResult<{ imagesByProjectId: PagedList<Image> }>>,
-      'imagesByProjectId'
-    );
-
-    const {
-      data: { locationSetsByProjectId: locationSets },
-    } = await client.graphql({
-      query: locationSetsByProjectId,
+    const locationSetsResponse = (await client.graphql({
+      query: pointFinderLocationSetsByProjectId,
       variables: {
         projectId,
       },
-    });
+    })) as GraphQLResult<{
+      locationSetsByProjectId: PagedList<LocationSet>;
+    }>;
 
-    const locationSet = locationSets.items.find((locationSet) =>
+    const locationSet = locationSetsResponse.data?.locationSetsByProjectId.items.find((locationSet) =>
       locationSet.name.includes('elephant-detection-nadir')
     );
 
@@ -148,65 +253,59 @@ export const handler: Handler = async (event, context) => {
       },
     });
 
-    try {
-      await Promise.all(
-        images.map(async (image) => {
-          try {
-            await sqsClient.send(
-              new SendMessageCommand({
-                QueueUrl: queueUrl,
-                MessageBody: JSON.stringify({
-                  imageId: image.id,
-                  projectId: image.projectId,
-                  key: isLegacyProject
-                    ? `heatmaps/${image.originalPath}.h5`
-                    : `heatmaps/${organizationId}/${projectId}/${image.originalPath}.h5`,
-                  width: 1024,
-                  height: 1024,
-                  threshold: 0.95,
-                  bucket: env.OUTPUTS_BUCKET_NAME,
-                  setId: locationSet.id,
-                }),
-              })
-            );
-            console.info(
-              `Point finder job submitted for ${image.originalPath}`
-            );
-          } catch (err) {
-            console.warn(
-              `Error submitting point finder job for ${image.originalPath}:`,
-              err
-            );
-          }
-        })
-      );
-    } catch (error: any) {
-      console.error('Error in runPointFinder:', error);
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
+    let nextToken: string | undefined;
+    let submittedCount = 0;
+    let pageNumber = 0;
+
+    do {
+      const imagesResponse = (await client.graphql({
+        query: pointFinderImagesByProjectId,
+        variables: {
+          projectId,
+          limit: IMAGE_PAGE_SIZE,
+          nextToken,
+        },
+      })) as GraphQLResult<{
+        imagesByProjectId: PagedList<Image>;
+      }>;
+      const page = imagesResponse.data?.imagesByProjectId;
+      const images = page?.items ?? [];
+
+      await enqueueImagePage(sqsClient, queueUrl, images, {
+        isLegacyProject,
+        organizationId,
+        projectId,
+        locationSetId: locationSet.id,
       });
-    }
+
+      submittedCount += images.length;
+      pageNumber += 1;
+      nextToken = page?.nextToken ?? undefined;
+      console.log(
+        `Submitted point-finder page ${pageNumber}: ${images.length} messages ` +
+          `(${submittedCount} total)`
+      );
+    } while (nextToken);
+
     return {
       statusCode: 200,
       body: JSON.stringify({
         message: 'Images received',
-        count: images.length,
+        count: submittedCount,
       }),
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorDetails =
+      error instanceof Error
+        ? { message: error.message, stack: error.stack, name: error.name }
+        : { message: String(error), stack: undefined, name: 'UnknownError' };
     console.error('Error in runPointFinder:', error);
-    console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name,
-    });
+    console.error('Error details:', errorDetails);
     return {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Error running point finder',
-        error: error.message,
+        error: errorDetails.message,
       }),
     };
   }
