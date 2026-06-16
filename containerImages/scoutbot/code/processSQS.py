@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from boto3 import Session as AWSSession
 from gql import gql
 from gql.client import Client
@@ -12,8 +13,7 @@ from contextlib import ExitStack
 import scoutbot
 from requests_aws4auth import AWS4Auth
 import multiprocessing
-from multiprocessing import Queue
-import logging        
+import logging
 import torch
                                                                                                                                          
 logging.basicConfig(level=logging.INFO)   
@@ -112,18 +112,35 @@ def main():
     queue_url = os.environ['QUEUE_URL']
     s3_client = boto3.client('s3', os.environ['REGION'])
 
-    # Create queues for inter-process communication
-    input_queue = Queue(maxsize=5)  # Adjust capacity as needed
-    output_queue = Queue()
+    # Fail fast if CUDA is unavailable, rather than consuming messages we can't process
+    if not torch.cuda.is_available():
+        logging.error('CUDA is not available. Exiting so ECS can replace this task.')
+        sys.exit(1)
+
+    # CUDA cannot be re-initialized in a forked subprocess. The torch.cuda.is_available()
+    # check above initializes a CUDA context in this parent process, so children must be
+    # started with 'spawn' (a fresh interpreter) rather than the Linux default of 'fork'.
+    ctx = multiprocessing.get_context('spawn')
+
+    # Create queues for inter-process communication (must share the spawn context)
+    input_queue = ctx.Queue(maxsize=5)  # Adjust capacity as needed
+    output_queue = ctx.Queue()
 
     # Start the scoutbot process
-    scoutbot_process = multiprocessing.Process(target=process_scoutbot, args=(input_queue, output_queue))
-    output_process = multiprocessing.Process(target=process_output, args=(output_queue,))
+    scoutbot_process = ctx.Process(target=process_scoutbot, args=(input_queue, output_queue))
+    output_process = ctx.Process(target=process_output, args=(output_queue,))
     scoutbot_process.start()
     output_process.start()
 
     try:
         while True:
+            # Fail fast if either child process has died so ECS replaces the task
+            if not scoutbot_process.is_alive() or not output_process.is_alive():
+                logging.error(f'Child process died (scoutbot exitcode={scoutbot_process.exitcode}, output exitcode={output_process.exitcode}). Exiting.')
+                scoutbot_process.terminate()
+                output_process.terminate()
+                sys.exit(1)
+
             response = sqs.receive_message(
                 QueueUrl=queue_url,
                 AttributeNames=['SentTimestamp'],
@@ -153,8 +170,10 @@ def main():
     except KeyboardInterrupt:
         print("Shutting down...")
     finally:
-        # Signal the scoutbot process to stop
-        input_queue.put(None)
+        # Signal the scoutbot process to stop (skip if it already died, so we don't
+        # block forever on a full queue)
+        if scoutbot_process.is_alive():
+            input_queue.put(None)
         scoutbot_process.join()
         output_process.join()
 

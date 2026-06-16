@@ -86,45 +86,48 @@ interface Image {
   originalPath: string;
 }
 
-interface ImageWithDetails {
-  id: string;
-  projectId: string;
-  originalPath: string;
-  locations?: {
-    items: { id: string; source: string }[];
-  };
-  processedBy?: {
-    items: { source: string }[];
-  };
+interface ImageProcessedByRow {
+  imageId: string;
 }
 
+interface LocationRow {
+  id: string;
+}
 
-const imagesByProjectIdWithDetails = /* GraphQL */ `query ImagesByProjectIdWithDetails(
+const processedByProjectIdAndSource = /* GraphQL */ `query ProcessedByProjectIdAndSource(
   $projectId: ID!
+  $source: ModelStringKeyConditionInput
   $limit: Int
   $nextToken: String
-  $source: String!
 ) {
-  imagesByProjectId(
+  processedByProjectIdAndSource(
     projectId: $projectId
+    source: $source
+    limit: $limit
+    nextToken: $nextToken
+  ) {
+    items {
+      imageId
+    }
+    nextToken
+  }
+}
+`;
+
+const locationsByImageKey = /* GraphQL */ `query LocationsByImageKey(
+  $imageId: ID!
+  $source: String!
+  $limit: Int
+  $nextToken: String
+) {
+  locationsByImageKey(
+    imageId: $imageId
+    filter: { source: { eq: $source } }
     limit: $limit
     nextToken: $nextToken
   ) {
     items {
       id
-      projectId
-      originalPath
-      locations(filter: { source: { contains: $source } }, limit: 1) {
-        items {
-          id
-          source
-        }
-      }
-      processedBy(filter: { source: { eq: $source } }, limit: 1) {
-        items {
-          source
-        }
-      }
     }
     nextToken
   }
@@ -235,49 +238,119 @@ async function fetchAllPages<T, K extends string>(
   return allItems;
 }
 
+const LOCATION_PAGE_SIZE = 50;
+const LOCATION_LOOKUP_CONCURRENCY = 25;
+
+async function hasLocationForSource(
+  imageId: string,
+  source: string
+): Promise<boolean> {
+  let nextToken: string | undefined;
+
+  do {
+    const response = (await client.graphql({
+      query: locationsByImageKey,
+      variables: {
+        imageId,
+        source,
+        limit: LOCATION_PAGE_SIZE,
+        nextToken,
+      },
+    })) as GraphQLResult<{
+      locationsByImageKey: PagedList<LocationRow>;
+    }>;
+
+    if ((response.data?.locationsByImageKey?.items?.length ?? 0) > 0) {
+      return true;
+    }
+
+    nextToken =
+      response.data?.locationsByImageKey?.nextToken ?? undefined;
+  } while (nextToken);
+
+  return false;
+}
+
 async function updateProgress(
   project: Project,
   projectImages: Image[],
   source: string
 ) {
-  console.log(`Fetching images with processing status for project ${project.id} (source: ${source})`);
+  console.log(
+    `Fetching processedBy records for project ${project.id} (source: ${source})`
+  );
 
-  const imagesWithDetails = await fetchAllPages<ImageWithDetails, 'imagesByProjectId'>(
+  const processedByRows = await fetchAllPages<
+    ImageProcessedByRow,
+    'processedByProjectIdAndSource'
+  >(
     (nextToken) =>
       client.graphql({
-        query: imagesByProjectIdWithDetails,
+        query: processedByProjectIdAndSource,
         variables: {
           projectId: project.id,
-          source: source,
+          source: { eq: source },
           limit: 10000,
           nextToken,
         },
-      }) as Promise<GraphQLResult<{ imagesByProjectId: PagedList<ImageWithDetails> }>>,
-    'imagesByProjectId',
-    (count) => {
-      console.log(`Fetched ${count} images with details for project ${project.id}`);
-    }
+      }) as Promise<
+        GraphQLResult<{
+          processedByProjectIdAndSource: PagedList<ImageProcessedByRow>;
+        }>
+      >,
+    'processedByProjectIdAndSource'
   );
 
-  console.log(`Found ${imagesWithDetails.length} total images for project ${project.id}`);
+  const processedImageIds = new Set(
+    processedByRows.map((row) => row.imageId)
+  );
+  const imagesMissingProcessedBy = projectImages.filter(
+    (image) => !processedImageIds.has(image.id)
+  );
+  const imagesToUpdateProcessedBy: Image[] = [];
 
-  const processedImageIds = new Set<string>();
-  const imagesToUpdateProcessedBy: ImageWithDetails[] = [];
+  console.log(
+    `Checking locations for ${imagesMissingProcessedBy.length} images missing ` +
+      `a ${source} processedBy record`
+  );
 
-  for (const image of imagesWithDetails) {
-    const hasLocation = (image.locations?.items?.length ?? 0) > 0;
-    const hasProcessedByRecord = (image.processedBy?.items?.length ?? 0) > 0;
+  for (
+    let i = 0;
+    i < imagesMissingProcessedBy.length;
+    i += LOCATION_LOOKUP_CONCURRENCY
+  ) {
+    const batch = imagesMissingProcessedBy.slice(
+      i,
+      i + LOCATION_LOOKUP_CONCURRENCY
+    );
+    const results = await Promise.all(
+      batch.map(async (image) => ({
+        image,
+        hasLocation: await hasLocationForSource(image.id, source),
+      }))
+    );
 
-    if (hasLocation || hasProcessedByRecord) {
-      processedImageIds.add(image.id);
-      if (hasLocation && !hasProcessedByRecord) {
-        imagesToUpdateProcessedBy.push(image);
+    for (const result of results) {
+      if (result.hasLocation) {
+        processedImageIds.add(result.image.id);
+        imagesToUpdateProcessedBy.push(result.image);
       }
     }
+
+    console.log(
+      `Checked locations for ${Math.min(
+        i + batch.length,
+        imagesMissingProcessedBy.length
+      )}/${imagesMissingProcessedBy.length} unmarked images`
+    );
   }
 
-  console.log(`Processed images: ${processedImageIds.size}/${imagesWithDetails.length}`);
-  console.log(`Images needing processedBy record update: ${imagesToUpdateProcessedBy.length}`);
+  console.log(
+    `Processed images: ${processedImageIds.size}/${projectImages.length}`
+  );
+  console.log(
+    `Images needing processedBy record update: ${imagesToUpdateProcessedBy.length}`
+  );
 
   if (imagesToUpdateProcessedBy.length > 0) {
     const BATCH_SIZE = 50;
@@ -308,8 +381,9 @@ async function updateProgress(
     }
   }
 
-  const allImagesProcessed = imagesWithDetails.length > 0 &&
-    imagesWithDetails.every((image) => processedImageIds.has(image.id));
+  const allImagesProcessed =
+    projectImages.length > 0 &&
+    projectImages.every((image) => processedImageIds.has(image.id));
 
   if (allImagesProcessed) {
     if (await isRegistrationDone(project.id)) {
@@ -327,7 +401,7 @@ async function updateProgress(
     }
   } else {
     console.log(
-      `Project ${project.id} still has ${imagesWithDetails.length - processedImageIds.size
+      `Project ${project.id} still has ${projectImages.length - processedImageIds.size
       } images to process`
     );
   }
