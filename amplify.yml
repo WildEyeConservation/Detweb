@@ -4,7 +4,21 @@ backend:
     build:
       commands:
         - npm install --cache .npm --prefer-offline
-        - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+        # NOTE: Amplify executes the console build-spec override, not this file. Keep
+        # the two in sync. Only master deploys the backend; other branches reuse
+        # master's outputs. On master, pull the gitignored scoutbot model files
+        # (~440 MB) from S3 into the image build context so `COPY models/` in the
+        # Dockerfile resolves. The bucket name comes from an Amplify env var to keep
+        # it out of the repo.
+        - |
+          if [ "$AWS_BRANCH" = "master" ]; then
+            if [ -z "$SCOUTBOT_MODELS_BUCKET" ]; then echo "SCOUTBOT_MODELS_BUCKET not set"; exit 1; fi
+            aws s3 sync "s3://$SCOUTBOT_MODELS_BUCKET/scoutbot-models/" containerImages/scoutbot/models/
+            sha256sum -c containerImages/scoutbot/models.sha256
+            npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+          else
+            npx ampx generate outputs --branch master --app-id $AWS_APP_ID
+          fi
 frontend:
   phases:
     build:
