@@ -13,8 +13,7 @@ from contextlib import ExitStack
 import scoutbot
 from requests_aws4auth import AWS4Auth
 import multiprocessing
-from multiprocessing import Queue
-import logging        
+import logging
 import torch
                                                                                                                                          
 logging.basicConfig(level=logging.INFO)   
@@ -118,13 +117,18 @@ def main():
         logging.error('CUDA is not available. Exiting so ECS can replace this task.')
         sys.exit(1)
 
-    # Create queues for inter-process communication
-    input_queue = Queue(maxsize=5)  # Adjust capacity as needed
-    output_queue = Queue()
+    # CUDA cannot be re-initialized in a forked subprocess. The torch.cuda.is_available()
+    # check above initializes a CUDA context in this parent process, so children must be
+    # started with 'spawn' (a fresh interpreter) rather than the Linux default of 'fork'.
+    ctx = multiprocessing.get_context('spawn')
+
+    # Create queues for inter-process communication (must share the spawn context)
+    input_queue = ctx.Queue(maxsize=5)  # Adjust capacity as needed
+    output_queue = ctx.Queue()
 
     # Start the scoutbot process
-    scoutbot_process = multiprocessing.Process(target=process_scoutbot, args=(input_queue, output_queue))
-    output_process = multiprocessing.Process(target=process_output, args=(output_queue,))
+    scoutbot_process = ctx.Process(target=process_scoutbot, args=(input_queue, output_queue))
+    output_process = ctx.Process(target=process_output, args=(output_queue,))
     scoutbot_process.start()
     output_process.start()
 
