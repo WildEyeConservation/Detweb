@@ -32,6 +32,36 @@ class StormflyDetectorOrientationTests(unittest.TestCase):
         self.assertEqual(seen_shapes, [(6, 4, 3)])
         self.assertEqual((detections[0].x, detections[0].y), (2, 4))
 
+    def test_detect_keeps_low_confidence_local_maxima_when_threshold_allows(self):
+        image = Image.new('RGB', (6, 6))
+
+        detector = object.__new__(StormflyDetector)
+        detector.threshold = 0.0
+
+        def fake_heatmap(_arr):
+            heatmap = np.zeros((3, 3), dtype=np.float32)
+            heatmap[1, 1] = 0.2
+            return heatmap
+
+        detector._heatmap = fake_heatmap
+
+        detections = detector.detect(image)
+
+        self.assertEqual(len(detections), 1)
+        self.assertEqual((detections[0].x, detections[0].y), (2, 2))
+        self.assertAlmostEqual(detections[0].score, 0.2)
+
+    def test_zero_threshold_does_not_emit_zero_confidence_locations(self):
+        image = Image.new('RGB', (6, 6))
+
+        detector = object.__new__(StormflyDetector)
+        detector.threshold = 0.0
+        detector._heatmap = lambda _arr: np.zeros((3, 3), dtype=np.float32)
+
+        detections = detector.detect(image)
+
+        self.assertEqual(detections, [])
+
 
 if __name__ == '__main__':
     unittest.main()

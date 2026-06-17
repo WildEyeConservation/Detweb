@@ -23,7 +23,7 @@ REGION = os.environ['REGION']
 QUEUE_URL = os.environ['QUEUE_URL']
 API_ENDPOINT = os.environ['API_ENDPOINT']
 MODEL_S3_URI = os.environ.get('STORMFLY_MODEL_S3', '')
-THRESHOLD = float(os.environ.get('STORMFLY_THRESHOLD', '0.30'))
+THRESHOLD = float(os.environ.get('STORMFLY_THRESHOLD', '0.00'))
 BOX_SIZE = int(os.environ.get('STORMFLY_BOX_SIZE', '64'))
 
 sqs = boto3.client('sqs', region_name=REGION)

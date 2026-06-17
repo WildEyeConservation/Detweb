@@ -2,6 +2,9 @@ boto3
 gql[all]
 numpy>=1.24
 onnxruntime-gpu>=1.20
+# Used only when STORMFLY_FP16 is enabled, to convert the fp32 model to fp16.
+onnx>=1.15
+onnxconverter-common>=1.14
 pillow>=9.0
 requests_aws4auth>=1.2
 
