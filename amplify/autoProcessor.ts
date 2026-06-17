@@ -45,6 +45,7 @@ type AutoProcessorProps={
   rootVolumeSize?: number;
   maxTasks?: number; // maximum desired ECS tasks to allow
   messagesPerTask?: number;
+  allowSelfRequeue?: boolean;
 }
 
 export class AutoProcessor extends Construct {
@@ -142,6 +143,9 @@ export class AutoProcessor extends Construct {
 
     // Grant permissions to the ECS task to access the SQS queue
     this.queue.grantConsumeMessages(taskDefinition.taskRole);
+    if (props.allowSelfRequeue) {
+      this.queue.grantSendMessages(taskDefinition.taskRole);
+    }
 
     // Set up scaling based on SQS queue
     const scaling = service.autoScaleTaskCount({
