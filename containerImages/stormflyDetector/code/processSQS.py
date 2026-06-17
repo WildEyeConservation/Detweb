@@ -108,11 +108,132 @@ def _write_location(body, image_id, x, y, confidence, size):
     )
 
 
+# Optional rotation support (mirrors the Scoutbot worker).
+#
+# Some surveys hold landscape images whose correct orientation is only reached by
+# rotating them (e.g. 270 CCW), but that rotation was never written to EXIF, so the
+# detector sees them in the wrong orientation. When a message carries a `rotation`
+# (CCW degrees, one of 90/180/270 - message-level, or per-image as an override) we
+# rotate the pixels before inference and map every detection point back into the
+# original/stored frame so the saved Locations still line up with the image.
+#
+# An optional `landscape` flag gates the rotation on the image's actual dimensions:
+#   landscape=True  -> only rotate when width  > height
+#   landscape=False -> only rotate when height > width
+#   landscape unset -> rotate regardless of dimensions
+_TRANSPOSE = getattr(Image, 'Transpose', Image)  # enum moved under Image.Transpose in Pillow 9.1
+_ROTATE_TRANSPOSE = {
+    90: _TRANSPOSE.ROTATE_90,    # PIL transpose rotations are counter-clockwise
+    180: _TRANSPOSE.ROTATE_180,
+    270: _TRANSPOSE.ROTATE_270,
+}
+
+
+def _normalize_rotation(value):
+    """Return rotation in CCW degrees (0/90/180/270), or 0 if unset/invalid."""
+    if value is None:
+        return 0
+    try:
+        rotation = int(value) % 360
+    except (TypeError, ValueError):
+        print(f'Ignoring invalid rotation value: {value!r}', flush=True)
+        return 0
+    if rotation not in _ROTATE_TRANSPOSE:
+        if rotation != 0:
+            print(f'Ignoring unsupported rotation {value!r} (expected 0/90/180/270 CCW)', flush=True)
+        return 0
+    return rotation
+
+
+def _get_rotation(body, image):
+    """Per-image rotation overrides the message-level rotation; both are CCW degrees."""
+    if image.get('rotation') is not None:
+        return _normalize_rotation(image.get('rotation'))
+    return _normalize_rotation(body.get('rotation'))
+
+
+def _normalize_landscape(value):
+    """Return True/False for the landscape constraint, or None when unset/invalid."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in ('true', '1', 'yes'):
+            return True
+        if lowered in ('false', '0', 'no'):
+            return False
+    print(f'Ignoring invalid landscape value: {value!r}', flush=True)
+    return None
+
+
+def _get_landscape(body, image):
+    """Per-image landscape constraint overrides the message-level one. Returns
+    True/False, or None when unset (no orientation check)."""
+    if image.get('landscape') is not None:
+        return _normalize_landscape(image.get('landscape'))
+    return _normalize_landscape(body.get('landscape'))
+
+
+def _orientation_qualifies(orig_width, orig_height, landscape):
+    """Whether an image's orientation matches the optional landscape constraint.
+    landscape=True requires width > height; False requires height > width;
+    None imposes no constraint. Square images never qualify when a constraint is set."""
+    if landscape is None:
+        return True
+    if landscape:
+        return orig_width > orig_height
+    return orig_height > orig_width
+
+
+def _maybe_rotate_image(pil_image, rotation, landscape):
+    """Return (image_for_inference, rotation_info).
+
+    When `rotation` (CCW degrees) is set and the image's orientation satisfies the
+    optional `landscape` constraint, the returned image is rotated and rotation_info
+    records the rotation + pre-rotation dimensions so detection points can be mapped
+    back to the stored frame. Otherwise the original image is returned unchanged."""
+    if not rotation:
+        return pil_image, {'rotation': 0}
+    orig_width, orig_height = pil_image.size
+    if not _orientation_qualifies(orig_width, orig_height, landscape):
+        print(
+            f'Skipping {rotation}-degree rotation: {orig_width}x{orig_height} '
+            f'does not satisfy landscape={landscape}',
+            flush=True,
+        )
+        return pil_image, {'rotation': 0}
+    rotated = pil_image.transpose(_ROTATE_TRANSPOSE[rotation])
+    return rotated, {'rotation': rotation, 'origWidth': orig_width, 'origHeight': orig_height}
+
+
+def _map_point_to_original(x, y, rotation_info):
+    """Map a detection point (x, y - in the rotated frame) back to the original
+    pre-rotation frame, using the rotation recorded in rotation_info."""
+    rotation = rotation_info.get('rotation', 0) if rotation_info else 0
+    if not rotation:
+        return x, y
+    orig_width = rotation_info['origWidth']
+    orig_height = rotation_info['origHeight']
+    if rotation == 90:
+        return orig_width - y, x
+    if rotation == 180:
+        return orig_width - x, orig_height - y
+    if rotation == 270:
+        return y, orig_height - x
+    return x, y
+
+
 def handle_message(body):
     model = _get_detector()
     for image in body['images']:
         key = image['key']
         suffix = os.path.splitext(key)[1] or '.jpg'
+        rotation = _get_rotation(body, image)
+        landscape = _get_landscape(body, image) if rotation else None
         with NamedTemporaryFile(suffix=suffix) as temp_file:
             _download_s3_object(
                 body['bucket'],
@@ -121,18 +242,22 @@ def handle_message(body):
                 f'survey image {image["imageId"]}',
             )
             with Image.open(temp_file.name) as pil_image:
-                detections = model.detect(pil_image)
+                inference_image, rotation_info = _maybe_rotate_image(
+                    pil_image, rotation, landscape
+                )
+                detections = model.detect(inference_image)
 
         if not detections:
             _write_location(body, image['imageId'], 0, 0, 0.0, 0)
             continue
 
         for detection in detections:
+            x, y = _map_point_to_original(detection.x, detection.y, rotation_info)
             _write_location(
                 body,
                 image['imageId'],
-                detection.x,
-                detection.y,
+                x,
+                y,
                 detection.score,
                 BOX_SIZE,
             )

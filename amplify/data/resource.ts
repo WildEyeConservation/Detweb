@@ -1053,6 +1053,14 @@ const schema = a
         queueUrl: a.string().required(),
         images: a.string().array(),
         setId: a.string().required(),
+        // Optional CCW rotation (90/180/270) applied before inference, for images
+        // whose true orientation is missing from EXIF. Detection boxes are mapped
+        // back to the stored frame. Used when requeueing such images.
+        rotation: a.integer(),
+        // Optional orientation guard for `rotation`: when true, only images whose
+        // width exceeds height are rotated; when false, only those with height >
+        // width; when unset, every image is rotated regardless of dimensions.
+        landscape: a.boolean(),
       })
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
@@ -1077,6 +1085,14 @@ const schema = a
         queueUrl: a.string().required(),
         images: a.string().array(),
         setId: a.string().required(),
+        // Optional CCW rotation (90/180/270) applied before inference, for images
+        // whose true orientation is missing from EXIF. Detection points are mapped
+        // back to the stored frame. Used when requeueing such images.
+        rotation: a.integer(),
+        // Optional orientation guard for `rotation`: when true, only images whose
+        // width exceeds height are rotated; when false, only those with height >
+        // width; when unset, every image is rotated regardless of dimensions.
+        landscape: a.boolean(),
       })
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
@@ -1363,9 +1379,9 @@ export type LaunchHomographyHandler = MutationHandler<{ request: string }>;
 export type ProcessImagesHandler = MutationHandler<{ s3key: string; model: string; threshold?: number | null }>;
 export type UpdateProjectMembershipsHandler = MutationHandler<{ projectId: string }>;
 export type RunImageRegistrationHandler = MutationHandler<{ projectId: string; metadata: string; queueUrl: string; images?: string[] | null }>;
-export type RunScoutbotHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string }>;
+export type RunScoutbotHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string; rotation?: number | null; landscape?: boolean | null }>;
 export type RunMadDetectorHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string }>;
-export type RunStormflyDetectorHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string }>;
+export type RunStormflyDetectorHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string; rotation?: number | null; landscape?: boolean | null }>;
 export type RunHeatmapperHandler = MutationHandler<{ projectId: string; images?: string[] | null }>;
 export type RunPointFinderHandler = MutationHandler<{ projectId: string }>;
 

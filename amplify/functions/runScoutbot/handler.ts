@@ -59,6 +59,12 @@ export const handler: RunScoutbotHandler = async (event, context) => {
     }
     const setId = event.arguments.setId;
     const bucket = event.arguments.bucket;
+    // Optional CCW rotation (90/180/270) for images whose orientation is missing
+    // from EXIF. Forwarded in the SQS body so the processor rotates before inference.
+    const rotation = event.arguments.rotation ?? undefined;
+    // Optional orientation guard: only rotate images whose dimensions match
+    // (true -> width > height, false -> height > width).
+    const landscape = event.arguments.landscape ?? undefined;
 
     const images = imagesFromEvent.map((imageStr) => {
       const [id, originalPath] = imageStr.split('---');
@@ -103,6 +109,8 @@ export const handler: RunScoutbotHandler = async (event, context) => {
               projectId,
               bucket,
               setId,
+              ...(rotation !== undefined ? { rotation } : {}),
+              ...(landscape !== undefined ? { landscape } : {}),
             }),
           })
         );
@@ -131,6 +139,8 @@ export const handler: RunScoutbotHandler = async (event, context) => {
                   setId,
                   bucket,
                   queueUrl,
+                  ...(rotation !== undefined ? { rotation } : {}),
+                  ...(landscape !== undefined ? { landscape } : {}),
                 })
               ),
             })
