@@ -4,20 +4,18 @@ import { createGroup } from '../data/create-group/resource';
 import { listUsers } from '../data/list-users/resource';
 import { listGroupsForUser } from '../data/list-groups-for-user/resource';
 import { removeUserFromGroup } from '../data/remove-user-from-group/resource';
-import { processImages } from '../functions/processImages/resource';
 import { updateUserStats } from '../functions/updateUserStats/resource';
 import { monitorModelProgress } from '../functions/monitorModelProgress/resource';
 import { updateProjectMemberships } from '../functions/updateProjectMemberships/resource';
 import { cleanupJobs } from '../functions/cleanupJobs/resource';
 import { runImageRegistration } from '../functions/runImageRegistration/resource';
 import { runScoutbot } from '../functions/runScoutbot/resource';
-import { runHeatmapper } from '../functions/runHeatmapper/resource';
-import { runPointFinder } from '../functions/runPointFinder/resource';
 import { deleteProject } from '../functions/deleteProject/resource';
 import { generateSurveyResults } from '../functions/generateSurveyResults/resource';
 import { getJwtSecret } from '../functions/getJwtSecret/resource';
 import { runMadDetector } from '../functions/runMadDetector/resource';
 import { runStormflyDetector } from '../functions/runStormflyDetector/resource';
+import { runElephantDetector } from '../functions/runElephantDetector/resource';
 import { launchAnnotationSet } from '../functions/launchAnnotationSet/resource';
 import { launchFalseNegatives } from '../functions/launchFalseNegatives/resource';
 import { requeueProjectQueues } from '../functions/requeueProjectQueues/resource';
@@ -1053,6 +1051,14 @@ const schema = a
         queueUrl: a.string().required(),
         images: a.string().array(),
         setId: a.string().required(),
+        // Optional CCW rotation (90/180/270) applied before inference, for images
+        // whose true orientation is missing from EXIF. Detection boxes are mapped
+        // back to the stored frame. Used when requeueing such images.
+        rotation: a.integer(),
+        // Optional orientation guard for `rotation`: when true, only images whose
+        // width exceeds height are rotated; when false, only those with height >
+        // width; when unset, every image is rotated regardless of dimensions.
+        landscape: a.boolean(),
       })
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
@@ -1077,27 +1083,32 @@ const schema = a
         queueUrl: a.string().required(),
         images: a.string().array(),
         setId: a.string().required(),
+        // Optional CCW rotation (90/180/270) applied before inference, for images
+        // whose true orientation is missing from EXIF. Detection points are mapped
+        // back to the stored frame. Used when requeueing such images.
+        rotation: a.integer(),
+        // Optional orientation guard for `rotation`: when true, only images whose
+        // width exceeds height are rotated; when false, only those with height >
+        // width; when unset, every image is rotated regardless of dimensions.
+        landscape: a.boolean(),
       })
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(runStormflyDetector)),
-    runHeatmapper: a
+    runElephantDetector: a
       .mutation()
       .arguments({
         projectId: a.string().required(),
+        bucket: a.string().required(),
+        queueUrl: a.string().required(),
         images: a.string().array(),
+        setId: a.string().required(),
+        rotation: a.integer(),
+        landscape: a.boolean(),
       })
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
-      .handler(a.handler.function(runHeatmapper)),
-    runPointFinder: a
-      .mutation()
-      .arguments({
-        projectId: a.string().required(),
-      })
-      .returns(a.json())
-      .authorization((allow) => [allow.group('sysadmin')])
-      .handler(a.handler.function(runPointFinder)),
+      .handler(a.handler.function(runElephantDetector)),
     deleteProjectInFull: a
       .mutation()
       .arguments({
@@ -1274,17 +1285,15 @@ const schema = a
       .authorization((allow) => [allow.group("sysadmin")])
   })
   .authorization((allow) => [
-    allow.resource(processImages),
     allow.resource(updateUserStats),
     allow.resource(monitorModelProgress),
     allow.resource(updateProjectMemberships),
     allow.resource(cleanupJobs),
     allow.resource(runImageRegistration),
     allow.resource(runScoutbot),
-    allow.resource(runHeatmapper),
-    allow.resource(runPointFinder),
     allow.resource(runMadDetector),
     allow.resource(runStormflyDetector),
+    allow.resource(runElephantDetector),
     allow.resource(launchAnnotationSet),
     allow.resource(launchFalseNegatives),
     allow.resource(launchQCReview),
@@ -1360,14 +1369,12 @@ export type LaunchAnnotationSetHandler = MutationHandler<{ request: string }>;
 export type LaunchFalseNegativesHandler = MutationHandler<{ request: string }>;
 export type LaunchQCReviewHandler = MutationHandler<{ request: string }>;
 export type LaunchHomographyHandler = MutationHandler<{ request: string }>;
-export type ProcessImagesHandler = MutationHandler<{ s3key: string; model: string; threshold?: number | null }>;
 export type UpdateProjectMembershipsHandler = MutationHandler<{ projectId: string }>;
 export type RunImageRegistrationHandler = MutationHandler<{ projectId: string; metadata: string; queueUrl: string; images?: string[] | null }>;
-export type RunScoutbotHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string }>;
+export type RunScoutbotHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string; rotation?: number | null; landscape?: boolean | null }>;
 export type RunMadDetectorHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string }>;
-export type RunStormflyDetectorHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string }>;
-export type RunHeatmapperHandler = MutationHandler<{ projectId: string; images?: string[] | null }>;
-export type RunPointFinderHandler = MutationHandler<{ projectId: string }>;
+export type RunStormflyDetectorHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string; rotation?: number | null; landscape?: boolean | null }>;
+export type RunElephantDetectorHandler = MutationHandler<{ projectId: string; bucket: string; queueUrl: string; images?: string[] | null; setId: string; rotation?: number | null; landscape?: boolean | null }>;
 
 export type GetJwtSecretHandler = MutationHandler<Record<string, never>, string>;
 

@@ -1336,6 +1336,7 @@ export default function UploadManager() {
       }
 
       if (model === 'elephant-detection-nadir') {
+        // Results use the existing elephant set and 'heatmap' source.
         const elephantSetName = `${projectId}_elephant-detection-nadir`;
         let locationSet =
           (await findLocationSetByName(elephantSetName))?.id ?? null;
@@ -1355,21 +1356,41 @@ export default function UploadManager() {
           return;
         }
 
-        for (let i = 0; i < sessionImages.length; i += BATCH_SIZE) {
-          const batch = sessionImages.slice(i, i + BATCH_SIZE);
-          const batchStrings = batch.map((image) =>
-            makeKey(image.originalPath)
+        const processedRecords = await fetchAllPaginatedResults(
+          client.models.ImageProcessedBy.processedByProjectIdAndSource,
+          {
+            projectId,
+            source: { eq: 'heatmap' },
+            selectionSet: ['imageId'],
+            limit: 10000,
+          }
+        );
+        const processedImageIds = new Set(
+          (processedRecords as { imageId: string }[]).map((r) => r.imageId)
+        );
+
+        const unprocessedImages = allProjectImages.filter(
+          (img) => !processedImageIds.has(img.id)
+        );
+
+        for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
+          const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
+          const batchStrings = batch.map(
+            (image) => `${image.id}---${makeKey(image.originalPath)}`
           );
 
-          client.mutations.runHeatmapper({
-            projectId,
+          client.mutations.runElephantDetector({
+            projectId: projectId,
             images: batchStrings,
+            setId: locationSet,
+            bucket: backend.storage.buckets[1].bucket_name,
+            queueUrl: backend.custom.elephantDetectorTaskQueueUrl,
           }, { retry: false });
         }
 
         await client.models.Project.update({
           id: projectId,
-          status: 'processing-heatmap-busy',
+          status: 'processing-pointFinder',
         });
       }
 

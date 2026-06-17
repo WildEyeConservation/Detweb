@@ -54,6 +54,11 @@ export const handler: RunStormflyDetectorHandler = async (event) => {
     const [imageId, key] = image.split('---');
     return { imageId, key: `images/${key}` };
   });
+  // Optional CCW rotation (90/180/270) and orientation guard for images whose
+  // orientation is missing from EXIF. Forwarded in the SQS body so the processor
+  // rotates before inference (and only when dimensions match, if `landscape` is set).
+  const rotation = event.arguments.rotation ?? undefined;
+  const landscape = event.arguments.landscape ?? undefined;
   const sqsClient = new SQSClient({ region: env.AWS_REGION });
 
   // Stormfly is testing-only and deliberately uses small messages because a
@@ -67,6 +72,8 @@ export const handler: RunStormflyDetectorHandler = async (event) => {
           projectId,
           bucket: event.arguments.bucket,
           setId: event.arguments.setId,
+          ...(rotation !== undefined ? { rotation } : {}),
+          ...(landscape !== undefined ? { landscape } : {}),
         }),
       })
     );

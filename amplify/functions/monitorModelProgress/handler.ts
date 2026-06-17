@@ -23,7 +23,6 @@ const updateProjectMembershipsMutation = /* GraphQL */ `
   }
 `;
 import type { GraphQLResult } from '@aws-amplify/api-graphql';
-import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 
 Amplify.configure(
@@ -56,15 +55,6 @@ Amplify.configure(
 
 const client = generateClient({
   authMode: 'iam',
-});
-
-const s3Client = new S3Client({
-  region: env.AWS_REGION,
-  credentials: {
-    accessKeyId: env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
-    sessionToken: env.AWS_SESSION_TOKEN,
-  },
 });
 
 interface PagedList<T> {
@@ -466,12 +456,6 @@ export const handler: Handler = async (event, context) => {
     for (const project of processingProjects) {
       console.log(`Processing project ${project.name} (${project.id})`);
 
-      const tagsRaw = project.tags ?? [];
-      const tags = Array.isArray(tagsRaw)
-        ? tagsRaw.filter((t): t is string => typeof t === 'string')
-        : [];
-      const isLegacyProject = tags.includes('legacy');
-
       console.log(`Fetching images for project ${project.id}`);
       const projectImages = await fetchAllPages<Image, 'imagesByProjectId'>(
         (nextToken) =>
@@ -505,72 +489,7 @@ export const handler: Handler = async (event, context) => {
         await updateProgress(project, projectImages, 'stormfly-testing');
       }
 
-      if (project.status?.includes('heatmap-busy')) {
-        console.log(`Project ${project.id} is running heatmapper`);
-
-        const imagePaths = projectImages.map((image) => image.originalPath);
-
-        const results = await Promise.all(
-          imagePaths.map(async (path) => {
-            const heatmapFilePath = isLegacyProject
-              ? `heatmaps/${path}.h5`
-              : `heatmaps/${project.organizationId}/${project.id}/${path}.h5`;
-            try {
-              await s3Client.send(
-                new HeadObjectCommand({
-                  Bucket: env.OUTPUTS_BUCKET_NAME,
-                  Key: heatmapFilePath,
-                })
-              );
-              console.info(`Heatmap file ${heatmapFilePath} available`);
-              return true;
-            } catch (err) {
-              console.warn(`Heatmap file ${heatmapFilePath} not available yet`);
-              return false;
-            }
-          })
-        );
-
-        const availableCount = results.filter((r) => r).length;
-
-        if (availableCount === imagePaths.length) {
-          console.log(`All heatmap files available for project ${project.id}`);
-          await client.graphql({
-            query: updateProject,
-            variables: {
-              input: { id: project.id, status: 'processing-heatmap-done' },
-            },
-          });
-        }
-      }
-
-      if (project.status?.includes('heatmap-done')) {
-        console.log(`Project ${project.id} is done running heatmapper`);
-        const lambdaClient = new LambdaClient({
-          region: env.AWS_REGION,
-          credentials: {
-            accessKeyId: env.AWS_ACCESS_KEY_ID,
-            secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
-            sessionToken: env.AWS_SESSION_TOKEN,
-          },
-        });
-
-        await lambdaClient.send(
-          new InvokeCommand({
-            FunctionName: env.RUN_POINT_FINDER_FUNCTION_NAME,
-            InvocationType: 'Event',
-            Payload: Buffer.from(JSON.stringify({ projectId: project.id })),
-          })
-        );
-
-        await client.graphql({
-          query: updateProject,
-          variables: {
-            input: { id: project.id, status: 'processing-pointFinder' },
-          },
-        });
-      }
-
+      // Finalize elephant detector results reported as pointFinder progress.
       if (project.status?.includes('pointFinder')) {
         console.log(`Project ${project.id} is running pointFinder`);
         await updateProgress(project, projectImages, 'heatmap');
