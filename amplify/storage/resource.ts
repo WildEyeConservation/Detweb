@@ -1,9 +1,6 @@
 import { defineStorage } from "@aws-amplify/backend"
 import { generateTile } from "./generateTile/resource"
 import { handleS3Upload } from "./handleS3Upload/resource"
-import { processImages } from "../functions/processImages/resource"
-import { runPointFinder } from "../functions/runPointFinder/resource"
-import { runHeatmapper } from "../functions/runHeatmapper/resource"
 import { monitorModelProgress } from "../functions/monitorModelProgress/resource"
 import { launchAnnotationSet } from "../functions/launchAnnotationSet/resource"
 import { launchFalseNegatives } from "../functions/launchFalseNegatives/resource"
@@ -34,9 +31,6 @@ export const outputBucket = defineStorage({
       allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
     ],
     'heatmaps/*': [
-      allow.resource(processImages).to(['write', 'list', 'delete']),
-      allow.resource(runPointFinder).to(['read']),
-      allow.resource(runHeatmapper).to(['read']),
       allow.resource(monitorModelProgress).to(['read']),
       allow.authenticated.to(['read']),
       allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
@@ -125,8 +119,6 @@ export const inputBucket = defineStorage({
     'images/*': [
       allow.resource(generateTile).to(['get']),
       allow.resource(handleS3Upload).to(['get']),
-      allow.resource(processImages).to(['read']),
-      allow.resource(runHeatmapper).to(['read']),
       allow.resource(pretileImage).to(['get']),
       allow.authenticated.to(['read', 'write', 'delete']),
       allow.groups(['sysadmin']).to(['read', 'write', 'delete'])

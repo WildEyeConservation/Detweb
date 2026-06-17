@@ -1336,44 +1336,6 @@ export default function UploadManager() {
       }
 
       if (model === 'elephant-detection-nadir') {
-        const elephantSetName = `${projectId}_elephant-detection-nadir`;
-        let locationSet =
-          (await findLocationSetByName(elephantSetName))?.id ?? null;
-        if (!locationSet) {
-          const { data: createdLocationSet } =
-            await client.models.LocationSet.create({
-              name: elephantSetName,
-              projectId: projectId,
-              group: organizationId,
-            });
-          locationSet = createdLocationSet?.id ?? null;
-        }
-
-        if (!locationSet) {
-          console.error('Failed to create location set');
-          alert('Something went wrong, please try again.');
-          return;
-        }
-
-        for (let i = 0; i < sessionImages.length; i += BATCH_SIZE) {
-          const batch = sessionImages.slice(i, i + BATCH_SIZE);
-          const batchStrings = batch.map((image) =>
-            makeKey(image.originalPath)
-          );
-
-          client.mutations.runHeatmapper({
-            projectId,
-            images: batchStrings,
-          }, { retry: false });
-        }
-
-        await client.models.Project.update({
-          id: projectId,
-          status: 'processing-heatmap-busy',
-        });
-      }
-
-      if (model === 'elephant-detection-nadir-new') {
         // Results use the existing elephant set and 'heatmap' source.
         const elephantSetName = `${projectId}_elephant-detection-nadir`;
         let locationSet =

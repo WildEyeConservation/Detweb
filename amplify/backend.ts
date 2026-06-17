@@ -10,8 +10,6 @@ import { handleS3Upload } from './storage/handleS3Upload/resource';
 //import * as sts from '@aws-sdk/client-sts';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import { AutoProcessor } from './autoProcessor';
-import { EC2QueueProcessor } from './ec2QueueProcessor';
-import { processImages } from './functions/processImages/resource';
 import { postDeploy } from './functions/postDeploy/resource';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -21,8 +19,6 @@ import { StartingPosition, EventSourceMapping } from 'aws-cdk-lib/aws-lambda';
 import { Repository } from 'aws-cdk-lib/aws-ecr';
 import { monitorModelProgress } from './functions/monitorModelProgress/resource';
 import { cleanupJobs } from './functions/cleanupJobs/resource';
-import { runHeatmapper } from './functions/runHeatmapper/resource';
-import { runPointFinder } from './functions/runPointFinder/resource';
 import { runImageRegistration } from './functions/runImageRegistration/resource';
 import { runScoutbot } from './functions/runScoutbot/resource';
 import { runMadDetector } from './functions/runMadDetector/resource';
@@ -75,12 +71,9 @@ const backend = defineBackend({
   inputBucket,
   generateTile,
   handleS3Upload,
-  processImages,
   postDeploy,
   updateUserStats,
   monitorModelProgress,
-  runHeatmapper,
-  runPointFinder,
   runImageRegistration,
   runScoutbot,
   runMadDetector,
@@ -342,12 +335,7 @@ backend.handleS3Upload.resources.cfnResources.cfnFunction.addPropertyOverride(
   50
 );
 
-// Additional stack for bespoke EC2/ECS compute and shared infra.
-const customStack = backend.createStack('DetwebCustom');
 const enableEcs = true;
-const enablePointFinder =
-  (process.env.AMPLIFY_ENABLE_ECS_POINTFINDER ?? 'true').toLowerCase() ===
-  'true';
 const enableLightGlue =
   (process.env.AMPLIFY_ENABLE_ECS_LIGHTGLUE ?? 'true').toLowerCase() === 'true';
 const enableScoutbot =
@@ -359,15 +347,11 @@ const enableStormflyDetector =
 const enableElephantDetector =
   (process.env.AMPLIFY_ENABLE_ECS_ELEPHANT ?? 'true').toLowerCase() === 'true';
 
-// Base VPC that hosts the EC2 queue processor.
-const vpc = new ec2.Vpc(customStack, 'my-cdk-vpc');
-
 // Derive an environment name for parameter paths and tagging.
 const envName =
   process.env.AMPLIFY_ENV ?? process.env.AWS_BRANCH ?? 'production'; // use AWS_BRANCH or default if AMPLIFY_ENV is undefined
 
 // Collect queue URLs so they can be exposed as stack outputs.
-let pointFinderQueueUrl: string | undefined;
 let lightglueQueueUrl: string | undefined;
 let scoutbotQueueUrl: string | undefined;
 let madDetectorQueueUrl: string | undefined;
@@ -377,7 +361,6 @@ let elephantDetectorQueueUrl: string | undefined;
 if (enableEcs) {
   // Provision ECS auto-processors when the feature flags are enabled.
   const ecsStack = backend.createStack('DetwebECS');
-  //const custom = createDetwebResources(customStack, backend)
   const ecsTaskRole = new iam.Role(ecsStack, 'EcsTaskRole', {
     assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
   });
@@ -393,40 +376,6 @@ if (enableEcs) {
       resources: ['arn:aws:s3:::*'],
     })
   );
-
-  if (enablePointFinder) {
-    // CPU-backed auto processor for Point Finder jobs.
-    const pointFinderAutoProcessor = new AutoProcessor(
-      ecsStack,
-      'CpuAutoProcessor',
-      {
-        vpc: ecsvpc,
-        instanceType: ec2.InstanceType.of(
-          ec2.InstanceClass.T3,
-          ec2.InstanceSize.SMALL
-        ),
-        ecsImage: ecs.ContainerImage.fromAsset(
-          'containerImages/pointFinderImage'
-        ),
-        ecsTaskRole,
-        environment: {
-          API_ENDPOINT: backend.data.graphqlUrl,
-        },
-        machineImage: ecs.EcsOptimizedImage.amazonLinux2(),
-      }
-    );
-
-    new ssm.StringParameter(ecsStack, 'PointFinderQueueUrlParameter', {
-      parameterName: `/${envName}/runPointFinder/QueueUrl`,
-      stringValue: pointFinderAutoProcessor.queue.queueUrl,
-    });
-
-    pointFinderAutoProcessor.asg.role.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppSyncInvokeFullAccess')
-    );
-
-    pointFinderQueueUrl = pointFinderAutoProcessor.queue.queueUrl;
-  }
 
   if (enableLightGlue) {
     // GPU-backed auto processor tailored for LightGlue workloads.
@@ -633,38 +582,6 @@ if (enableEcs) {
 //   })],
 // }));
 
-// Legacy EC2 queue processor that feeds the general image pipeline.
-const processor = new EC2QueueProcessor(customStack, 'MyProcessor', {
-  vpc: vpc, // Your VPC
-  instanceType: ec2.InstanceType.of(
-    ec2.InstanceClass.G4DN,
-    ec2.InstanceSize.XLARGE
-  ), // Or any instance type you prefer
-  amiId: 'ami-0d0e015cd8fe6c8c1', // Your AMI ID
-  keyName: 'surveyscope', // Optional: Your EC2 key pair name
-});
-
-// Inject queue URLs and function names into the runtime environment.
-backend.processImages.addEnvironment(
-  'PROCESS_QUEUE_URL',
-  processor.queue.queueUrl
-);
-
-backend.monitorModelProgress.addEnvironment(
-  'RUN_POINT_FINDER_FUNCTION_NAME',
-  backend.runPointFinder.resources.lambda.functionName
-);
-
-backend.runHeatmapper.addEnvironment(
-  'PROCESS_QUEUE_URL',
-  processor.queue.queueUrl
-);
-
-backend.runPointFinder.addEnvironment(
-  'POINT_FINDER_QUEUE_URL_PARAM',
-  `/${envName}/runPointFinder/QueueUrl`
-);
-
 // Inject tiling batch lambda function name for orchestrating lambdas
 backend.launchAnnotationSet.addEnvironment(
   'PROCESS_TILING_BATCH_FUNCTION_NAME',
@@ -674,14 +591,6 @@ backend.launchFalseNegatives.addEnvironment(
   'PROCESS_TILING_BATCH_FUNCTION_NAME',
   backend.processTilingBatch.resources.lambda.functionName
 );
-
-// Allow processImages to publish Digests into SQS.
-const statement = new iam.PolicyStatement({
-  sid: 'AllowPublishToDigest',
-  actions: ['sqs:SendMessage'],
-  resources: ['*'],
-});
-backend.processImages.resources.lambda.addToRolePolicy(statement);
 
 // Allow lambdas that enqueue work to SQS to send messages
 backend.runImageRegistration.resources.lambda.addToRolePolicy(
@@ -918,12 +827,6 @@ backend.monitorTilingTasks.resources.lambda.addToRolePolicy(
     resources: ['*'],
   })
 );
-backend.runPointFinder.resources.lambda.addToRolePolicy(
-  new iam.PolicyStatement({
-    actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes', 'sqs:GetQueueUrl'],
-    resources: ['*'],
-  })
-);
 backend.requeueProjectQueues.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({
     actions: [
@@ -935,13 +838,6 @@ backend.requeueProjectQueues.resources.lambda.addToRolePolicy(
       'sqs:ChangeMessageVisibility',
     ],
     resources: ['*'],
-  })
-);
-// runPointFinder also reads the SSM parameter for its queue URL
-backend.runPointFinder.resources.lambda.addToRolePolicy(
-  new iam.PolicyStatement({
-    actions: ['ssm:GetParameter'],
-    resources: ['arn:aws:ssm:*:*:parameter/*'],
   })
 );
 
@@ -1168,9 +1064,7 @@ backend.registrationBucketCleanup.addEnvironment(
   registrationDeleteQueue.queueUrl
 );
 
-// monitorModelProgress invokes registrationBucketCleanup asynchronously
-// (InvocationType: 'Event'). Reuses the same Lambda-invoke pattern used for
-// runPointFinder above.
+// Allow asynchronous registration cleanup.
 backend.monitorModelProgress.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({
     actions: ['lambda:InvokeFunction'],
@@ -1296,8 +1190,6 @@ backend.addOutput({
     madDetectorTaskQueueUrl: madDetectorQueueUrl ?? '',
     stormflyDetectorTaskQueueUrl: stormflyDetectorQueueUrl ?? '',
     elephantDetectorTaskQueueUrl: elephantDetectorQueueUrl ?? '',
-    processTaskQueueUrl: processor.queue.queueUrl,
-    pointFinderTaskQueueUrl: pointFinderQueueUrl ?? '',
     generalBucketName: generalBucketName,
   },
 });

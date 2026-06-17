@@ -111,7 +111,7 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
     setLoading(true);
 
     const locationSetName =
-      model.value === 'heatmap' || model.value === 'elephant'
+      model.value === 'elephant'
         ? `${projectId}_elephant-detection-nadir`
         : model.value === 'scoutbotv3'
           ? `${projectId}_scoutbot`
@@ -178,24 +178,6 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
             status: 'processing-scoutbot',
           });
         }
-        break;
-      case 'heatmap':
-        for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
-          const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
-          const batchStrings = batch.map((image) =>
-            makeKey(image.originalPath)
-          );
-
-          client.mutations.runHeatmapper({
-            projectId,
-            images: batchStrings,
-          }, { retry: false });
-        }
-
-        await client.models.Project.update({
-          id: projectId,
-          status: 'processing-heatmap-busy',
-        });
         break;
       case 'elephant':
         for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
@@ -283,8 +265,7 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
             onChange={(m) => setModel(m)}
             options={[
               { label: 'ScoutBot', value: 'scoutbotv3' },
-              { label: 'Elephant Detection Nadir', value: 'heatmap' },
-              { label: 'Elephant Detection Nadir (new)', value: 'elephant' },
+              { label: 'Elephant Detection Nadir', value: 'elephant' },
               { label: 'MAD', value: 'mad' },
               { label: 'Stormfly (testing model)', value: 'stormfly-testing' },
             ]}
