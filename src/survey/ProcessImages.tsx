@@ -60,6 +60,8 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
 
   const scanImages = useCallback(async () => {
     if (!model) return;
+    // New elephant results use the legacy 'heatmap' source.
+    const processedSource = model.value === 'elephant' ? 'heatmap' : model.value;
     setLoading(true);
     let unprocessed: { id: string; originalPath: string }[] = [];
     let nextToken: string | null | undefined = undefined;
@@ -74,7 +76,7 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
         { selectionSet: ['id', 'originalPath', 'processedBy.source'], nextToken, limit: 10000 }
       );
       const page = (res.data ?? []).flatMap((img) =>
-        img?.id && img?.originalPath && !img.processedBy?.some((p: { source: string }) => p.source === model.value)
+        img?.id && img?.originalPath && !img.processedBy?.some((p: { source: string }) => p.source === processedSource)
           ? [{ id: img.id, originalPath: img.originalPath }]
           : []
       );
@@ -109,7 +111,7 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
     setLoading(true);
 
     const locationSetName =
-      model.value === 'heatmap'
+      model.value === 'heatmap' || model.value === 'elephant'
         ? `${projectId}_elephant-detection-nadir`
         : model.value === 'scoutbotv3'
           ? `${projectId}_scoutbot`
@@ -195,6 +197,27 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
           status: 'processing-heatmap-busy',
         });
         break;
+      case 'elephant':
+        for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
+          const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
+          const batchStrings = batch.map(
+            (image) => `${image.id}---${makeKey(image.originalPath)}`
+          );
+
+          client.mutations.runElephantDetector({
+            projectId,
+            images: batchStrings,
+            setId: locationSet.id,
+            bucket: backend.storage.buckets[1].bucket_name,
+            queueUrl: backend.custom.elephantDetectorTaskQueueUrl,
+          }, { retry: false });
+        }
+
+        await client.models.Project.update({
+          id: projectId,
+          status: 'processing-pointFinder',
+        });
+        break;
       case 'mad':
         for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
           const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
@@ -261,6 +284,7 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
             options={[
               { label: 'ScoutBot', value: 'scoutbotv3' },
               { label: 'Elephant Detection Nadir', value: 'heatmap' },
+              { label: 'Elephant Detection Nadir (new)', value: 'elephant' },
               { label: 'MAD', value: 'mad' },
               { label: 'Stormfly (testing model)', value: 'stormfly-testing' },
             ]}

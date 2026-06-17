@@ -58,6 +58,8 @@ export const handler: RunHeatmapperHandler = async (event) => {
     }
 
     const imagePaths = event.arguments.images ?? [];
+    const rotation = event.arguments.rotation ?? undefined;
+    const landscape = event.arguments.landscape ?? undefined;
 
     //log a sample
     console.log('imagePath sample', imagePaths[0]);
@@ -105,6 +107,8 @@ export const handler: RunHeatmapperHandler = async (event) => {
                     inputPath: 'images/' + path,
                     outputbucket: env.OUTPUTS_BUCKET_NAME,
                     heatmapPath: heatmapFilePath,
+                    ...(rotation !== undefined ? { rotation } : {}),
+                    ...(landscape !== undefined ? { landscape } : {}),
                   }),
                 })
               );

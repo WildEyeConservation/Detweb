@@ -27,6 +27,7 @@ import { runImageRegistration } from './functions/runImageRegistration/resource'
 import { runScoutbot } from './functions/runScoutbot/resource';
 import { runMadDetector } from './functions/runMadDetector/resource';
 import { runStormflyDetector } from './functions/runStormflyDetector/resource';
+import { runElephantDetector } from './functions/runElephantDetector/resource';
 import { launchAnnotationSet } from './functions/launchAnnotationSet/resource';
 import { launchFalseNegatives } from './functions/launchFalseNegatives/resource';
 import { requeueProjectQueues } from './functions/requeueProjectQueues/resource';
@@ -84,6 +85,7 @@ const backend = defineBackend({
   runScoutbot,
   runMadDetector,
   runStormflyDetector,
+  runElephantDetector,
   cleanupJobs,
   launchAnnotationSet,
   launchFalseNegatives,
@@ -354,6 +356,8 @@ const enableMadDetector =
   (process.env.AMPLIFY_ENABLE_ECS_MAD ?? 'true').toLowerCase() === 'true';
 const enableStormflyDetector =
   (process.env.AMPLIFY_ENABLE_ECS_STORMFLY ?? 'true').toLowerCase() === 'true';
+const enableElephantDetector =
+  (process.env.AMPLIFY_ENABLE_ECS_ELEPHANT ?? 'true').toLowerCase() === 'true';
 
 // Base VPC that hosts the EC2 queue processor.
 const vpc = new ec2.Vpc(customStack, 'my-cdk-vpc');
@@ -368,6 +372,7 @@ let lightglueQueueUrl: string | undefined;
 let scoutbotQueueUrl: string | undefined;
 let madDetectorQueueUrl: string | undefined;
 let stormflyDetectorQueueUrl: string | undefined;
+let elephantDetectorQueueUrl: string | undefined;
 
 if (enableEcs) {
   // Provision ECS auto-processors when the feature flags are enabled.
@@ -585,6 +590,37 @@ if (enableEcs) {
     );
     stormflyDetectorQueueUrl = stormflyDetectorAutoProcessor.queue.queueUrl;
   }
+
+  if (enableElephantDetector) {
+    const elephantDetectorAutoProcessor = new AutoProcessor(
+      ecsStack,
+      'ElephantDetectorAutoProcessor',
+      {
+        vpc: ecsvpc,
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.G4DN,
+          ec2.InstanceSize.XLARGE
+        ),
+        ecsImage: ecs.ContainerImage.fromAsset('containerImages/heatmapperImage'),
+        ecsTaskRole,
+        memoryLimitMiB: 1024 * 12,
+        gpuCount: 1,
+        environment: {
+          API_ENDPOINT: backend.data.graphqlUrl,
+          BUCKET: backend.inputBucket.resources.bucket.bucketName,
+        },
+        machineImage: ecs.EcsOptimizedImage.amazonLinux2(
+          ecs.AmiHardwareType.GPU
+        ),
+        rootVolumeSize: 100,
+      }
+    );
+
+    elephantDetectorAutoProcessor.asg.role.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppSyncInvokeFullAccess')
+    );
+    elephantDetectorQueueUrl = elephantDetectorAutoProcessor.queue.queueUrl;
+  }
 }
 
 //const devRole = iam.Role.fromRoleArn(scope, "DevRole", devUserArn);
@@ -673,6 +709,12 @@ backend.runMadDetector.resources.lambda.addToRolePolicy(
   })
 );
 backend.runStormflyDetector.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes', 'sqs:GetQueueUrl'],
+    resources: ['*'],
+  })
+);
+backend.runElephantDetector.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({
     actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes', 'sqs:GetQueueUrl'],
     resources: ['*'],
@@ -1253,6 +1295,7 @@ backend.addOutput({
     scoutbotTaskQueueUrl: scoutbotQueueUrl ?? '',
     madDetectorTaskQueueUrl: madDetectorQueueUrl ?? '',
     stormflyDetectorTaskQueueUrl: stormflyDetectorQueueUrl ?? '',
+    elephantDetectorTaskQueueUrl: elephantDetectorQueueUrl ?? '',
     processTaskQueueUrl: processor.queue.queueUrl,
     pointFinderTaskQueueUrl: pointFinderQueueUrl ?? '',
     generalBucketName: generalBucketName,

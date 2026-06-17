@@ -15,6 +15,10 @@ backend:
             if [ -z "$SCOUTBOT_MODELS_BUCKET" ]; then echo "SCOUTBOT_MODELS_BUCKET not set"; exit 1; fi
             aws s3 sync "s3://$SCOUTBOT_MODELS_BUCKET/scoutbot-models/" containerImages/scoutbot/models/
             sha256sum -c containerImages/scoutbot/models.sha256
+            # Restore gitignored heatmapper model files for Docker build.
+            if [ -z "$HEATMAPPER_MODELS_BUCKET" ]; then echo "HEATMAPPER_MODELS_BUCKET not set"; exit 1; fi
+            aws s3 sync "s3://$HEATMAPPER_MODELS_BUCKET/heatmapper-models/" containerImages/heatmapperImage/models/
+            sha256sum -c containerImages/heatmapperImage/models.sha256
             npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
           else
             npx ampx generate outputs --branch master --app-id $AWS_APP_ID

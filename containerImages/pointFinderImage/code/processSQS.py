@@ -73,11 +73,53 @@ transport = RequestsHTTPTransport(url=os.environ['API_ENDPOINT'],
 client = Client(transport=transport,
                 fetch_schema_from_transport=False)
 
+# Optional .h5 attrs from the heatmap worker: rotation, orig_width, orig_height.
+def _read_rotation_metadata(h5f, heatmap_shape):
+    """Return rotation metadata used to map points back to the stored image frame."""
+    try:
+        rotation = int(h5f.attrs.get('rotation', 0) or 0) % 360
+    except (TypeError, ValueError):
+        rotation = 0
+    if rotation not in (90, 180, 270):
+        return 0, 0, 0
+    try:
+        orig_width = int(h5f.attrs.get('orig_width', 0) or 0)
+        orig_height = int(h5f.attrs.get('orig_height', 0) or 0)
+    except (TypeError, ValueError):
+        orig_width = orig_height = 0
+    if orig_width <= 0 or orig_height <= 0:
+        # heatmap_shape is (rows, cols) in the rotated frame.
+        rot_height = int(heatmap_shape[0] * proj.stride)
+        rot_width = int(heatmap_shape[1] * proj.stride)
+        if rotation in (90, 270):
+            orig_width, orig_height = rot_height, rot_width
+        else:
+            orig_width, orig_height = rot_width, rot_height
+    return rotation, orig_width, orig_height
+
+def _map_point_to_original(x, y, rotation, orig_width, orig_height):
+    """Map a point from the rotated frame back to the stored image frame."""
+    if rotation == 90:
+        return orig_width - y, x
+    if rotation == 180:
+        return orig_width - x, orig_height - y
+    if rotation == 270:
+        return y, orig_height - x
+    return x, y
+
 def processFile(file,height,width,threshold):
     blockFinder = MultiTypeBlockPointFinder(smoothing_flag=True, block_width=width,block_height=height,threshold=threshold)
     with h5py.File(file, 'r') as h5f:
-        hm_xyvs=blockFinder.detect(np.asarray(h5f['heatmap']))
-    return [(proj.hm_to_vis(hm_xyv),float(hm_xyv['features']['hm_block_max'])) for hm_xyv in hm_xyvs]
+        heatmap = np.asarray(h5f['heatmap'])
+        hm_xyvs = blockFinder.detect(heatmap)
+        rotation, orig_width, orig_height = _read_rotation_metadata(h5f, heatmap.shape)
+    results = []
+    for hm_xyv in hm_xyvs:
+        vis_x, vis_y = proj.hm_to_vis(hm_xyv)
+        if rotation:
+            vis_x, vis_y = _map_point_to_original(vis_x, vis_y, rotation, orig_width, orig_height)
+        results.append(((vis_x, vis_y), float(hm_xyv['features']['hm_block_max'])))
+    return results
         
 def process(body):
     #s3_client = boto3.client('s3',body['region'])
