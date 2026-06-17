@@ -443,6 +443,8 @@ if (enableEcs) {
         environment: {
           API_ENDPOINT: backend.data.graphqlUrl,
           BUCKET: backend.inputBucket.resources.bucket.bucketName,
+          SINGLE_IMAGE_FAILURE_VISIBILITY_SECONDS:
+            process.env.SCOUTBOT_SINGLE_IMAGE_FAILURE_VISIBILITY_SECONDS ?? '1800',
         },
         machineImage: ecs.EcsOptimizedImage.amazonLinux2(
           ecs.AmiHardwareType.GPU
@@ -487,6 +489,7 @@ if (enableEcs) {
           ecs.AmiHardwareType.GPU
         ),
         rootVolumeSize: 100,
+        allowSelfRequeue: true,
       }
     );
 
@@ -554,19 +557,26 @@ if (enableEcs) {
           API_ENDPOINT: backend.data.graphqlUrl,
           STORMFLY_MODEL_S3:
             process.env.STORMFLY_MODEL_S3 ?? 's3://surveyscope/testing/stormfly.onnx',
-          STORMFLY_THRESHOLD: process.env.STORMFLY_THRESHOLD ?? '0.30',
+          STORMFLY_THRESHOLD: process.env.STORMFLY_THRESHOLD ?? '0.00',
           // Stormfly emits points, while Detweb annotation tasks use rectangular
           // location bounds. Wrap each point in a testing-only fixed-size box.
           STORMFLY_BOX_SIZE: process.env.STORMFLY_BOX_SIZE ?? '64',
+          // Inference tuning. STORMFLY_FP16 runs convolutions in half precision.
+          // Keep it off by default until fp16/fp32 parity is confirmed.
+          // STORMFLY_BATCH is the number of tiles per ONNX call.
+          STORMFLY_FP16: process.env.STORMFLY_FP16 ?? '0',
+          STORMFLY_BATCH: process.env.STORMFLY_BATCH ?? '16',
         },
         machineImage: ecs.EcsOptimizedImage.amazonLinux2(
           ecs.AmiHardwareType.GPU
         ),
         rootVolumeSize: 100,
         // Stormfly processes large aerial images sequentially within each message,
-        // so scale more aggressively than the shared detector default.
+        // so scale more aggressively than the shared detector default. Cap at 20
+        // tasks to match the other detectors; the low messagesPerTask means the
+        // fleet ramps to full width after only ~400 images.
         messagesPerTask: 10,
-        maxTasks: 10,
+        maxTasks: 20,
       }
     );
 
