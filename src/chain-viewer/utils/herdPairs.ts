@@ -160,12 +160,43 @@ function comparePairs(a: HerdDisplayPair, b: HerdDisplayPair): number {
 }
 
 /**
- * Build a minimum same-camera forest for one herd.
+ * Build a same-camera pair for two chronologically adjacent images, using a
+ * direct neighbour homography when one is registered, then a transform
+ * composed through the neighbour graph, and finally identity.
+ */
+function adjacentPair(
+  herdId: string,
+  image1: ImageType,
+  image2: ImageType,
+  neighboursByPair: Map<string, ImageNeighbourType>,
+  getChainedTransform: (
+    sourceImageId: string,
+    targetImageId: string
+  ) => ChainedTransform | undefined
+): HerdDisplayPair {
+  const neighbour = neighboursByPair.get(pairKey(image1.id, image2.id));
+  if (neighbour) {
+    const registered = registeredPair(herdId, neighbour, image1, image2, false);
+    if (registered) return registered;
+  }
+  return chainedPair(
+    herdId,
+    image1,
+    image2,
+    getChainedTransform(image1.id, image2.id)
+  );
+}
+
+/**
+ * Build same-camera display pairs for one herd as a set of chronological paths.
  *
- * Consecutive sightings of each chain are sufficient candidate edges to
- * connect every image containing that chain. Kruskal then removes redundant
- * chain overlaps, so N connected images produce N-1 displayed pairs. Every
- * retained pair is guaranteed to share a chain.
+ * Images are grouped into chain-connected components (two images link when
+ * they are consecutive sightings of a shared chain). Each component is then
+ * laid out as a single time-ordered path, pairing each image only with its
+ * immediate successor. A path — unlike the spanning tree a minimum forest
+ * produces — gives every image at most one earlier-pair and one later-pair, so
+ * no image is ever shown as the earlier (or later) half of more than one
+ * same-camera pair.
  */
 function cameraPairs(
   herdId: string,
@@ -177,6 +208,12 @@ function cameraPairs(
     targetImageId: string
   ) => ChainedTransform | undefined
 ): HerdDisplayPair[] {
+  // Connect images that are consecutive sightings of a shared chain. This is
+  // the same connectivity the previous minimum forest used; only the layout
+  // within each connected component changes from a tree to a path.
+  const components = new DisjointSet();
+  for (const image of images) components.add(image.id);
+
   const imagesByChain = new Map<string, ImageType[]>();
   for (const image of images) {
     for (const chain of chainsByImage.get(image.id) ?? []) {
@@ -185,40 +222,37 @@ function cameraPairs(
       else imagesByChain.set(chain, [image]);
     }
   }
-
-  const candidates = new Map<string, HerdDisplayPair>();
   for (const sightings of imagesByChain.values()) {
     sightings.sort(compareImages);
     for (let i = 1; i < sightings.length; i++) {
-      const image1 = sightings[i - 1];
-      const image2 = sightings[i];
-      const neighbour = neighboursByPair.get(pairKey(image1.id, image2.id));
-      const pair = neighbour
-        ? registeredPair(herdId, neighbour, image1, image2, false) ??
-          chainedPair(
-            herdId,
-            image1,
-            image2,
-            getChainedTransform(image1.id, image2.id)
-          )
-        : chainedPair(
-            herdId,
-            image1,
-            image2,
-            getChainedTransform(image1.id, image2.id)
-          );
-      candidates.set(
-        pairKey(image1.id, image2.id),
-        pair
-      );
+      components.union(sightings[i - 1].id, sightings[i].id);
     }
   }
 
-  const forest = new DisjointSet();
-  for (const image of images) forest.add(image.id);
-  return [...candidates.values()]
-    .sort(comparePairs)
-    .filter((pair) => forest.union(pair.image1Id, pair.image2Id));
+  const componentImages = new Map<string, ImageType[]>();
+  for (const image of images) {
+    const root = components.find(image.id);
+    const list = componentImages.get(root);
+    if (list) list.push(image);
+    else componentImages.set(root, [image]);
+  }
+
+  const pairs: HerdDisplayPair[] = [];
+  for (const list of componentImages.values()) {
+    list.sort(compareImages);
+    for (let i = 1; i < list.length; i++) {
+      pairs.push(
+        adjacentPair(
+          herdId,
+          list[i - 1],
+          list[i],
+          neighboursByPair,
+          getChainedTransform
+        )
+      );
+    }
+  }
+  return pairs.sort(comparePairs);
 }
 
 /**
@@ -226,12 +260,16 @@ function cameraPairs(
  *
  * Chains define herds first: images are in the same herd only when connected
  * transitively by shared chain identities. Camera grouping is secondary. For
- * each herd we show a minimum same-camera forest, then only the earliest real
- * cross-camera neighbour needed to introduce each additional camera.
+ * each herd we lay out a chronological same-camera path, then only the earliest
+ * real cross-camera neighbour needed to introduce each additional camera.
  *
- * Consequently every displayed pair shares at least one chain. Same-camera
- * pairs use a direct or composed neighbour-graph homography when possible;
- * cross-camera pairs always use a registered homography neighbour.
+ * Same-camera pairs use a direct or composed neighbour-graph homography when
+ * possible; cross-camera pairs always use a registered homography neighbour.
+ *
+ * Every image appears as the earlier half of at most one pair and the later
+ * half of at most one pair: the per-camera paths guarantee this within a
+ * camera, and a guard drops any crossover that would re-use a role an image
+ * has already filled.
  */
 export function buildHerdDisplayPairs(
   imagesById: Record<string, ImageType>,
@@ -310,6 +348,24 @@ export function buildHerdDisplayPairs(
     .sort((a, b) => compareImages(a.images[0], b.images[0]));
 
   const result: HerdDisplayPair[] = [];
+  // image1Id is always the earlier image and image2Id the later one. Track the
+  // images already shown in each role so no image is ever the earlier half of
+  // two pairs (or the later half of two pairs). Same-camera paths never repeat
+  // a role; this only ever drops a redundant crossover.
+  const usedAsEarlier = new Set<string>();
+  const usedAsLater = new Set<string>();
+  const pushPair = (pair: HerdDisplayPair): boolean => {
+    if (usedAsEarlier.has(pair.image1Id) || usedAsLater.has(pair.image2Id)) {
+      return false;
+    }
+    usedAsEarlier.add(pair.image1Id);
+    usedAsLater.add(pair.image2Id);
+    result.push(pair);
+    return true;
+  };
+  const pushPairs = (pairs: HerdDisplayPair[]): void => {
+    for (const pair of pairs) pushPair(pair);
+  };
   for (const { herdId, images } of herds) {
     const imageIds = new Set(images.map((image) => image.id));
     const imagesByCamera = new Map<string, ImageType[]>();
@@ -360,8 +416,8 @@ export function buildHerdDisplayPairs(
       if (visited.size === 0) {
         const firstCamera = cameraOrder[0];
         visited.add(firstCamera);
-        result.push(
-          ...cameraPairs(
+        pushPairs(
+          cameraPairs(
             herdId,
             imagesByCamera.get(firstCamera) ?? [],
             chainsByImage,
@@ -383,13 +439,15 @@ export function buildHerdDisplayPairs(
       });
 
       if (crossover) {
-        result.push(crossover);
+        // Drop the bridge pair if either endpoint already fills that role; the
+        // new camera is still introduced through its own path below.
+        pushPair(crossover);
         const cameraA = cameraKey(crossover.imageA);
         const cameraB = cameraKey(crossover.imageB);
         const nextCamera = visited.has(cameraA) ? cameraB : cameraA;
         visited.add(nextCamera);
-        result.push(
-          ...cameraPairs(
+        pushPairs(
+          cameraPairs(
             herdId,
             imagesByCamera.get(nextCamera) ?? [],
             chainsByImage,
@@ -405,8 +463,8 @@ export function buildHerdDisplayPairs(
       const nextCamera = cameraOrder.find((camera) => !visited.has(camera));
       if (!nextCamera) break;
       visited.add(nextCamera);
-      result.push(
-        ...cameraPairs(
+      pushPairs(
+        cameraPairs(
           herdId,
           imagesByCamera.get(nextCamera) ?? [],
           chainsByImage,

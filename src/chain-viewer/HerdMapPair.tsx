@@ -42,7 +42,6 @@ interface Props {
   onViewChainTiles: (annotationId: string) => void;
   onChangeLabel: (annotationId: string) => void;
   bearingForImage: (image: HerdDisplayPair['imageA']) => number;
-  rotationKeyForImage: (image: HerdDisplayPair['imageA']) => string;
   onImageBearingChange: (
     image: HerdDisplayPair['imageA'],
     bearing: number
@@ -81,7 +80,6 @@ export function HerdMapPair({
   onViewChainTiles,
   onChangeLabel,
   bearingForImage,
-  rotationKeyForImage,
   onImageBearingChange,
   onRequestPrevPair,
   onRequestNextPair,
@@ -187,35 +185,6 @@ export function HerdMapPair({
       if (wasNull !== (map === null)) setMapsTick((t) => t + 1);
     },
     []
-  );
-
-  const handleBearingChange = useCallback(
-    (side: 0 | 1, bearing: number) => {
-      const sourceImage = side === 0 ? imageA : imageB;
-      onImageBearingChange(sourceImage, bearing);
-
-      // Also update the mounted peer synchronously. The map-level rotation
-      // group handles the general case; this direct path closes the brief
-      // subscription gap while a newly-mounted pair is finishing its effects.
-      const otherImage = side === 0 ? imageB : imageA;
-      if (
-        rotationKeyForImage(sourceImage) === rotationKeyForImage(otherImage)
-      ) {
-        const otherMap = mapsRef.current[side === 0 ? 1 : 0]?.map;
-        if (
-          otherMap &&
-          Math.abs(otherMap.getBearing() - bearing) >= 0.01
-        ) {
-          otherMap.setBearing(bearing);
-        }
-      }
-    },
-    [
-      imageA,
-      imageB,
-      onImageBearingChange,
-      rotationKeyForImage,
-    ]
   );
 
   useEffect(() => {
@@ -333,8 +302,9 @@ export function HerdMapPair({
           <IndividualIdMap
             image={imageA}
             bearing={bearingForImage(imageA)}
-            rotationGroup={rotationKeyForImage(imageA)}
-            onBearingChange={(bearing) => handleBearingChange(0, bearing)}
+            onBearingChange={(bearing) =>
+              onImageBearingChange(imageA, bearing)
+            }
             sourceKey={sourceKeys[0]}
             markers={markersA}
             onMarkerDrag={NOOP}
@@ -356,8 +326,9 @@ export function HerdMapPair({
           <IndividualIdMap
             image={imageB}
             bearing={bearingForImage(imageB)}
-            rotationGroup={rotationKeyForImage(imageB)}
-            onBearingChange={(bearing) => handleBearingChange(1, bearing)}
+            onBearingChange={(bearing) =>
+              onImageBearingChange(imageB, bearing)
+            }
             sourceKey={sourceKeys[1]}
             markers={markersB}
             onMarkerDrag={NOOP}

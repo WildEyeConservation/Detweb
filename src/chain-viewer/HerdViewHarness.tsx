@@ -221,32 +221,25 @@ export function HerdViewHarness({ annotationSetId }: Props) {
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [navCollapsed, setNavCollapsed] = useState(false);
-  const [cameraBearings, setCameraBearings] = useState<Map<string, number>>(
+  const [imageBearings, setImageBearings] = useState<Map<string, number>>(
     () => new Map()
   );
   const initialChainParamHandledRef = useRef<string | null>(null);
 
-  const rotationKeyForImage = useCallback(
-    (image: ImageType) =>
-      image.cameraId ? `cam:${image.cameraId}` : `img:${image.id}`,
-    []
-  );
   const bearingForImage = useCallback(
-    (image: ImageType) =>
-      cameraBearings.get(rotationKeyForImage(image)) ?? 0,
-    [cameraBearings, rotationKeyForImage]
+    (image: ImageType) => imageBearings.get(image.id) ?? 0,
+    [imageBearings]
   );
   const onImageBearingChange = useCallback(
     (image: ImageType, bearing: number) => {
-      const key = rotationKeyForImage(image);
-      setCameraBearings((current) => {
-        if (current.get(key) === bearing) return current;
+      setImageBearings((current) => {
+        if (current.get(image.id) === bearing) return current;
         const next = new Map(current);
-        next.set(key, bearing);
+        next.set(image.id, bearing);
         return next;
       });
     },
-    [rotationKeyForImage]
+    []
   );
 
   useEffect(() => {
@@ -530,7 +523,6 @@ export function HerdViewHarness({ annotationSetId }: Props) {
                 onViewChainTiles={onViewChainTiles}
                 onChangeLabel={handleChangeLabel}
                 bearingForImage={bearingForImage}
-                rotationKeyForImage={rotationKeyForImage}
                 onImageBearingChange={onImageBearingChange}
                 onRequestPrevPair={hasPrev ? () => stepFrame(-1) : undefined}
                 onRequestNextPair={hasNext ? () => stepFrame(1) : undefined}
