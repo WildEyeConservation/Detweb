@@ -35,15 +35,7 @@ def _tile_starts(total, patch, overlap):
 
 
 def _ensure_fp16_model(model_path):
-    """Return a path to an fp16 copy of the model, converting and caching once.
-
-    keep_io_types leaves the graph inputs/outputs as fp32 (cast nodes are
-    inserted at the boundary), so callers keep feeding fp32 tiles and reading
-    fp32 heatmaps — only the internal convolutions run in half precision. The
-    converter also clamps large activations so a regression head cannot overflow
-    to inf. onnx/onnxconverter-common are imported lazily so the fp32 path (and
-    the unit tests, which stub onnxruntime) never need them installed.
-    """
+    """Return a cached fp16 model with fp32 I/O."""
     fp16_path = f'{os.path.splitext(model_path)[0]}_fp16.onnx'
     if not os.path.isfile(fp16_path):
         import onnx
@@ -78,9 +70,7 @@ class StormflyDetector:
         self.output_name = self.session.get_outputs()[0].name
         self.threshold = threshold
         self.overlap = overlap
-        # Honour a fixed batch axis if the export declares one. A symbolic
-        # (str), None, or negative dim means the batch axis is dynamic and we
-        # can stack tiles; a concrete int pins us to that size (usually 1).
+        # Respect fixed batch axes exported by the model.
         batch_dim = self.session.get_inputs()[0].shape[0]
         self.max_batch = (
             max(1, batch_dim)
@@ -93,8 +83,7 @@ class StormflyDetector:
         )
 
     def detect(self, image):
-        # The web tile pipeline auto-rotates from EXIF. Run inference in that
-        # same orientation so detections use the displayed image coordinates.
+        # Match the displayed EXIF orientation.
         oriented_image = ImageOps.exif_transpose(image)
         arr = np.asarray(oriented_image.convert('RGB'), dtype=np.uint8)
         heatmap = self._heatmap(arr)
@@ -127,8 +116,8 @@ class StormflyDetector:
         heat_height = height // DOWN_RATIO
         heat_width = width // DOWN_RATIO
         patch_heat = PATCH // DOWN_RATIO
-        total = np.zeros((heat_height, heat_width), dtype=np.float32)
-        count = np.zeros((heat_height, heat_width), dtype=np.float32)
+        # Max-merge preserves peaks weakened near adjacent tile edges.
+        heatmap = np.zeros((heat_height, heat_width), dtype=np.float32)
 
         coords = [(y, x) for y in ys for x in xs]
         for start in range(0, len(coords), self.max_batch):
@@ -147,14 +136,10 @@ class StormflyDetector:
             for i, (y, x) in enumerate(batch_coords):
                 output = outputs[i, 0]
                 heat_y, heat_x = y // DOWN_RATIO, x // DOWN_RATIO
-                total[
+                region = heatmap[
                     heat_y:heat_y + patch_heat,
                     heat_x:heat_x + patch_heat,
-                ] += output
-                count[
-                    heat_y:heat_y + patch_heat,
-                    heat_x:heat_x + patch_heat,
-                ] += 1.0
+                ]
+                np.maximum(region, output, out=region)
 
-        count[count == 0] = 1.0
-        return total / count
+        return heatmap
