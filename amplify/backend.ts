@@ -517,9 +517,12 @@ if (enableEcs) {
           STORMFLY_BOX_SIZE: process.env.STORMFLY_BOX_SIZE ?? '64',
           // Inference tuning. STORMFLY_FP16 runs convolutions in half precision.
           // Keep it off by default until fp16/fp32 parity is confirmed.
-          // STORMFLY_BATCH is the number of tiles per ONNX call.
+          // STORMFLY_BATCH is the number of tiles per ONNX call. The current
+          // exported model bakes batch=1 into its Swin window reshapes, so any
+          // batch > 1 fails with a broadcast error. Keep this at 1 until the
+          // model is re-exported / patched for batched inference.
           STORMFLY_FP16: process.env.STORMFLY_FP16 ?? '0',
-          STORMFLY_BATCH: process.env.STORMFLY_BATCH ?? '16',
+          STORMFLY_BATCH: process.env.STORMFLY_BATCH ?? '1',
         },
         machineImage: ecs.EcsOptimizedImage.amazonLinux2(
           ecs.AmiHardwareType.GPU

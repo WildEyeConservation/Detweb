@@ -28,19 +28,31 @@ export interface HerdRuns {
  * empty set (a pair with no animals — not expected in the herd viewer) breaks
  * the run and stands alone.
  */
-export function buildHerdRuns(chainSets: Set<string>[]): HerdRuns {
+export function buildHerdRuns(
+  chainSets: Set<string>[],
+  herdIds?: string[]
+): HerdRuns {
   const runIdByIndex: number[] = [];
   const runStarts: number[] = [];
   let prev: Set<string> | null = null;
+  let prevHerdId: string | null = null;
   let runIdx = -1;
   chainSets.forEach((cur, i) => {
     const set = cur ?? new Set<string>();
-    if (prev === null || set.size === 0 || disjoint(prev, set)) {
+    const changedHerd =
+      herdIds !== undefined && herdIds[i] !== prevHerdId;
+    if (
+      prev === null ||
+      set.size === 0 ||
+      changedHerd ||
+      (herdIds === undefined && disjoint(prev, set))
+    ) {
       runIdx++;
       runStarts.push(i);
     }
     runIdByIndex.push(runIdx);
     prev = set.size === 0 ? null : set;
+    prevHerdId = herdIds?.[i] ?? null;
   });
   return { runIdByIndex, runStarts };
 }

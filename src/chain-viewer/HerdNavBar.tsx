@@ -8,6 +8,8 @@ interface Props {
    * pair's two images. Drives the run-grouping colours.
    */
   chainSets: Set<string>[];
+  /** Chain-connected herd id for each flat pair index. */
+  herdIds: string[];
   /** Stacked rows from buildLanes; entries index into chainSets. */
   lanes: Lane[];
   activeIndex: number;
@@ -35,20 +37,32 @@ const PALETTE = [
  * Walk a lane's pairs in order; start a new colour run whenever a pair shares
  * no chain with the previous one. Returns a colour per local entry.
  */
-function runColorsForLane(entries: number[], chainSets: Set<string>[]): string[] {
+function runColorsForLane(
+  entries: number[],
+  chainSets: Set<string>[],
+  herdIds: string[]
+): string[] {
   const colors: string[] = [];
   let runIdx = 0;
   let prev: Set<string> | null = null;
+  let prevHerdId: string | null = null;
   for (const flat of entries) {
     const cur = chainSets[flat] ?? new Set<string>();
+    const herdId = herdIds[flat] ?? null;
     if (cur.size === 0) {
       colors.push(EMPTY_COLOR);
       prev = null;
       continue;
     }
-    if (prev !== null && disjoint(prev, cur)) runIdx++;
+    if (
+      prev !== null &&
+      (herdId !== prevHerdId || (herdId === null && disjoint(prev, cur)))
+    ) {
+      runIdx++;
+    }
     colors.push(PALETTE[runIdx % PALETTE.length]);
     prev = cur;
+    prevHerdId = herdId;
   }
   return colors;
 }
@@ -190,6 +204,7 @@ function LaneBar({
  */
 export function HerdNavBar({
   chainSets,
+  herdIds,
   lanes,
   activeIndex,
   activeLane,
@@ -200,8 +215,11 @@ export function HerdNavBar({
   );
 
   const colorsByLane = useMemo(
-    () => lanes.map((lane) => runColorsForLane(lane.entries, chainSets)),
-    [lanes, chainSets]
+    () =>
+      lanes.map((lane) =>
+        runColorsForLane(lane.entries, chainSets, herdIds)
+      ),
+    [lanes, chainSets, herdIds]
   );
 
   const multi = lanes.length > 1;

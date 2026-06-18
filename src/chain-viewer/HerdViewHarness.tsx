@@ -4,10 +4,9 @@ import { Button, Spinner } from 'react-bootstrap';
 import Select, { type SingleValue } from 'react-select';
 import { GlobalContext, ProjectContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
-import { buildNeighbourTransforms } from '../individual-id/utils/transforms';
 import type { Lane } from '../individual-id/utils/lanes';
 import { buildHerdRuns } from './utils/herdRuns';
-import type { NeighbourPairWithMeta } from '../individual-id/types';
+import { buildHerdDisplayPairs } from './utils/herdPairs';
 import type { CategoryType, ImageType } from '../schemaTypes';
 import { useHerdData } from './hooks/useHerdData';
 import { HerdMapPair } from './HerdMapPair';
@@ -47,26 +46,12 @@ type UpdateAnnotationCategory = (input: {
   categoryId: string;
 }) => Promise<GraphQLResponse>;
 
-/** Chronological order, mirroring the ChainLinker (older image owns identity). */
-function isOlder(a: ImageType | undefined, b: ImageType | undefined): boolean {
-  const at = a?.timestamp ?? null;
-  const bt = b?.timestamp ?? null;
-  if (at !== null && bt !== null) {
-    if (at !== bt) return at < bt;
-  } else {
-    return false;
-  }
-  if (a?.originalPath && b?.originalPath) {
-    return a.originalPath < b.originalPath;
-  }
-  return false;
-}
-
 /**
- * Default Chain Viewer content: a stripped-down ChainLinker that walks the
- * survey's neighbour pairs that contain animals. Two linked maps, lane-aware
- * navigation, a chain-grouped nav bar, and per-marker obscured / view-chain-
- * tiles actions. No matching, linking or auto-pan.
+ * Default Chain Viewer content: a stripped-down ChainLinker that walks animal
+ * images chronologically within each camera, using registered neighbour pairs
+ * to cross between cameras. Two linked maps, lane-aware navigation, a chain-
+ * grouped nav bar, and per-marker obscured / view-chain-tiles actions. No
+ * matching, linking or auto-pan.
  */
 export function HerdViewHarness({ annotationSetId }: Props) {
   const { client } = useContext(GlobalContext)!;
@@ -191,75 +176,36 @@ export function HerdViewHarness({ annotationSetId }: Props) {
     return out;
   }, [visibleAnnotations]);
 
-  // ---- Pairs (older→newer, homography only), oriented + sorted. ----
-  const directPairs: NeighbourPairWithMeta[] = useMemo(() => {
-    const raw = herd.data?.rawNeighbours ?? [];
-    const imagesById = herd.data?.imagesById ?? {};
-    const out: NeighbourPairWithMeta[] = [];
-    for (const n of raw) {
-      const tfs = buildNeighbourTransforms(n);
-      if (tfs.noHomography) continue;
-      const img1 = imagesById[n.image1Id];
-      const img2 = imagesById[n.image2Id];
-      if (!img1 || !img2) continue;
-      const swap = isOlder(img2, img1);
-      const imageA = swap ? img2 : img1;
-      const imageB = swap ? img1 : img2;
-      out.push({
-        image1Id: imageA.id,
-        image2Id: imageB.id,
-        forward: swap ? tfs.backward : tfs.forward,
-        backward: swap ? tfs.forward : tfs.backward,
-        noHomography: false,
-        skipped: false,
-        imageA,
-        imageB,
-        rawNeighbour: n,
-      });
-    }
-    out.sort((p, q) => {
-      const at = p.imageA.timestamp ?? 0;
-      const bt = q.imageA.timestamp ?? 0;
-      if (at !== bt) return at - bt;
-      return (p.imageB.timestamp ?? 0) - (q.imageB.timestamp ?? 0);
-    });
-    return out;
-  }, [herd.data?.rawNeighbours, herd.data?.imagesById]);
-
-  // Keep only pairs where the SAME chain appears in both images — i.e. the
-  // herd is actually visible in the overlap of both linked frames. Pairs
-  // annotated on only one side (or with disjoint animals) are skipped.
+  // ---- Camera-grouped chronological pairs with registered crossovers. ----
+  // Same-camera entries need not be database neighbours. Cross-camera entries
+  // remain real homography neighbours sharing a chain in both images.
   const { pairs, chainSets } = useMemo(() => {
-    const ps: NeighbourPairWithMeta[] = [];
-    const cs: Set<string>[] = [];
-    for (const p of directPairs) {
+    const ps = buildHerdDisplayPairs(
+      herd.data?.imagesById ?? {},
+      herd.data?.rawNeighbours ?? [],
+      annotationsByImage
+    );
+    const cs = ps.map((p) => {
       const aAnns = annotationsByImage[p.image1Id] ?? [];
       const bAnns = annotationsByImage[p.image2Id] ?? [];
-      const aSet = new Set<string>();
-      for (const a of aAnns) aSet.add(a.objectId ?? a.id);
-      const bSet = new Set<string>();
-      for (const a of bAnns) bSet.add(a.objectId ?? a.id);
-      let shared = false;
-      for (const id of aSet) {
-        if (bSet.has(id)) {
-          shared = true;
-          break;
-        }
-      }
-      if (!shared) continue;
-      ps.push(p);
-      cs.push(new Set<string>([...aSet, ...bSet]));
-    }
+      return new Set<string>([
+        ...aAnns.map((a) => a.objectId ?? a.id),
+        ...bAnns.map((a) => a.objectId ?? a.id),
+      ]);
+    });
     return { pairs: ps, chainSets: cs };
-  }, [directPairs, annotationsByImage]);
+  }, [
+    herd.data?.imagesById,
+    herd.data?.rawNeighbours,
+    annotationsByImage,
+  ]);
 
-  // ---- Single timestamp-ordered lane + herd-run grouping ----
-  // Every animal-pair lives in one time-ordered lane; "herd runs" (maximal
-  // contiguous chain-sharing stretches) replace the old per-camera/overlap
-  // lanes, so navigation follows a herd across consecutive frames and cameras.
+  // ---- Single display-order lane + herd-run grouping ----
+  // "Herd runs" remain maximal contiguous chain-sharing stretches, now over
+  // the camera-grouped traversal rather than globally timestamp-sorted pairs.
   const { runIdByIndex, runStarts } = useMemo(
-    () => buildHerdRuns(chainSets),
-    [chainSets]
+    () => buildHerdRuns(chainSets, pairs.map((pair) => pair.herdId)),
+    [chainSets, pairs]
   );
 
   const navLane: Lane = useMemo(
@@ -275,7 +221,26 @@ export function HerdViewHarness({ annotationSetId }: Props) {
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [navCollapsed, setNavCollapsed] = useState(false);
+  const [imageBearings, setImageBearings] = useState<Map<string, number>>(
+    () => new Map()
+  );
   const initialChainParamHandledRef = useRef<string | null>(null);
+
+  const bearingForImage = useCallback(
+    (image: ImageType) => imageBearings.get(image.id) ?? 0,
+    [imageBearings]
+  );
+  const onImageBearingChange = useCallback(
+    (image: ImageType, bearing: number) => {
+      setImageBearings((current) => {
+        if (current.get(image.id) === bearing) return current;
+        const next = new Map(current);
+        next.set(image.id, bearing);
+        return next;
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     if (currentIndex >= pairs.length) setCurrentIndex(0);
@@ -557,6 +522,8 @@ export function HerdViewHarness({ annotationSetId }: Props) {
                 onToggleObscured={toggleObscured}
                 onViewChainTiles={onViewChainTiles}
                 onChangeLabel={handleChangeLabel}
+                bearingForImage={bearingForImage}
+                onImageBearingChange={onImageBearingChange}
                 onRequestPrevPair={hasPrev ? () => stepFrame(-1) : undefined}
                 onRequestNextPair={hasNext ? () => stepFrame(1) : undefined}
                 onRequestPrevHerd={hasPrevHerd ? () => jumpHerd(-1) : undefined}
@@ -569,6 +536,7 @@ export function HerdViewHarness({ annotationSetId }: Props) {
           {!navCollapsed && (
             <HerdNavBar
               chainSets={chainSets}
+              herdIds={pairs.map((pair) => pair.herdId)}
               lanes={[navLane]}
               activeIndex={currentIndex}
               activeLane={0}

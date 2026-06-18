@@ -17,11 +17,8 @@ import {
 } from '../individual-id/IndividualIdMap';
 import type { LocationSourceConfig } from '../individual-id/MapLocationOverlay';
 import { isOov } from '../individual-id/utils/identity';
-import type {
-  NeighbourPairWithMeta,
-  PixelTransform,
-} from '../individual-id/types';
-import type { ChainAnnotation } from './types';
+import type { PixelTransform } from '../individual-id/types';
+import type { ChainAnnotation, HerdDisplayPair } from './types';
 
 const DEFAULT_COLOR = '#3498db';
 const NOOP = () => {};
@@ -35,7 +32,7 @@ const LOCATION_SOURCES: LocationSourceConfig[] = [
 ];
 
 interface Props {
-  pair: NeighbourPairWithMeta;
+  pair: HerdDisplayPair;
   /** Annotations on the pair's older image (image1), drawn on the left map. */
   annotationsA: ChainAnnotation[];
   /** Annotations on the pair's newer image (image2), drawn on the right map. */
@@ -44,6 +41,11 @@ interface Props {
   onToggleObscured: (annotationId: string) => void;
   onViewChainTiles: (annotationId: string) => void;
   onChangeLabel: (annotationId: string) => void;
+  bearingForImage: (image: HerdDisplayPair['imageA']) => number;
+  onImageBearingChange: (
+    image: HerdDisplayPair['imageA'],
+    bearing: number
+  ) => void;
   /** Step one frame (pair) back / forward along the time-ordered sequence. */
   onRequestPrevPair?: () => void;
   onRequestNextPair?: () => void;
@@ -77,6 +79,8 @@ export function HerdMapPair({
   onToggleObscured,
   onViewChainTiles,
   onChangeLabel,
+  bearingForImage,
+  onImageBearingChange,
   onRequestPrevPair,
   onRequestNextPair,
   onRequestPrevHerd,
@@ -297,6 +301,10 @@ export function HerdMapPair({
         <div style={{ flex: 1, minHeight: 0 }}>
           <IndividualIdMap
             image={imageA}
+            bearing={bearingForImage(imageA)}
+            onBearingChange={(bearing) =>
+              onImageBearingChange(imageA, bearing)
+            }
             sourceKey={sourceKeys[0]}
             markers={markersA}
             onMarkerDrag={NOOP}
@@ -317,6 +325,10 @@ export function HerdMapPair({
         <div style={{ flex: 1, minHeight: 0 }}>
           <IndividualIdMap
             image={imageB}
+            bearing={bearingForImage(imageB)}
+            onBearingChange={(bearing) =>
+              onImageBearingChange(imageB, bearing)
+            }
             sourceKey={sourceKeys[1]}
             markers={markersB}
             onMarkerDrag={NOOP}
