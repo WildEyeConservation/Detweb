@@ -1,6 +1,7 @@
 import sys
 import types
 import unittest
+from pathlib import Path
 
 import numpy as np
 from PIL import Image
@@ -8,6 +9,15 @@ from PIL import Image
 sys.modules.setdefault('onnxruntime', types.SimpleNamespace())
 
 from stormfly_detector import StormflyDetector
+
+
+class StormflyGraphQLTests(unittest.TestCase):
+    def test_required_location_ids_use_non_null_graphql_variables(self):
+        source = Path(__file__).with_name('processSQS.py').read_text()
+
+        self.assertNotIn('$projectId: ID=""', source)
+        self.assertNotIn("'$projectId: ID'", source)
+        self.assertGreaterEqual(source.count('$projectId: ID!'), 2)
 
 
 class StormflyDetectorOrientationTests(unittest.TestCase):
