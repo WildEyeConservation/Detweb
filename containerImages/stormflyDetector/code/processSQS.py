@@ -41,7 +41,7 @@ client = Client(
 )
 
 create_location = gql("""
-mutation CreateLocation($confidence: Float, $height: Int, $imageId: ID!, $projectId: ID="", $setId: ID!, $source: String!, $width: Int, $x: Int!, $y: Int!) {
+mutation CreateLocation($confidence: Float, $height: Int, $imageId: ID!, $projectId: ID!, $setId: ID!, $source: String!, $width: Int, $x: Int!, $y: Int!) {
   createLocation(input: {confidence: $confidence, height: $height, imageId: $imageId, projectId: $projectId, setId: $setId, source: $source, x: $x, y: $y, width: $width}) {
     id
   }
@@ -109,7 +109,7 @@ LOCATION_BATCH = 25
 def _write_locations(body, image_id, points, size):
     for start in range(0, len(points), LOCATION_BATCH):
         chunk = points[start:start + LOCATION_BATCH]
-        var_defs = ['$imageId: ID!', '$projectId: ID', '$setId: ID!',
+        var_defs = ['$imageId: ID!', '$projectId: ID!', '$setId: ID!',
                     '$source: String!', '$size: Int']
         fields = []
         variables = {
