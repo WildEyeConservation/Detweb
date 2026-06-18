@@ -1,8 +1,14 @@
 import type { ImageNeighbourType, ImageType } from '../../schemaTypes';
 import { buildNeighbourTransforms } from '../../individual-id/utils/transforms';
+import {
+  buildAdjacency,
+  buildChainedTransformsFromAdj,
+  type ChainedTransform,
+} from '../../individual-id/utils/chainedTransforms';
 import type { ChainAnnotation, HerdDisplayPair } from '../types';
 
 const identity = (c: [number, number]): [number, number] => [c[0], c[1]];
+const MAX_CHAINED_TRANSFORM_HOPS = 20;
 
 function compareImages(a: ImageType, b: ImageType): number {
   const aTime = a.timestamp ?? null;
@@ -83,17 +89,56 @@ function syntheticPair(
   };
 }
 
-function crossoverPair(
+function chainedPair(
   herdId: string,
-  neighbour: ImageNeighbourType,
   image1: ImageType,
-  image2: ImageType
-): HerdDisplayPair | null {
-  const transforms = buildNeighbourTransforms(neighbour);
-  if (transforms.noHomography) return null;
+  image2: ImageType,
+  chained: ChainedTransform | undefined
+): HerdDisplayPair {
+  if (!chained) return syntheticPair(herdId, image1, image2);
   const swap = compareImages(image2, image1) < 0;
   const imageA = swap ? image2 : image1;
   const imageB = swap ? image1 : image2;
+  return {
+    herdId,
+    image1Id: imageA.id,
+    image2Id: imageB.id,
+    forward: swap ? chained.backward : chained.forward,
+    backward: swap ? chained.forward : chained.backward,
+    noHomography: false,
+    skipped: false,
+    imageA,
+    imageB,
+    crossover: false,
+  };
+}
+
+function registeredPair(
+  herdId: string,
+  neighbour: ImageNeighbourType,
+  image1: ImageType,
+  image2: ImageType,
+  crossover: boolean
+): HerdDisplayPair | null {
+  const transforms = buildNeighbourTransforms(neighbour);
+  if (transforms.noHomography) return null;
+
+  // Transform direction is defined by the neighbour row, independently of
+  // the order in which the candidate images were supplied.
+  const neighbourImage1 =
+    image1.id === neighbour.image1Id ? image1 : image2;
+  const neighbourImage2 =
+    image2.id === neighbour.image2Id ? image2 : image1;
+  if (
+    neighbourImage1.id !== neighbour.image1Id ||
+    neighbourImage2.id !== neighbour.image2Id
+  ) {
+    return null;
+  }
+
+  const swap = compareImages(neighbourImage2, neighbourImage1) < 0;
+  const imageA = swap ? neighbourImage2 : neighbourImage1;
+  const imageB = swap ? neighbourImage1 : neighbourImage2;
   return {
     herdId,
     image1Id: imageA.id,
@@ -105,7 +150,7 @@ function crossoverPair(
     imageA,
     imageB,
     rawNeighbour: neighbour,
-    crossover: true,
+    crossover,
   };
 }
 
@@ -125,7 +170,12 @@ function comparePairs(a: HerdDisplayPair, b: HerdDisplayPair): number {
 function cameraPairs(
   herdId: string,
   images: ImageType[],
-  chainsByImage: Map<string, Set<string>>
+  chainsByImage: Map<string, Set<string>>,
+  neighboursByPair: Map<string, ImageNeighbourType>,
+  getChainedTransform: (
+    sourceImageId: string,
+    targetImageId: string
+  ) => ChainedTransform | undefined
 ): HerdDisplayPair[] {
   const imagesByChain = new Map<string, ImageType[]>();
   for (const image of images) {
@@ -142,9 +192,24 @@ function cameraPairs(
     for (let i = 1; i < sightings.length; i++) {
       const image1 = sightings[i - 1];
       const image2 = sightings[i];
+      const neighbour = neighboursByPair.get(pairKey(image1.id, image2.id));
+      const pair = neighbour
+        ? registeredPair(herdId, neighbour, image1, image2, false) ??
+          chainedPair(
+            herdId,
+            image1,
+            image2,
+            getChainedTransform(image1.id, image2.id)
+          )
+        : chainedPair(
+            herdId,
+            image1,
+            image2,
+            getChainedTransform(image1.id, image2.id)
+          );
       candidates.set(
         pairKey(image1.id, image2.id),
-        syntheticPair(herdId, image1, image2)
+        pair
       );
     }
   }
@@ -165,8 +230,8 @@ function cameraPairs(
  * cross-camera neighbour needed to introduce each additional camera.
  *
  * Consequently every displayed pair shares at least one chain. Same-camera
- * pairs may be synthetic chronological adjacencies; cross-camera pairs always
- * use a registered homography neighbour.
+ * pairs use a direct or composed neighbour-graph homography when possible;
+ * cross-camera pairs always use a registered homography neighbour.
  */
 export function buildHerdDisplayPairs(
   imagesById: Record<string, ImageType>,
@@ -184,6 +249,39 @@ export function buildHerdDisplayPairs(
     annotatedImages.push(image);
   }
   annotatedImages.sort(compareImages);
+
+  const neighboursByPair = new Map<string, ImageNeighbourType>();
+  for (const neighbour of rawNeighbours) {
+    if (neighbour.skipped) continue;
+    neighboursByPair.set(
+      pairKey(neighbour.image1Id, neighbour.image2Id),
+      neighbour
+    );
+  }
+
+  // Reuse Individual ID's neighbour-graph composition. A selected pair that
+  // is not a direct neighbour can still be spatially linked when both images
+  // are reachable through a chain of registered homographies.
+  const adjacency = buildAdjacency(rawNeighbours);
+  const chainedTransformsBySource = new Map<
+    string,
+    Map<string, ChainedTransform>
+  >();
+  const getChainedTransform = (
+    sourceImageId: string,
+    targetImageId: string
+  ): ChainedTransform | undefined => {
+    let transforms = chainedTransformsBySource.get(sourceImageId);
+    if (!transforms) {
+      transforms = buildChainedTransformsFromAdj(
+        sourceImageId,
+        adjacency,
+        MAX_CHAINED_TRANSFORM_HOPS
+      );
+      chainedTransformsBySource.set(sourceImageId, transforms);
+    }
+    return transforms.get(targetImageId);
+  };
 
   // Chain connectivity, not camera or neighbour connectivity, defines herds.
   const herdSet = new DisjointSet();
@@ -242,7 +340,13 @@ export function buildHerdDisplayPairs(
       const chains1 = chainsByImage.get(image1.id);
       const chains2 = chainsByImage.get(image2.id);
       if (!chains1 || !chains2 || !intersects(chains1, chains2)) continue;
-      const pair = crossoverPair(herdId, neighbour, image1, image2);
+      const pair = registeredPair(
+        herdId,
+        neighbour,
+        image1,
+        image2,
+        true
+      );
       if (pair) crossovers.push(pair);
     }
     crossovers.sort(comparePairs);
@@ -260,7 +364,9 @@ export function buildHerdDisplayPairs(
           ...cameraPairs(
             herdId,
             imagesByCamera.get(firstCamera) ?? [],
-            chainsByImage
+            chainsByImage,
+            neighboursByPair,
+            getChainedTransform
           )
         );
         continue;
@@ -286,7 +392,9 @@ export function buildHerdDisplayPairs(
           ...cameraPairs(
             herdId,
             imagesByCamera.get(nextCamera) ?? [],
-            chainsByImage
+            chainsByImage,
+            neighboursByPair,
+            getChainedTransform
           )
         );
         continue;
@@ -301,7 +409,9 @@ export function buildHerdDisplayPairs(
         ...cameraPairs(
           herdId,
           imagesByCamera.get(nextCamera) ?? [],
-          chainsByImage
+          chainsByImage,
+          neighboursByPair,
+          getChainedTransform
         )
       );
     }

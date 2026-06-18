@@ -48,9 +48,11 @@ export interface AnnotationImageMeta {
 }
 
 /**
- * A pair shown by the herd viewer. Same-camera pairs are synthetic chronological
- * adjacencies and therefore have no neighbour row; camera crossovers always
- * carry the registered neighbour that supplies their homography.
+ * A pair shown by the herd viewer. Camera crossovers always carry a registered
+ * neighbour. Same-camera pairs are chronological chain adjacencies. They use
+ * a direct neighbour homography when available, otherwise an in-memory
+ * transform composed through the neighbour graph, with identity as a final
+ * fallback.
  */
 export interface HerdDisplayPair {
   /** Stable id of the chain-connected image component this pair belongs to. */
