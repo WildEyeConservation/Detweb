@@ -1,7 +1,4 @@
-"""SQS worker for Stormfly.
-
-TESTING ONLY: Stormfly weights are intentionally not included in this image.
-"""
+"""Stormfly SQS worker; testing weights are excluded."""
 
 import json
 import os
@@ -28,9 +25,7 @@ BOX_SIZE = int(os.environ.get('STORMFLY_BOX_SIZE', '64'))
 
 sqs = boto3.client('sqs', region_name=REGION)
 s3 = boto3.client('s3', region_name=REGION)
-# ECS task-role credentials rotate every few hours; passing the refreshable
-# botocore credentials object (instead of a frozen snapshot) makes AWS4Auth
-# re-read keys on every request, so long-lived workers keep signing correctly.
+# Keep credentials refreshable for long-lived workers.
 auth = AWS4Auth(
     region=REGION,
     service='appsync',
@@ -108,29 +103,52 @@ def _write_location(body, image_id, x, y, confidence, size):
     )
 
 
-# Optional rotation support (mirrors the Scoutbot worker).
-#
-# Some surveys hold landscape images whose correct orientation is only reached by
-# rotating them (e.g. 270 CCW), but that rotation was never written to EXIF, so the
-# detector sees them in the wrong orientation. When a message carries a `rotation`
-# (CCW degrees, one of 90/180/270 - message-level, or per-image as an override) we
-# rotate the pixels before inference and map every detection point back into the
-# original/stored frame so the saved Locations still line up with the image.
-#
-# An optional `landscape` flag gates the rotation on the image's actual dimensions:
-#   landscape=True  -> only rotate when width  > height
-#   landscape=False -> only rotate when height > width
-#   landscape unset -> rotate regardless of dimensions
-_TRANSPOSE = getattr(Image, 'Transpose', Image)  # enum moved under Image.Transpose in Pillow 9.1
+LOCATION_BATCH = 25
+
+
+def _write_locations(body, image_id, points, size):
+    for start in range(0, len(points), LOCATION_BATCH):
+        chunk = points[start:start + LOCATION_BATCH]
+        var_defs = ['$imageId: ID!', '$projectId: ID', '$setId: ID!',
+                    '$source: String!', '$size: Int']
+        fields = []
+        variables = {
+            'imageId': image_id,
+            'projectId': body['projectId'],
+            'setId': body['setId'],
+            'source': 'stormfly-testing',
+            'size': size,
+        }
+        for i, (x, y, confidence) in enumerate(chunk):
+            var_defs += [f'$x{i}: Int!', f'$y{i}: Int!', f'$c{i}: Float']
+            fields.append(
+                f'p{i}: createLocation(input: {{imageId: $imageId, '
+                f'projectId: $projectId, setId: $setId, source: $source, '
+                f'width: $size, height: $size, x: $x{i}, y: $y{i}, '
+                f'confidence: $c{i}}}) {{ id }}'
+            )
+            variables[f'x{i}'] = x
+            variables[f'y{i}'] = y
+            variables[f'c{i}'] = confidence
+        document = gql(
+            'mutation BatchCreateLocations('
+            + ', '.join(var_defs)
+            + ') { '
+            + ' '.join(fields)
+            + ' }'
+        )
+        client.execute(document, variable_values=json.dumps(variables))
+
+
+_TRANSPOSE = getattr(Image, 'Transpose', Image)
 _ROTATE_TRANSPOSE = {
-    90: _TRANSPOSE.ROTATE_90,    # PIL transpose rotations are counter-clockwise
+    90: _TRANSPOSE.ROTATE_90,
     180: _TRANSPOSE.ROTATE_180,
     270: _TRANSPOSE.ROTATE_270,
 }
 
 
 def _normalize_rotation(value):
-    """Return rotation in CCW degrees (0/90/180/270), or 0 if unset/invalid."""
     if value is None:
         return 0
     try:
@@ -146,14 +164,12 @@ def _normalize_rotation(value):
 
 
 def _get_rotation(body, image):
-    """Per-image rotation overrides the message-level rotation; both are CCW degrees."""
     if image.get('rotation') is not None:
         return _normalize_rotation(image.get('rotation'))
     return _normalize_rotation(body.get('rotation'))
 
 
 def _normalize_landscape(value):
-    """Return True/False for the landscape constraint, or None when unset/invalid."""
     if value is None:
         return None
     if isinstance(value, bool):
@@ -171,17 +187,12 @@ def _normalize_landscape(value):
 
 
 def _get_landscape(body, image):
-    """Per-image landscape constraint overrides the message-level one. Returns
-    True/False, or None when unset (no orientation check)."""
     if image.get('landscape') is not None:
         return _normalize_landscape(image.get('landscape'))
     return _normalize_landscape(body.get('landscape'))
 
 
 def _orientation_qualifies(orig_width, orig_height, landscape):
-    """Whether an image's orientation matches the optional landscape constraint.
-    landscape=True requires width > height; False requires height > width;
-    None imposes no constraint. Square images never qualify when a constraint is set."""
     if landscape is None:
         return True
     if landscape:
@@ -190,12 +201,6 @@ def _orientation_qualifies(orig_width, orig_height, landscape):
 
 
 def _maybe_rotate_image(pil_image, rotation, landscape):
-    """Return (image_for_inference, rotation_info).
-
-    When `rotation` (CCW degrees) is set and the image's orientation satisfies the
-    optional `landscape` constraint, the returned image is rotated and rotation_info
-    records the rotation + pre-rotation dimensions so detection points can be mapped
-    back to the stored frame. Otherwise the original image is returned unchanged."""
     if not rotation:
         return pil_image, {'rotation': 0}
     orig_width, orig_height = pil_image.size
@@ -211,8 +216,6 @@ def _maybe_rotate_image(pil_image, rotation, landscape):
 
 
 def _map_point_to_original(x, y, rotation_info):
-    """Map a detection point (x, y - in the rotated frame) back to the original
-    pre-rotation frame, using the rotation recorded in rotation_info."""
     rotation = rotation_info.get('rotation', 0) if rotation_info else 0
     if not rotation:
         return x, y
@@ -251,16 +254,12 @@ def handle_message(body):
             _write_location(body, image['imageId'], 0, 0, 0.0, 0)
             continue
 
-        for detection in detections:
-            x, y = _map_point_to_original(detection.x, detection.y, rotation_info)
-            _write_location(
-                body,
-                image['imageId'],
-                x,
-                y,
-                detection.score,
-                BOX_SIZE,
-            )
+        points = [
+            (*_map_point_to_original(detection.x, detection.y, rotation_info),
+             detection.score)
+            for detection in detections
+        ]
+        _write_locations(body, image['imageId'], points, BOX_SIZE)
 
 
 def main():
@@ -282,9 +281,7 @@ def main():
                 )
             except Exception as error:
                 print(f'Error processing Stormfly message: {error}', flush=True)
-                # Release the message immediately so retries (and eventual DLQ
-                # redrive) happen promptly instead of after the full 30-minute
-                # visibility timeout.
+                # Retry immediately instead of waiting for visibility expiry.
                 try:
                     sqs.change_message_visibility(
                         QueueUrl=QUEUE_URL,
