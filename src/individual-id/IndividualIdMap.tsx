@@ -95,6 +95,15 @@ interface Props {
   onMapClick?: (x: number, y: number) => void;
   /** Receives the map instance + coord converters once the map is ready. */
   onMapInstance?: MapInstanceCallback;
+  /** Controlled map bearing. Used by the herd viewer for camera-wide rotation. */
+  bearing?: number;
+  /** Fired when the user uses this map's 90-degree rotation control. */
+  onBearingChange?: (bearing: number) => void;
+  /**
+   * Mounted maps with the same rotation group rotate together immediately.
+   * The herd viewer supplies a camera-based key (or an image fallback).
+   */
+  rotationGroup?: string;
   /**
    * Show a passive popup (name only) for this candidate. Set by the parent
    * when the partner marker on the OTHER map is hovered, so the user can
@@ -207,8 +216,34 @@ const PREVIEW_LAYER_GRID = 'individual-id-homography-grid';
  * homography editor's RotateControl — keeping a consistent feel between the
  * two map experiences.
  */
+type RotationGroupListener = (bearing: number) => void;
+const rotationGroupListeners = new Map<string, Set<RotationGroupListener>>();
+
+function publishRotation(group: string, bearing: number): void {
+  for (const listener of rotationGroupListeners.get(group) ?? []) {
+    listener(bearing);
+  }
+}
+
+function subscribeRotation(
+  group: string,
+  listener: RotationGroupListener
+): () => void {
+  const listeners = rotationGroupListeners.get(group) ?? new Set();
+  listeners.add(listener);
+  rotationGroupListeners.set(group, listeners);
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) rotationGroupListeners.delete(group);
+  };
+}
+
 class RotateControl implements maplibregl.IControl {
   private container?: HTMLDivElement;
+  constructor(
+    private readonly onBearingChange?: (bearing: number) => void,
+    private readonly rotationGroup?: string
+  ) {}
   onAdd(map: maplibregl.Map) {
     const c = document.createElement('div');
     c.className = 'maplibregl-ctrl maplibregl-ctrl-group';
@@ -224,7 +259,12 @@ class RotateControl implements maplibregl.IControl {
     );
     btn.onclick = () => {
       const next = Math.round(map.getBearing() / 90) * 90 - 90;
-      map.easeTo({ bearing: next, duration: 300 });
+      // Apply synchronously. An animated rotation emits a stream of `move`
+      // events which competes with the pair viewer's linked-map panning and
+      // can leave same-camera peers at different intermediate bearings.
+      map.setBearing(next);
+      this.onBearingChange?.(next);
+      if (this.rotationGroup) publishRotation(this.rotationGroup, next);
     };
     c.appendChild(btn);
     this.container = c;
@@ -443,6 +483,9 @@ export function IndividualIdMap({
   onMarkerCtrlClick,
   onMapClick,
   onMapInstance,
+  bearing = 0,
+  onBearingChange,
+  rotationGroup,
   passiveHoverKey,
   onHoverChange,
   onMarkerDelete,
@@ -937,6 +980,7 @@ export function IndividualIdMap({
         layers: [],
       },
       center: px2lngLat(image.width / 2, image.height / 2),
+      bearing,
       zoom: 1,
       minZoom: -20,
       maxZoom: 22,
@@ -950,7 +994,10 @@ export function IndividualIdMap({
       new maplibregl.NavigationControl({ showCompass: false, showZoom: true }),
       'top-left'
     );
-    m.addControl(new RotateControl(), 'top-left');
+    m.addControl(
+      new RotateControl(onBearingChange, rotationGroup),
+      'top-left'
+    );
     m.addControl(new HomographyControl(), 'top-left');
 
     m.on('load', () => {
@@ -1013,6 +1060,7 @@ export function IndividualIdMap({
         [px2lngLat(0, image.height), px2lngLat(image.width, 0)],
         { padding: 20, animate: false }
       );
+      m.setBearing(bearing);
       updateVisibleTiles(m);
       mapForPopupRef.current = m;
       setMap(m);
@@ -1071,6 +1119,19 @@ export function IndividualIdMap({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [image.id, sourceKey, px2lngLat, updateVisibleTiles, image.width, image.height]);
+
+  useEffect(() => {
+    if (!map || Math.abs(map.getBearing() - bearing) < 0.01) return;
+    map.setBearing(bearing);
+  }, [map, bearing]);
+
+  useEffect(() => {
+    if (!map || !rotationGroup) return;
+    return subscribeRotation(rotationGroup, (nextBearing) => {
+      if (Math.abs(map.getBearing() - nextBearing) < 0.01) return;
+      map.setBearing(nextBearing);
+    });
+  }, [map, rotationGroup]);
 
   // Notify parent of map instance / converters.
   useEffect(() => {

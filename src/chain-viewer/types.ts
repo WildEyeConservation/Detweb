@@ -1,3 +1,6 @@
+import type { ImageNeighbourType, ImageType } from '../schemaTypes';
+import type { PixelTransform } from '../individual-id/types';
+
 /**
  * Minimal annotation shape pulled up-front for the chain viewer. Image and
  * camera details are fetched lazily per chain via the harness, so we keep
@@ -42,4 +45,24 @@ export interface AnnotationImageMeta {
   cameraName: string | null;
   cameraSerial: string | null;
   sourceKey: string | null;
+}
+
+/**
+ * A pair shown by the herd viewer. Same-camera pairs are synthetic chronological
+ * adjacencies and therefore have no neighbour row; camera crossovers always
+ * carry the registered neighbour that supplies their homography.
+ */
+export interface HerdDisplayPair {
+  /** Stable id of the chain-connected image component this pair belongs to. */
+  herdId: string;
+  image1Id: string;
+  image2Id: string;
+  forward: PixelTransform;
+  backward: PixelTransform;
+  noHomography: boolean;
+  skipped: boolean;
+  imageA: ImageType;
+  imageB: ImageType;
+  rawNeighbour?: ImageNeighbourType;
+  crossover: boolean;
 }
