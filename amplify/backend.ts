@@ -494,7 +494,7 @@ if (enableEcs) {
         ),
         rootVolumeSize: 100,
         messagesPerTask: 10,
-        maxTasks: 180,
+        maxTasks: 20,
       }
     );
 
