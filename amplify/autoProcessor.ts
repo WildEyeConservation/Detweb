@@ -153,29 +153,10 @@ export class AutoProcessor extends Construct {
       maxCapacity: maxTasks,
     });
 
-    // Step scaling policies support at most 40 intervals, including the
-    // zero-message interval. Preserve one-task granularity for normal-sized
-    // processors and spread larger limits across the remaining 39 intervals.
-    const maxPositiveScalingSteps = 39;
-    const desiredCapacities =
-      maxTasks <= maxPositiveScalingSteps
-        ? Array.from({ length: maxTasks }, (_, index) => index + 1)
-        : Array.from({ length: maxPositiveScalingSteps }, (_, index) =>
-            index === 0
-              ? 1
-              : Math.ceil(
-                  1 +
-                    (index * (maxTasks - 1)) /
-                      (maxPositiveScalingSteps - 1)
-                )
-          );
-
-    const steps: autoscaling.ScalingInterval[] = [{ upper: 0, change: 0 }];
-    let previousCapacity = 0;
-    for (const desiredCapacity of desiredCapacities) {
-      const lower = previousCapacity * messagesPerTask + 1;
-      steps.push({ lower, change: desiredCapacity });
-      previousCapacity = desiredCapacity;
+    const steps: autoscaling.ScalingInterval[] = [ { upper: 0, change: 0 } ];
+    for (let i = 1; i <= maxTasks; i++) {
+      const lower = (i - 1) * messagesPerTask + 1;
+      steps.push({ lower, change: i });
     }
 
     scaling.scaleOnMetric('ScaleOnSQSMessages', {

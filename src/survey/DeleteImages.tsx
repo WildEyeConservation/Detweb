@@ -17,6 +17,7 @@ import { Button, Spinner, Alert, ProgressBar, Badge, Form } from 'react-bootstra
 import { fetchAllPaginatedResults } from '../utils';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
+import './surveyMap.css';
 
 type ImageData = {
   id: string;
@@ -79,6 +80,7 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
     null
   );
   const [popupImage, setPopupImage] = useState<ImageData | null>(null);
+  const [showInstructions, setShowInstructions] = useState(false);
   const [shapefileCoords, setShapefileCoords] = useState<
     [number, number][] | null
   >(null);
@@ -738,31 +740,23 @@ This action cannot be undone.`;
   return (
     <>
       <div className='p-3 d-flex flex-column gap-3'>
-        {/* Instructions */}
-        <Alert variant='info' className='mb-0'>
-          <strong>Instructions:</strong>
-          <ul className='mb-0 mt-2'>
-            <li>Click on an image marker to select it</li>
-            <li>
-              Hold <kbd>Ctrl</kbd> + click to select multiple images
-            </li>
-            <li>
-              Use the polygon tool (top-right) to draw around multiple images
-            </li>
-            <li>Right-click on a marker to view image details</li>
-            <li>Blue markers = unselected, Red markers = selected</li>
-          </ul>
-        </Alert>
-
-        {/* Status bar */}
+        {/* Selection header + toolbar */}
         <div className='d-flex justify-content-between align-items-center flex-wrap gap-2'>
-          <div className='d-flex gap-2 align-items-center'>
-            <Badge bg='primary'>{images.length} images loaded</Badge>
-            <Badge bg={selectedCount > 0 ? 'danger' : 'secondary'}>
-              {selectedCount} selected
-            </Badge>
+          <div className='d-flex align-items-baseline gap-2'>
+            <div
+              className='text-uppercase fw-semibold text-muted'
+              style={{ letterSpacing: 0.5, fontSize: 12 }}
+            >
+              Selection
+            </div>
+            <span className='text-muted' style={{ fontSize: 13 }}>
+              {images.length} loaded {' · '}
+              <span className={selectedCount > 0 ? 'text-danger fw-semibold' : ''}>
+                {selectedCount} selected
+              </span>
+            </span>
           </div>
-          <div className='d-flex gap-2'>
+          <div className='d-flex gap-2 flex-wrap'>
             <Button
               size='sm'
               variant='outline-secondary'
@@ -794,22 +788,47 @@ This action cannot be undone.`;
             >
               Clear Selection
             </Button>
-            <Button
-              size='sm'
-              variant='danger'
-              onClick={handleDelete}
-              disabled={loading || deleting || selectedCount === 0}
-            >
-              {deleting ? (
-                <>
-                  <Spinner animation='border' size='sm' className='me-1' />
-                  Deleting...
-                </>
-              ) : (
-                `Delete ${selectedCount > 0 ? `(${selectedCount})` : ''}`
-              )}
-            </Button>
           </div>
+        </div>
+
+        {/* Instructions (collapsible) */}
+        <div>
+          <button
+            type='button'
+            className='text-muted d-flex align-items-center gap-1'
+            onClick={() => setShowInstructions((v) => !v)}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              cursor: 'pointer',
+              fontSize: 13,
+            }}
+          >
+            <span
+              style={{
+                display: 'inline-block',
+                transform: showInstructions ? 'rotate(90deg)' : 'rotate(0deg)',
+                transition: 'transform 0.15s',
+              }}
+            >
+              ▶
+            </span>
+            Instructions
+          </button>
+          {showInstructions && (
+            <ul className='mt-2 mb-0 text-muted' style={{ fontSize: 13 }}>
+              <li>Click on an image marker to select it</li>
+              <li>
+                Hold <kbd>Ctrl</kbd> + click to select multiple images
+              </li>
+              <li>
+                Use the polygon tool (top-right) to draw around multiple images
+              </li>
+              <li>Right-click on a marker to view image details</li>
+              <li>Blue markers = unselected, Red markers = selected</li>
+            </ul>
+          )}
         </div>
 
         {/* Shapefile controls */}
@@ -905,16 +924,7 @@ This action cannot be undone.`;
         )}
 
         {/* Map */}
-        <div
-          style={{
-            height: '600px',
-            width: '100%',
-            position: 'relative',
-            border: '1px solid #dee2e6',
-            borderRadius: '4px',
-            overflow: 'hidden',
-          }}
-        >
+        <div className='survey-map'>
           {images.length === 0 && !loading ? (
             <div className='d-flex justify-content-center align-items-center h-100 text-muted'>
               No images with GPS coordinates found
@@ -1037,6 +1047,20 @@ This action cannot be undone.`;
         </div>
       </div>
       <Footer>
+        <Button
+          variant='danger'
+          onClick={handleDelete}
+          disabled={loading || deleting || selectedCount === 0}
+        >
+          {deleting ? (
+            <>
+              <Spinner animation='border' size='sm' className='me-1' />
+              Deleting...
+            </>
+          ) : (
+            `Delete ${selectedCount > 0 ? `(${selectedCount})` : ''}`
+          )}
+        </Button>
         <Button
           variant='dark'
           onClick={() => showModal(null)}

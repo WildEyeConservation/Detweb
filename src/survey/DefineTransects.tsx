@@ -22,6 +22,7 @@ import 'leaflet/dist/leaflet.css';
 import { EditControl } from 'react-leaflet-draw';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import proj4 from 'proj4';
+import './surveyMap.css';
 
 // tolerance in degrees for simplifying the transect line
 const SIMPLIFY_TOLERANCE = 0.002;
@@ -298,6 +299,7 @@ export default function DefineTransects({ projectId, organizationId }: { project
   // disabledClose: only disables Close during active save; saveDisabled: governs Save button enablement
   const [disabledClose, setDisabledClose] = useState(false);
   const [saveDisabled, setSaveDisabled] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
   const [polygonCoords, setPolygonCoords] = useState<
     L.LatLngExpression[] | null
   >(null);
@@ -1190,11 +1192,46 @@ export default function DefineTransects({ projectId, organizationId }: { project
 
   return (
     <>
-      <Form className='p-3'>
-        <Form.Group className='d-flex flex-column'>
-          <Form.Label className='mb-0'>Define Transects and Strata</Form.Label>
-          <span className='text-muted mb-2' style={{ fontSize: '14px' }}>
-            <ul className='mb-0'>
+      <Form className='d-flex flex-column gap-3 p-3'>
+        <div className='d-flex justify-content-between align-items-center gap-2'>
+          <div
+            className='text-uppercase fw-semibold text-muted'
+            style={{ letterSpacing: 0.5, fontSize: 12 }}
+          >
+            Define Transects and Strata
+          </div>
+          {existingData && (
+            <Button variant='outline-primary' size='sm' onClick={clearStrata}>
+              Clear Strata
+            </Button>
+          )}
+        </div>
+        <div>
+          <button
+            type='button'
+            className='text-muted d-flex align-items-center gap-1'
+            onClick={() => setShowInstructions((v) => !v)}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              cursor: 'pointer',
+              fontSize: 13,
+            }}
+          >
+            <span
+              style={{
+                display: 'inline-block',
+                transform: showInstructions ? 'rotate(90deg)' : 'rotate(0deg)',
+                transition: 'transform 0.15s',
+              }}
+            >
+              ▶
+            </span>
+            Instructions
+          </button>
+          {showInstructions && (
+            <ul className='mt-2 mb-0 text-muted' style={{ fontSize: '14px' }}>
               <li>
                 Single-click a point to select its transect (Ctrl-click for
                 multi-select). Clicking a selected transect will deselect it.
@@ -1226,17 +1263,9 @@ export default function DefineTransects({ projectId, organizationId }: { project
                 </li>
               )}
             </ul>
-          </span>
-          {existingData && (
-            <Button
-              variant='outline-primary'
-              className='mb-2'
-              onClick={clearStrata}
-            >
-              Clear Strata
-            </Button>
           )}
-          <div style={{ height: '600px', width: '100%', position: 'relative' }}>
+        </div>
+        <div className='survey-map'>
             {partsLoading !== null ? (
               <div className='d-flex justify-content-center align-items-center mt-3'>
                 <Spinner animation='border' />
@@ -1605,7 +1634,6 @@ export default function DefineTransects({ projectId, organizationId }: { project
               </span>
             </div>
           )}
-        </Form.Group>
       </Form>
       <Footer>
         <Button
