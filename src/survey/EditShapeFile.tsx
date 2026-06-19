@@ -19,6 +19,7 @@ import { Footer } from '../Modal';
 import FileInput from '../FileInput';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
+import './surveyMap.css';
 
 export default function EditShapeFile({ projectId, organizationId }: { projectId: string; organizationId: string }) {
   const { client, showModal } = useContext(GlobalContext)!;
@@ -262,9 +263,14 @@ export default function EditShapeFile({ projectId, organizationId }: { projectId
 
   return (
     <>
-      <Form className='p-3'>
-        <Form.Group className='d-flex flex-column'>
-          <Form.Label className='mb-0'>Upload or Draw Shapefile</Form.Label>
+      <Form className='d-flex flex-column gap-3 p-3'>
+        <div className='d-flex flex-column'>
+          <div
+            className='text-uppercase fw-semibold text-muted mb-1'
+            style={{ letterSpacing: 0.5, fontSize: 12 }}
+          >
+            Upload or Draw Shapefile
+          </div>
           <span className='text-muted mb-2' style={{ fontSize: '14px' }}>
             Select a shapefile to overlay on the map or draw a new one. Press
             "Save Shapefile" at the bottom of the page to save.
@@ -279,14 +285,29 @@ export default function EditShapeFile({ projectId, organizationId }: { projectId
           >
             <p className='mb-0'>Select Shapefile (optional)</p>
           </FileInput>
-        </Form.Group>
-        {loadingShapefile && (
-          <div className='d-flex justify-content-center align-items-center mt-3'>
-            <Spinner animation='border' />
-            <span className='ms-2'>Loading shapefile</span>
+          {loadingShapefile && (
+            <div className='d-flex justify-content-center align-items-center mt-3'>
+              <Spinner animation='border' />
+              <span className='ms-2'>Loading shapefile</span>
+            </div>
+          )}
+        </div>
+
+        <hr
+          className='m-0'
+          style={{
+            borderTop: '1px solid rgba(255, 255, 255, 0.12)',
+            opacity: 1,
+          }}
+        />
+
+        <div className='d-flex flex-column'>
+          <div
+            className='text-uppercase fw-semibold text-muted mb-2'
+            style={{ letterSpacing: 0.5, fontSize: 12 }}
+          >
+            Shapefile Map
           </div>
-        )}
-        <Form.Group className='mt-3'>
           <Form.Group className='d-flex flex-column mb-2'>
             <Form.Label className='mb-0'>Drawing Mode</Form.Label>
             <div className='d-flex gap-3'>
@@ -313,7 +334,7 @@ export default function EditShapeFile({ projectId, organizationId }: { projectId
               computing results.
             </span>
           </Form.Group>
-          <div style={{ height: '600px', width: '100%', position: 'relative' }}>
+          <div className='survey-map'>
             <MapContainer
               style={{ height: '100%', width: '100%' }}
               center={[0, 0]}
@@ -441,7 +462,7 @@ export default function EditShapeFile({ projectId, organizationId }: { projectId
               </span>
             </div>
           )}
-        </Form.Group>
+        </div>
       </Form>
       <Footer>
         <Button
