@@ -8,7 +8,7 @@ import {
 } from 'react';
 import { GlobalContext } from '../Context';
 import { Footer } from '../Modal';
-import maplibregl, { type StyleSpecification } from 'maplibre-gl';
+import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { TerraDraw, TerraDrawPolygonMode } from 'terra-draw';
 import { TerraDrawMapLibreGLAdapter } from 'terra-draw-maplibre-gl-adapter';
@@ -22,6 +22,12 @@ import {
   Form,
 } from 'react-bootstrap';
 import { fetchAllPaginatedResults } from '../utils';
+import {
+  BASE_STYLE,
+  EMPTY_FC,
+  escapeHtml,
+  type FeatureCollection,
+} from './surveyMapStyle';
 import './surveyMap.css';
 
 type ImageData = {
@@ -63,32 +69,6 @@ const SRC_IMAGES = 'images';
 const LYR_IMAGES = 'images-points';
 const SRC_SHAPEFILE = 'shapefile';
 const LYR_SHAPEFILE = 'shapefile-line';
-
-type FeatureCollection = { type: 'FeatureCollection'; features: any[] };
-const EMPTY_FC: FeatureCollection = { type: 'FeatureCollection', features: [] };
-
-// OpenStreetMap raster basemap, matching the rest of the app's MapLibre views
-// (see DensityMap.tsx). Glyphs are needed for any symbol layers MapLibre adds.
-const BASE_STYLE: StyleSpecification = {
-  version: 8,
-  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-  sources: {
-    osm: {
-      type: 'raster',
-      tiles: [
-        'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      ],
-      tileSize: 256,
-      // OSM serves tiles up to z19; beyond that MapLibre overzooms the z19 tile
-      // rather than requesting non-existent tiles (which would 400 as CORS).
-      maxzoom: 19,
-      attribution: '&copy; OpenStreetMap contributors',
-    },
-  },
-  layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
-};
 
 // ---------------------------------------------------------------------------
 // Resilience helpers — retry with backoff, idempotency detection and a bounded
@@ -278,20 +258,6 @@ async function runPool<T>(
     );
   }
   await Promise.all(runners);
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(
-    /[&<>"']/g,
-    (c) =>
-      ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;',
-      }[c]!)
-  );
 }
 
 export default function DeleteImages({ projectId }: { projectId: string }) {
