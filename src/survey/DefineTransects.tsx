@@ -1,31 +1,80 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import {
+  useState,
+  useEffect,
+  useContext,
+  useRef,
+  useMemo,
+  useCallback,
+} from 'react';
 import { GlobalContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
 import { Form, Spinner, Button } from 'react-bootstrap';
 import { Footer } from '../Modal';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import {
-  MapContainer,
-  TileLayer,
-  CircleMarker,
-  Popup,
-  Polygon,
-  FeatureGroup,
-} from 'react-leaflet';
-import L from 'leaflet';
+  TerraDraw,
+  TerraDrawPolygonMode,
+  TerraDrawLineStringMode,
+  TerraDrawSelectMode,
+  TerraDrawRenderMode,
+} from 'terra-draw';
+import { TerraDrawMapLibreGLAdapter } from 'terra-draw-maplibre-gl-adapter';
 import * as turf from '@turf/turf';
 import type {
   Feature as GeoJSONFeature,
   Polygon as GeoJSONPolygon,
   LineString as GeoJSONLineString,
 } from 'geojson';
-import 'leaflet/dist/leaflet.css';
-import { EditControl } from 'react-leaflet-draw';
-import 'leaflet-draw/dist/leaflet.draw.css';
 import proj4 from 'proj4';
+import { BASE_STYLE, EMPTY_FC } from './surveyMapStyle';
 import './surveyMap.css';
 
 // tolerance in degrees for simplifying the transect line
 const SIMPLIFY_TOLERANCE = 0.002;
+
+// Terra Draw mode names: a polygon "enclose" tool to lasso points into a new
+// transect, a linestring "strata" tool to split the boundary into strata, a
+// select mode to edit/delete drawn lines, and an inert idle/render mode so the
+// image-point click handlers work when no tool is active.
+const MODE_ENCLOSE = 'enclose';
+const MODE_STRATA = 'strata';
+const MODE_SELECT = 'select';
+const MODE_IDLE = 'idle';
+
+const SRC_POINTS = 'tx-points';
+const LYR_POINTS = 'tx-points-layer';
+const SRC_BOUNDARY = 'tx-boundary';
+const LYR_BOUNDARY = 'tx-boundary-line';
+const SRC_EXCLUSIONS = 'tx-exclusions';
+const LYR_EXCLUSIONS = 'tx-exclusions-line';
+const SRC_STRATA = 'tx-strata';
+const LYR_STRATA_FILL = 'tx-strata-fill';
+const LYR_STRATA_LINE = 'tx-strata-line';
+
+// a simple palette for transect / strata colors
+const transectColors = [
+  'red',
+  'blue',
+  'green',
+  'orange',
+  'purple',
+  'brown',
+  'pink',
+  'cyan',
+];
+const strataColors = [
+  'yellow',
+  'cyan',
+  'magenta',
+  'grey',
+  'lightgreen',
+  'lightblue',
+  'lightcoral',
+  'lightpink',
+];
+
+type LatLng = [number, number]; // [lat, lng]
 
 // Utilities: validation and sanitization
 function isFiniteNumber(n: any): n is number {
@@ -43,10 +92,8 @@ function isValidLatLng(lat: any, lng: any): lat is number {
   );
 }
 
-function toLatLngPairs(
-  values: Array<number | null | undefined>
-): [number, number][] {
-  const pairs: [number, number][] = [];
+function toLatLngPairs(values: Array<number | null | undefined>): LatLng[] {
+  const pairs: LatLng[] = [];
   for (let i = 0; i + 1 < values.length; i += 2) {
     const lat = values[i] as any;
     const lng = values[i + 1] as any;
@@ -55,13 +102,6 @@ function toLatLngPairs(
     }
   }
   return pairs;
-}
-
-// @ts-ignore -- reserved for future use
-function filterValidImages<T extends { latitude: any; longitude: any }>(
-  imgs: T[]
-): T[] {
-  return imgs.filter((img) => isValidLatLng(img.latitude, img.longitude));
 }
 
 // Impute missing/invalid lat/lng by time-based linear interpolation between
@@ -171,7 +211,7 @@ function getProjectedDirectionalBaseline(
   });
 
   // Now find min/max along the aligned axis (which is yRot)
-  const yVals = rotated.map(([_, y]) => y);
+  const yVals = rotated.map(([, y]) => y);
   const minY = Math.min(...yVals);
   const maxY = Math.max(...yVals);
 
@@ -277,7 +317,7 @@ function mergeSmallSegmentsByBoundary(
       });
       return minDist;
     };
-    let bestNeighbor = neighbors.reduce(
+    const bestNeighbor = neighbors.reduce(
       (best, nbr) => (neighborDist(nbr) < neighborDist(best) ? nbr : best),
       neighbors[0]
     );
@@ -289,7 +329,13 @@ function mergeSmallSegmentsByBoundary(
 }
 
 // define transects and strata
-export default function DefineTransects({ projectId, organizationId }: { projectId: string; organizationId: string }) {
+export default function DefineTransects({
+  projectId,
+  organizationId,
+}: {
+  projectId: string;
+  organizationId: string;
+}) {
   const { client, showModal } = useContext(GlobalContext)!;
   const [images, setImages] = useState<any[]>([]);
   const [partsLoading, setPartsLoading] = useState<null | number>(0);
@@ -300,83 +346,48 @@ export default function DefineTransects({ projectId, organizationId }: { project
   const [disabledClose, setDisabledClose] = useState(false);
   const [saveDisabled, setSaveDisabled] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
-  const [polygonCoords, setPolygonCoords] = useState<
-    L.LatLngExpression[] | null
-  >(null);
+  const [polygonCoords, setPolygonCoords] = useState<LatLng[] | null>(null);
   const [segmentedImages, setSegmentedImages] = useState<
     (any & { transectId: number })[]
   >([]);
-  const [transectInfo, setTransectInfo] = useState<{
-    position: L.LatLngExpression;
-    transectId: number;
-  } | null>(null);
-  const [mergePrompt, setMergePrompt] = useState<{
-    position: L.LatLngExpression;
-    ids: number[];
-  } | null>(null);
   const [selectedTransectIds, setSelectedTransectIds] = useState<Set<number>>(
     new Set()
   );
-  const [drawnPolygonLayer, setDrawnPolygonLayer] = useState<L.Layer | null>(
-    null
-  );
   const [pendingPolygon, setPendingPolygon] = useState<{
-    layer: L.Layer;
+    id: string | number;
     enclosedImageIds: Set<any>;
-    position: L.LatLngExpression;
+    center: [number, number]; // [lng, lat]
   } | null>(null);
-  const [strataLines, setStrataLines] = useState<L.LatLngExpression[][]>([]);
+  const [strataLines, setStrataLines] = useState<LatLng[][]>([]);
   const [strataSections, setStrataSections] = useState<
-    { coords: L.LatLngExpression[]; id: number }[]
+    { coords: LatLng[]; id: number }[]
   >([]);
 
-  // Add ref for map instance
-  const mapRef = useRef<L.Map | null>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [activeTool, setActiveTool] = useState<
+    'enclose' | 'strata' | 'select' | null
+  >(null);
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const mapDivRef = useRef<HTMLDivElement>(null);
+  const drawRef = useRef<TerraDraw | null>(null);
+  const popupRef = useRef<maplibregl.Popup | null>(null);
+  const pendingPopupRef = useRef<maplibregl.Popup | null>(null);
   // Track if we've already fitted the map bounds
   const [hasFittedBounds, setHasFittedBounds] = useState(false);
 
   // Add state to track if existing transect data is present
   const [existingData, setExistingData] = useState<boolean>(false);
   // Add state for shapefile exclusion polygons
-  const [exclusionCoords, setExclusionCoords] = useState<
-    L.LatLngExpression[][]
-  >([]);
+  const [exclusionCoords, setExclusionCoords] = useState<LatLng[][]>([]);
   const [imputedImageIds, setImputedImageIds] = useState<Set<any>>(new Set());
-  const transectIds = React.useMemo(() => {
+  const transectIds = useMemo(() => {
     const ids = segmentedImages.map((img) => img.transectId);
     return Array.from(new Set(ids)).sort((a, b) => a - b);
   }, [segmentedImages]);
 
-  // Polygon selection actions
-  const clearPendingSelection = (removeLayer: boolean) => {
-    if (removeLayer) {
-      try {
-        pendingPolygon?.layer.remove();
-      } catch { }
-    }
-    setDrawnPolygonLayer(null);
-    setPendingPolygon(null);
-  };
-
-  const assignPendingToNewTransect = () => {
-    if (!pendingPolygon) return;
-    const currentMax =
-      segmentedImages.length > 0
-        ? Math.max(...segmentedImages.map((si) => si.transectId))
-        : -1;
-    const newTransectId = isFiniteNumber(currentMax) ? currentMax + 1 : 0;
-    const enclosedIds = pendingPolygon.enclosedImageIds;
-    setSegmentedImages((prev) =>
-      prev.map((si) =>
-        enclosedIds.has(si.id) ? { ...si, transectId: newTransectId } : si
-      )
-    );
-    setSelectedTransectIds(new Set([newTransectId]));
-    clearPendingSelection(true);
-  };
-
-  // removed merge-into-existing option
-  const transectImageCounts = React.useMemo(() => {
+  const transectImageCounts = useMemo(() => {
     const counts: Record<number, number> = {};
     segmentedImages.forEach((si) => {
       counts[si.transectId] = (counts[si.transectId] || 0) + 1;
@@ -384,31 +395,8 @@ export default function DefineTransects({ projectId, organizationId }: { project
     return counts;
   }, [segmentedImages]);
 
-  const handleMergeSelectedInto = (targetTransectId: number) => {
-    setSegmentedImages((prev) =>
-      prev.map((si) =>
-        selectedTransectIds.has(si.transectId)
-          ? { ...si, transectId: targetTransectId }
-          : si
-      )
-    );
-    setSelectedTransectIds(new Set());
-    // Remove the drawn polygon after merging
-    if (drawnPolygonLayer) {
-      try {
-        drawnPolygonLayer.remove();
-      } catch { }
-      setDrawnPolygonLayer(null);
-    }
-  };
-  const clearStrata = () => {
-    setExistingData(false);
-    setStrataSections([]);
-    setStrataLines([]);
-  };
-
   // Jitter duplicate coordinates slightly so overlapping markers are visible
-  const adjustedPositions = React.useMemo(() => {
+  const adjustedPositions = useMemo(() => {
     const byCoordKey: Record<string, (any & { transectId: number })[]> = {};
     const adjusted: Record<string, { latitude: number; longitude: number }> =
       {};
@@ -443,6 +431,100 @@ export default function DefineTransects({ projectId, organizationId }: { project
 
     return adjusted;
   }, [segmentedImages]);
+
+  // Refs so the once-registered map handlers always read current values.
+  const segmentedImagesRef = useRef(segmentedImages);
+  segmentedImagesRef.current = segmentedImages;
+  const adjustedPositionsRef = useRef(adjustedPositions);
+  adjustedPositionsRef.current = adjustedPositions;
+  const selectedTransectIdsRef = useRef(selectedTransectIds);
+  selectedTransectIdsRef.current = selectedTransectIds;
+  const transectImageCountsRef = useRef(transectImageCounts);
+  transectImageCountsRef.current = transectImageCounts;
+  const activeToolRef = useRef(activeTool);
+  activeToolRef.current = activeTool;
+  const pendingPolygonRef = useRef(pendingPolygon);
+  pendingPolygonRef.current = pendingPolygon;
+
+  // Polygon selection actions
+  const clearPendingSelection = useCallback(() => {
+    const pending = pendingPolygonRef.current;
+    if (pending) {
+      try {
+        drawRef.current?.removeFeatures([pending.id]);
+      } catch {
+        /* already gone */
+      }
+    }
+    setPendingPolygon(null);
+  }, []);
+
+  const assignPendingToNewTransect = useCallback(() => {
+    const pending = pendingPolygonRef.current;
+    if (!pending) return;
+    const currentMax =
+      segmentedImages.length > 0
+        ? Math.max(...segmentedImages.map((si) => si.transectId))
+        : -1;
+    const newTransectId = isFiniteNumber(currentMax) ? currentMax + 1 : 0;
+    const enclosedIds = pending.enclosedImageIds;
+    setSegmentedImages((prev) =>
+      prev.map((si) =>
+        enclosedIds.has(si.id) ? { ...si, transectId: newTransectId } : si
+      )
+    );
+    setSelectedTransectIds(new Set([newTransectId]));
+    try {
+      drawRef.current?.removeFeatures([pending.id]);
+    } catch {
+      /* already gone */
+    }
+    setPendingPolygon(null);
+    drawRef.current?.setMode(MODE_IDLE);
+    setActiveTool(null);
+  }, [segmentedImages]);
+
+  const handleMergeSelectedInto = useCallback(
+    (targetTransectId: number) => {
+      setSegmentedImages((prev) =>
+        prev.map((si) =>
+          selectedTransectIdsRef.current.has(si.transectId)
+            ? { ...si, transectId: targetTransectId }
+            : si
+        )
+      );
+      setSelectedTransectIds(new Set());
+    },
+    []
+  );
+  const handleMergeSelectedIntoRef = useRef(handleMergeSelectedInto);
+  handleMergeSelectedIntoRef.current = handleMergeSelectedInto;
+  const assignPendingToNewTransectRef = useRef(assignPendingToNewTransect);
+  assignPendingToNewTransectRef.current = assignPendingToNewTransect;
+
+  const clearStrata = () => {
+    setExistingData(false);
+    setStrataSections([]);
+    setStrataLines([]);
+    // Remove any drawn strata lines from Terra Draw.
+    const draw = drawRef.current;
+    if (draw) {
+      const ids = draw
+        .getSnapshot()
+        .filter(
+          (f: any) =>
+            f.geometry?.type === 'LineString' && f.properties?.mode === MODE_STRATA
+        )
+        .map((f: any) => f.id);
+      if (ids.length) {
+        try {
+          draw.removeFeatures(ids);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  };
 
   // submit handler: creates strata, transects, and assigns images
   const handleSubmit = async () => {
@@ -777,15 +859,13 @@ export default function DefineTransects({ projectId, organizationId }: { project
               (flat as Array<number | null>).filter(
                 (n): n is number => n != null
               )
-            ) as L.LatLngExpression[];
+            );
             if (latlngs.length < 3) return null;
             const match = /^Stratum (\d+)$/.exec(st.name);
             const id = match ? parseInt(match[1], 10) : 0;
             return { coords: latlngs, id };
           })
-          .filter(
-            (x): x is { coords: L.LatLngExpression[]; id: number } => !!x
-          );
+          .filter((x): x is { coords: LatLng[]; id: number } => !!x);
         setStrataSections(loadedSections);
       }
 
@@ -801,31 +881,14 @@ export default function DefineTransects({ projectId, organizationId }: { project
         client.models.ShapefileExclusions.shapefileExclusionsByProjectId as any
       )({ projectId })) as any;
       const data = result.data as Array<{ coordinates: (number | null)[] }>;
-      const polys: L.LatLngExpression[][] = [];
+      const polys: LatLng[][] = [];
       data.forEach((ex) => {
         if (ex.coordinates) {
           const coordsArr = ex.coordinates.filter(
             (n): n is number => n != null
           );
-          const latlngs = toLatLngPairs(coordsArr) as L.LatLngExpression[];
+          const latlngs = toLatLngPairs(coordsArr);
           if (latlngs.length < 3) return;
-          // Log exclusion polygon area
-          const excCoordsLngLat = latlngs.map((pt) => {
-            if (Array.isArray(pt)) {
-              const t = pt as [number, number];
-              return [t[1], t[0]] as [number, number];
-            }
-            const ll = pt as any;
-            return [ll.lng as number, ll.lat as number] as [number, number];
-          });
-          if (
-            excCoordsLngLat[0][0] !==
-            excCoordsLngLat[excCoordsLngLat.length - 1][0] ||
-            excCoordsLngLat[0][1] !==
-            excCoordsLngLat[excCoordsLngLat.length - 1][1]
-          ) {
-            excCoordsLngLat.push(excCoordsLngLat[0]);
-          }
           polys.push(latlngs);
         }
       });
@@ -847,26 +910,10 @@ export default function DefineTransects({ projectId, organizationId }: { project
         const coordsArr = data[0].coordinates.filter(
           (n): n is number => n != null
         );
-        const latlngs = toLatLngPairs(coordsArr) as L.LatLngExpression[];
+        const latlngs = toLatLngPairs(coordsArr);
         if (latlngs.length < 3) {
           setPartsLoading((l) => (l === null ? 1 : l + 1));
           return;
-        }
-        // Log shapefile boundary area
-        const boundaryLngLat = latlngs.map((pt) => {
-          if (Array.isArray(pt)) {
-            const t = pt as [number, number];
-            return [t[1], t[0]] as [number, number];
-          }
-          const ll = pt as any;
-          return [ll.lng as number, ll.lat as number] as [number, number];
-        });
-        if (
-          boundaryLngLat[0][0] !==
-          boundaryLngLat[boundaryLngLat.length - 1][0] ||
-          boundaryLngLat[0][1] !== boundaryLngLat[boundaryLngLat.length - 1][1]
-        ) {
-          boundaryLngLat.push(boundaryLngLat[0]);
         }
         setPolygonCoords(latlngs);
       }
@@ -931,9 +978,9 @@ export default function DefineTransects({ projectId, organizationId }: { project
 
   // Split a polygon by a multi-vertex polyline. Returns 1 or 2 polygons (open rings in [lat,lng]).
   const splitPolygon = (
-    poly: L.LatLngExpression[],
-    line: L.LatLngExpression[]
-  ): L.LatLngExpression[][] => {
+    poly: LatLng[],
+    line: LatLng[]
+  ): LatLng[][] => {
     if (poly.length < 3 || line.length < 2) return [poly];
 
     // Convert to [lng,lat]
@@ -1010,7 +1057,7 @@ export default function DefineTransects({ projectId, organizationId }: { project
       const path: [number, number][] = [];
       path.push(startCoord);
       let i = (startIdx + 1) % ringLen;
-      while (true) {
+      for (;;) {
         path.push(ringNoClose[i]);
         if (i === endIdx) break;
         i = (i + 1) % ringLen;
@@ -1064,7 +1111,7 @@ export default function DefineTransects({ projectId, organizationId }: { project
     ];
 
     // Convert back to [lat,lng] and ensure open rings (no duplicate last == first)
-    const toLatLng = (coords: [number, number][]): L.LatLngExpression[] => {
+    const toLatLng = (coords: [number, number][]): LatLng[] => {
       if (coords.length === 0) return [];
       const out = coords.map(([x, y]) => [y, x] as [number, number]);
       const first = out[0] as [number, number];
@@ -1077,7 +1124,7 @@ export default function DefineTransects({ projectId, organizationId }: { project
     const r2 = toLatLng(region2LngLat);
 
     // Validate minimal polygon
-    const results: L.LatLngExpression[][] = [];
+    const results: LatLng[][] = [];
     if (r1.length >= 3) results.push(r1);
     if (r2.length >= 3) results.push(r2);
     return results.length ? results : [poly];
@@ -1087,9 +1134,9 @@ export default function DefineTransects({ projectId, organizationId }: { project
   useEffect(() => {
     if (existingData) return;
     if (!polygonCoords) return;
-    let regions: L.LatLngExpression[][] = [polygonCoords];
+    let regions: LatLng[][] = [polygonCoords];
     strataLines.forEach((line) => {
-      const newRegions: L.LatLngExpression[][] = [];
+      const newRegions: LatLng[][] = [];
       regions.forEach((region) => {
         const parts = splitPolygon(region, line);
         parts.forEach((p) => {
@@ -1099,6 +1146,7 @@ export default function DefineTransects({ projectId, organizationId }: { project
       regions = newRegions;
     });
     setStrataSections(regions.map((coords, i) => ({ coords, id: i + 1 })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [polygonCoords, strataLines, existingData]);
 
   useEffect(() => {
@@ -1108,87 +1156,607 @@ export default function DefineTransects({ projectId, organizationId }: { project
     }
   }, [partsLoading]);
 
-  // Fit map to image points on initial load
-  useEffect(() => {
-    if (segmentedImages.length > 0 && !hasFittedBounds) {
-      // Use a timeout to ensure map is fully rendered
-      const timeoutId = setTimeout(() => {
-        if (mapRef.current) {
-          try {
-            const points = segmentedImages
-              .map((img) => {
-                const pos = adjustedPositions[img.id] || {
-                  latitude: img.latitude,
-                  longitude: img.longitude,
-                };
-                return [pos.latitude, pos.longitude] as [number, number];
-              })
-              .filter(([lat, lng]) => {
-                // Filter out invalid coordinates
-                return (
-                  lat >= -90 &&
-                  lat <= 90 &&
-                  lng >= -180 &&
-                  lng <= 180 &&
-                  !isNaN(lat) &&
-                  !isNaN(lng)
-                );
-              });
-
-            if (points.length > 0) {
-              const bounds = L.latLngBounds(points);
-              console.log(
-                'Fitting map bounds to',
-                points.length,
-                'points:',
-                bounds
-              );
-
-              // Add some padding to the bounds
-              mapRef.current.fitBounds(bounds, { padding: [20, 20] });
-              setHasFittedBounds(true);
-            } else {
-              console.warn('No valid points found for fitting bounds');
-            }
-          } catch (error) {
-            console.error('Error fitting map bounds:', error);
-          }
-        } else {
-          console.warn('Map reference not available for fitting bounds');
-        }
-      }, 100); // Small delay to ensure map is rendered
-
-      return () => clearTimeout(timeoutId);
-    }
-  }, [segmentedImages, adjustedPositions, hasFittedBounds]);
-
   // Reset fit bounds flag when project changes
   useEffect(() => {
     setHasFittedBounds(false);
   }, [projectId]);
 
-  // a simple palette for transect colors
-  const transectColors = [
-    'red',
-    'blue',
-    'green',
-    'orange',
-    'purple',
-    'brown',
-    'pink',
-    'cyan',
-  ];
-  const strataColors = [
-    'yellow',
-    'cyan',
-    'magenta',
-    'grey',
-    'lightgreen',
-    'lightblue',
-    'lightcoral',
-    'lightpink',
-  ];
-  // right-click popup shows transect info only
+  // -----------------------------------------------------------------------
+  // GeoJSON for the image points, coloured by transect.
+  // -----------------------------------------------------------------------
+  const pointsFC = useMemo(() => {
+    return {
+      type: 'FeatureCollection',
+      features: segmentedImages.map((img) => {
+        const pos = adjustedPositions[img.id] || {
+          latitude: img.latitude,
+          longitude: img.longitude,
+        };
+        return {
+          type: 'Feature',
+          id: img.id,
+          properties: {
+            id: img.id,
+            tid: img.transectId,
+            color: transectColors[img.transectId % transectColors.length],
+            selected: selectedTransectIds.has(img.transectId),
+          },
+          geometry: {
+            type: 'Point',
+            coordinates: [pos.longitude, pos.latitude],
+          },
+        };
+      }),
+    };
+  }, [segmentedImages, adjustedPositions, selectedTransectIds]);
+
+  const boundaryFC = useMemo(() => {
+    if (!polygonCoords || polygonCoords.length < 3) return EMPTY_FC;
+    const ring = polygonCoords.map(([lat, lng]) => [lng, lat]);
+    const [fx, fy] = ring[0];
+    const [lx, ly] = ring[ring.length - 1];
+    if (fx !== lx || fy !== ly) ring.push([fx, fy]);
+    return {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates: ring },
+        },
+      ],
+    };
+  }, [polygonCoords]);
+
+  const exclusionsFC = useMemo(() => {
+    return {
+      type: 'FeatureCollection',
+      features: exclusionCoords
+        .filter((c) => c.length >= 3)
+        .map((coords) => {
+          const ring = coords.map(([lat, lng]) => [lng, lat]);
+          const [fx, fy] = ring[0];
+          const [lx, ly] = ring[ring.length - 1];
+          if (fx !== lx || fy !== ly) ring.push([fx, fy]);
+          return {
+            type: 'Feature',
+            properties: {},
+            geometry: { type: 'LineString', coordinates: ring },
+          };
+        }),
+    };
+  }, [exclusionCoords]);
+
+  const strataFC = useMemo(() => {
+    return {
+      type: 'FeatureCollection',
+      features: strataSections
+        .filter((s) => s.coords.length >= 3)
+        .map((section) => {
+          const ring = section.coords.map(([lat, lng]) => [lng, lat]);
+          const [fx, fy] = ring[0];
+          const [lx, ly] = ring[ring.length - 1];
+          if (fx !== lx || fy !== ly) ring.push([fx, fy]);
+          return {
+            type: 'Feature',
+            properties: {
+              id: section.id,
+              color: strataColors[section.id % strataColors.length],
+            },
+            geometry: { type: 'Polygon', coordinates: [ring] },
+          };
+        }),
+    };
+  }, [strataSections]);
+
+  // -----------------------------------------------------------------------
+  // Map + Terra Draw initialisation (once).
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    if (!mapDivRef.current) return;
+
+    const map = new maplibregl.Map({
+      container: mapDivRef.current,
+      style: BASE_STYLE,
+      center: [0, 0],
+      zoom: 2,
+      attributionControl: { compact: true },
+    });
+    mapRef.current = map;
+    map.addControl(
+      new maplibregl.NavigationControl({ showCompass: false }),
+      'top-right'
+    );
+
+    const showPopup = (lngLat: maplibregl.LngLatLike, node: HTMLElement) => {
+      popupRef.current?.remove();
+      popupRef.current = new maplibregl.Popup({ closeButton: true })
+        .setLngLat(lngLat)
+        .setDOMContent(node)
+        .addTo(map);
+    };
+
+    const rebuildStrataLines = () => {
+      const lines = drawRef.current
+        ?.getSnapshot()
+        .filter(
+          (f: any) =>
+            f.geometry?.type === 'LineString' && f.properties?.mode === MODE_STRATA
+        );
+      setStrataLines(
+        (lines ?? []).map((f: any) =>
+          (f.geometry.coordinates as [number, number][]).map(
+            ([lng, lat]) => [lat, lng] as LatLng
+          )
+        )
+      );
+    };
+
+    const handleEncloseFinish = (
+      id: string | number,
+      feature: ReturnType<TerraDraw['getSnapshotFeature']>
+    ) => {
+      const draw = drawRef.current;
+      if (!draw || !feature || feature.geometry.type !== 'Polygon') return;
+
+      // Query the point layer using the polygon in screen coordinates. This
+      // makes the selection match the points currently rendered on the map,
+      // including their jittered display positions.
+      const screenPolygon = feature.geometry.coordinates[0].map(
+        ([lng, lat]) => map.project([lng, lat])
+      );
+      const isInsideScreenPolygon = (x: number, y: number) => {
+        let inside = false;
+        for (
+          let i = 0, j = screenPolygon.length - 1;
+          i < screenPolygon.length;
+          j = i++
+        ) {
+          const a = screenPolygon[i];
+          const b = screenPolygon[j];
+          if (
+            a.y > y !== b.y > y &&
+            x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x
+          ) {
+            inside = !inside;
+          }
+        }
+        return inside;
+      };
+
+      const enclosed = segmentedImagesRef.current.filter((img) => {
+        const pos = adjustedPositionsRef.current[img.id] || {
+          latitude: img.latitude,
+          longitude: img.longitude,
+        };
+        const screenPoint = map.project([pos.longitude, pos.latitude]);
+        return isInsideScreenPolygon(
+          screenPoint.x,
+          screenPoint.y
+        );
+      });
+
+      // Polygon selection is a one-shot action. Keep the completed polygon
+      // visible while the user decides whether to merge the enclosed points.
+      draw.setMode(MODE_IDLE);
+      setActiveTool(null);
+
+      if (!enclosed.length) {
+        try {
+          draw.removeFeatures([id]);
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
+      const center = turf.centerOfMass(feature as any).geometry
+        .coordinates as [number, number];
+      setPendingPolygon({
+        id,
+        enclosedImageIds: new Set(enclosed.map((img) => img.id)),
+        center,
+      });
+    };
+
+    map.on('load', () => {
+      // Sources (start empty; populated by the data effects below).
+      map.addSource(SRC_STRATA, { type: 'geojson', data: EMPTY_FC as any });
+      map.addSource(SRC_BOUNDARY, { type: 'geojson', data: EMPTY_FC as any });
+      map.addSource(SRC_EXCLUSIONS, { type: 'geojson', data: EMPTY_FC as any });
+      map.addSource(SRC_POINTS, {
+        type: 'geojson',
+        data: EMPTY_FC as any,
+        promoteId: 'id',
+      });
+
+      // Strata fill + outline (under everything else).
+      map.addLayer({
+        id: LYR_STRATA_FILL,
+        type: 'fill',
+        source: SRC_STRATA,
+        paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.1 },
+      });
+      map.addLayer({
+        id: LYR_STRATA_LINE,
+        type: 'line',
+        source: SRC_STRATA,
+        paint: { 'line-color': ['get', 'color'], 'line-width': 1 },
+      });
+      // Boundary + exclusions (outlines only).
+      map.addLayer({
+        id: LYR_BOUNDARY,
+        type: 'line',
+        source: SRC_BOUNDARY,
+        paint: { 'line-color': '#97009c', 'line-width': 2 },
+      });
+      map.addLayer({
+        id: LYR_EXCLUSIONS,
+        type: 'line',
+        source: SRC_EXCLUSIONS,
+        paint: { 'line-color': '#ff0000', 'line-width': 2 },
+      });
+      // Image points, coloured by transect. Selection is stored in the
+      // GeoJSON properties so source refreshes cannot discard it.
+      map.addLayer({
+        id: LYR_POINTS,
+        type: 'circle',
+        source: SRC_POINTS,
+        paint: {
+          'circle-radius': [
+            'case',
+            ['boolean', ['get', 'selected'], false],
+            7,
+            5,
+          ],
+          'circle-color': ['get', 'color'],
+          'circle-stroke-color': [
+            'case',
+            ['boolean', ['get', 'selected'], false],
+            '#000000',
+            ['get', 'color'],
+          ],
+          'circle-stroke-width': [
+            'case',
+            ['boolean', ['get', 'selected'], false],
+            3,
+            1,
+          ],
+          'circle-opacity': 1,
+        },
+      });
+
+      // ---- Terra Draw ----
+      const draw = new TerraDraw({
+        adapter: new TerraDrawMapLibreGLAdapter({ map }),
+        modes: [
+          new TerraDrawPolygonMode({
+            modeName: MODE_ENCLOSE,
+            styles: {
+              fillColor: '#000000',
+              fillOpacity: 0.05,
+              outlineColor: '#000000',
+              outlineWidth: 2,
+            },
+          }),
+          new TerraDrawLineStringMode({
+            modeName: MODE_STRATA,
+            styles: { lineStringColor: '#000000', lineStringWidth: 2 },
+          }),
+          new TerraDrawSelectMode({
+            flags: {
+              [MODE_STRATA]: {
+                feature: {
+                  draggable: true,
+                  coordinates: {
+                    draggable: true,
+                    midpoints: { draggable: true },
+                    deletable: true,
+                  },
+                },
+              },
+            },
+          }),
+          new TerraDrawRenderMode({ modeName: MODE_IDLE, styles: {} }),
+        ],
+      });
+      drawRef.current = draw;
+      draw.start();
+      draw.setMode(MODE_IDLE);
+
+      draw.on('finish', (id, ctx) => {
+        const feature =
+          draw.getSnapshotFeature(id) ??
+          draw
+            .getSnapshot()
+            .find((candidate) => String(candidate.id) === String(id));
+        const finishedMode = feature?.properties?.mode ?? ctx.mode;
+
+        if (
+          finishedMode === MODE_ENCLOSE &&
+          feature?.geometry.type === 'Polygon'
+        ) {
+          handleEncloseFinish(id, feature);
+        } else if (
+          finishedMode === MODE_STRATA ||
+          finishedMode === MODE_SELECT
+        ) {
+          rebuildStrataLines();
+        }
+      });
+      draw.on('change', (_ids, type, context) => {
+        const fromApi =
+          !!context && 'origin' in context && context.origin === 'api';
+        if (type === 'delete' && !fromApi) {
+          rebuildStrataLines();
+        }
+      });
+      draw.on('select', (id) => setSelectedLineId(String(id)));
+      draw.on('deselect', () => setSelectedLineId(null));
+
+      // ---- Image point interactions (only when no draw tool is active) ----
+      map.on('click', LYR_POINTS, (e) => {
+        // Ignore the click that just closed a lasso: by the time this fires the
+        // enclose tool has cleared, but a pending selection is in progress.
+        if (activeToolRef.current || pendingPolygonRef.current) return;
+        const f = e.features?.[0];
+        if (!f) return;
+        const imageId = String(f.id ?? (f.properties as any)?.id ?? '');
+        const image = segmentedImagesRef.current.find(
+          (candidate) => String(candidate.id) === imageId
+        );
+        const tid = Number(image?.transectId);
+        if (!Number.isFinite(tid)) return;
+        const ctrl = e.originalEvent.ctrlKey || e.originalEvent.metaKey;
+        setSelectedTransectIds((prev) => {
+          const next = new Set(prev);
+          if (ctrl) {
+            if (next.has(tid)) next.delete(tid);
+            else next.add(tid);
+          } else if (next.size === 1 && next.has(tid)) {
+            next.clear();
+          } else {
+            next.clear();
+            next.add(tid);
+          }
+          return next;
+        });
+      });
+
+      map.on('contextmenu', LYR_POINTS, (e) => {
+        if (activeToolRef.current) return;
+        const f = e.features?.[0];
+        if (!f) return;
+        e.originalEvent.preventDefault();
+        const imageId = String(f.id ?? (f.properties as any)?.id ?? '');
+        const image = segmentedImagesRef.current.find(
+          (candidate) => String(candidate.id) === imageId
+        );
+        const tid = Number(image?.transectId);
+        if (!Number.isFinite(tid)) return;
+        const selected = Array.from(selectedTransectIdsRef.current);
+        if (selected.length >= 2) {
+          const ids = selected.sort((a, b) => a - b);
+          const primary = Math.min(...ids);
+          const node = document.createElement('div');
+          node.style.cursor = 'pointer';
+          node.style.color = '#000';
+          node.textContent =
+            ids.length === 2
+              ? `Merge transect ${ids[0]} and ${ids[1]}`
+              : `Merge ${ids.length} selected transects`;
+          node.onclick = () => {
+            handleMergeSelectedIntoRef.current(primary);
+            popupRef.current?.remove();
+          };
+          showPopup(e.lngLat, node);
+        } else {
+          const node = document.createElement('div');
+          node.style.color = '#000';
+          node.innerHTML = `<div><strong>Transect:</strong> ${tid}</div><div><strong>Images:</strong> ${transectImageCountsRef.current[tid] || 0
+            }</div>`;
+          showPopup(e.lngLat, node);
+        }
+      });
+
+      // Stratum info popup (ignored if a point sits under the cursor).
+      map.on('click', LYR_STRATA_FILL, (e) => {
+        if (activeToolRef.current || pendingPolygonRef.current) return;
+        const pts = map.queryRenderedFeatures(e.point, { layers: [LYR_POINTS] });
+        if (pts.length) return;
+        const f = e.features?.[0];
+        if (!f) return;
+        const node = document.createElement('div');
+        node.style.color = '#000';
+        node.innerHTML = `<div><strong>Stratum:</strong> ${(f.properties as any)?.id ?? ''
+          }</div>`;
+        showPopup(e.lngLat, node);
+      });
+
+      for (const lyr of [LYR_POINTS, LYR_STRATA_FILL]) {
+        map.on('mouseenter', lyr, () => {
+          if (!activeToolRef.current) map.getCanvas().style.cursor = 'pointer';
+        });
+        map.on('mouseleave', lyr, () => {
+          if (!activeToolRef.current) map.getCanvas().style.cursor = '';
+        });
+      }
+
+      setMapLoaded(true);
+    });
+
+    return () => {
+      setMapLoaded(false);
+      popupRef.current?.remove();
+      popupRef.current = null;
+      pendingPopupRef.current?.remove();
+      pendingPopupRef.current = null;
+      try {
+        drawRef.current?.stop();
+      } catch {
+        /* ignore */
+      }
+      drawRef.current = null;
+      map.remove();
+      mapRef.current = null;
+    };
+  }, []);
+
+  // Push GeoJSON data into the sources whenever it changes.
+  useEffect(() => {
+    if (!mapLoaded) return;
+    const map = mapRef.current;
+    const src = map?.getSource(SRC_POINTS) as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    if (!map || !src) return;
+    src.setData(pointsFC as any);
+  }, [mapLoaded, pointsFC]);
+
+  useEffect(() => {
+    if (!mapLoaded) return;
+    (mapRef.current?.getSource(SRC_BOUNDARY) as maplibregl.GeoJSONSource)?.setData(
+      boundaryFC as any
+    );
+  }, [mapLoaded, boundaryFC]);
+
+  useEffect(() => {
+    if (!mapLoaded) return;
+    (
+      mapRef.current?.getSource(SRC_EXCLUSIONS) as maplibregl.GeoJSONSource
+    )?.setData(exclusionsFC as any);
+  }, [mapLoaded, exclusionsFC]);
+
+  useEffect(() => {
+    if (!mapLoaded) return;
+    (mapRef.current?.getSource(SRC_STRATA) as maplibregl.GeoJSONSource)?.setData(
+      strataFC as any
+    );
+  }, [mapLoaded, strataFC]);
+
+  // Fit the map to the image points on initial load.
+  useEffect(() => {
+    if (!mapLoaded || hasFittedBounds || segmentedImages.length === 0) return;
+    const map = mapRef.current;
+    if (!map) return;
+    let minLng = Infinity,
+      minLat = Infinity,
+      maxLng = -Infinity,
+      maxLat = -Infinity;
+    for (const img of segmentedImages) {
+      const pos = adjustedPositions[img.id] || {
+        latitude: img.latitude,
+        longitude: img.longitude,
+      };
+      if (!isValidLatLng(pos.latitude, pos.longitude)) continue;
+      if (pos.longitude < minLng) minLng = pos.longitude;
+      if (pos.latitude < minLat) minLat = pos.latitude;
+      if (pos.longitude > maxLng) maxLng = pos.longitude;
+      if (pos.latitude > maxLat) maxLat = pos.latitude;
+    }
+    if (!Number.isFinite(minLng)) return;
+    map.fitBounds(
+      [
+        [minLng, minLat],
+        [maxLng, maxLat],
+      ],
+      { padding: 30, maxZoom: 16, duration: 0 }
+    );
+    setHasFittedBounds(true);
+  }, [mapLoaded, segmentedImages, adjustedPositions, hasFittedBounds]);
+
+  // Show the "Merge points" popup while a polygon selection is pending.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded || !pendingPolygon) return;
+    const node = document.createElement('div');
+    node.className = 'd-flex flex-column gap-2';
+    node.style.color = '#000';
+    const label = document.createElement('div');
+    label.className = 'mb-1';
+    label.innerHTML = `<strong>${pendingPolygon.enclosedImageIds.size}</strong> points selected`;
+    node.appendChild(label);
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-primary btn-sm';
+    btn.textContent = 'Merge points';
+    btn.onclick = () => assignPendingToNewTransectRef.current();
+    node.appendChild(btn);
+    // closeOnClick defaults to true; the same click that closes the lasso would
+    // otherwise immediately dismiss this popup (and discard the selection).
+    const popup = new maplibregl.Popup({
+      closeButton: true,
+      closeOnClick: false,
+      closeOnMove: false,
+    })
+      .setLngLat(pendingPolygon.center)
+      .setDOMContent(node)
+      .addTo(map);
+    pendingPopupRef.current = popup;
+    const onClose = () => {
+      // Closed without merging -> discard the drawn polygon.
+      if (pendingPolygonRef.current) clearPendingSelection();
+    };
+    popup.on('close', onClose);
+    return () => {
+      popup.off('close', onClose);
+      popup.remove();
+      if (pendingPopupRef.current === popup) pendingPopupRef.current = null;
+    };
+  }, [pendingPolygon, mapLoaded, clearPendingSelection]);
+
+  // Tool toggles
+  const toggleTool = useCallback(
+    (tool: 'enclose' | 'strata' | 'select') => {
+      const draw = drawRef.current;
+      if (!draw) return;
+      popupRef.current?.remove();
+      if (activeTool === tool) {
+        draw.setMode(MODE_IDLE);
+        setActiveTool(null);
+        setSelectedLineId(null);
+      } else {
+        const modeName =
+          tool === 'enclose'
+            ? MODE_ENCLOSE
+            : tool === 'strata'
+              ? MODE_STRATA
+              : MODE_SELECT;
+        draw.setMode(modeName);
+        setActiveTool(tool);
+        // Leaving a pending selection behind would orphan its polygon.
+        if (tool !== 'enclose' && pendingPolygonRef.current) {
+          clearPendingSelection();
+        }
+      }
+    },
+    [activeTool, clearPendingSelection]
+  );
+
+  const deleteSelectedLine = useCallback(() => {
+    const draw = drawRef.current;
+    if (!draw || !selectedLineId) return;
+    try {
+      draw.removeFeatures([selectedLineId]);
+    } catch {
+      /* ignore */
+    }
+    setSelectedLineId(null);
+    // removeFeatures is an API change (no rebuild from 'change'), so sync now.
+    const lines = draw
+      .getSnapshot()
+      .filter(
+        (f: any) =>
+          f.geometry?.type === 'LineString' && f.properties?.mode === MODE_STRATA
+      );
+    setStrataLines(
+      lines.map((f: any) =>
+        (f.geometry.coordinates as [number, number][]).map(
+          ([lng, lat]) => [lat, lng] as LatLng
+        )
+      )
+    );
+  }, [selectedLineId]);
+
+  const toolsDisabled = partsLoading !== null || saving;
 
   return (
     <>
@@ -1233,28 +1801,28 @@ export default function DefineTransects({ projectId, organizationId }: { project
           {showInstructions && (
             <ul className='mt-2 mb-0 text-muted' style={{ fontSize: '14px' }}>
               <li>
-                Single-click a point to select its transect (Ctrl-click for
-                multi-select). Clicking a selected transect will deselect it.
+                Single-click a point to select its transect (Ctrl/⌘-click for
+                multi-select). Clicking a selected transect deselects it.
               </li>
               <li>
-                Right-click a point to view that transect's info (name/number
-                and image count). If multiple transects are selected,
-                right-click to merge them, or use the "Merge Selected Transects"
-                button that appears at the bottom of the map.
+                Right-click a point to view that transect's info (number and
+                image count). With multiple transects selected, right-click to
+                merge them, or use the "Merge Selected Transects" button below
+                the map.
               </li>
               <li>
-                Use the polygon tool (top-right) to draw around points, then
-                click "Merge points" to put only the enclosed points into a new
-                transect.
+                Use the <strong>Select points</strong> tool to draw around
+                points, then click "Merge points" to put only the enclosed
+                points into a new transect.
               </li>
               <li>
-                Define strata by selecting the polyline tool in the top right
-                corner of the map and drawing a line across the boundary. Start
-                and end points should be outside the boundary.
+                Define strata with the <strong>Draw strata line</strong> tool:
+                draw a line across the boundary (start and end outside it). Use{' '}
+                <strong>Edit lines</strong> to adjust or delete a line.
               </li>
               <li>
-                Save your work by clicking the save button at the bottom of the
-                page (even if you haven't made any changes).
+                Save your work with the save button at the bottom of the page
+                (even if you haven't made changes).
               </li>
               {existingData && (
                 <li>
@@ -1265,375 +1833,122 @@ export default function DefineTransects({ projectId, organizationId }: { project
             </ul>
           )}
         </div>
-        <div className='survey-map'>
-            {partsLoading !== null ? (
-              <div className='d-flex justify-content-center align-items-center mt-3'>
-                <Spinner animation='border' />
-                <span className='ms-2'>Loading data</span>
-              </div>
-            ) : (
-              <MapContainer
-                ref={mapRef}
-                style={{ height: '100%', width: '100%' }}
-                center={[0, 0]}
-                zoom={2}
-                doubleClickZoom={false}
-                preferCanvas={false}
+
+        {/* Map toolbar */}
+        <div className='d-flex gap-2 flex-wrap'>
+          <Button
+            size='sm'
+            variant={activeTool === 'enclose' ? 'primary' : 'outline-primary'}
+            onClick={() => toggleTool('enclose')}
+            disabled={toolsDisabled}
+          >
+            {activeTool === 'enclose' ? 'Selecting points…' : 'Select points'}
+          </Button>
+          {!existingData && (
+            <>
+              <Button
+                size='sm'
+                variant={
+                  activeTool === 'strata' ? 'primary' : 'outline-primary'
+                }
+                onClick={() => toggleTool('strata')}
+                disabled={toolsDisabled}
               >
-                <TileLayer
-                  attribution='&copy; OpenStreetMap contributors'
-                  url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-                />
-                {polygonCoords && (
-                  <Polygon
-                    positions={polygonCoords}
-                    pathOptions={{ fill: false, color: '#97009c' }}
-                  />
-                )}
-                {/* Polygon selection tool - always available */}
-                <FeatureGroup>
-                  <EditControl
-                    position='topright'
-                    draw={{
-                      rectangle: false,
-                      circle: false,
-                      circlemarker: false,
-                      marker: false,
-                      polyline: false,
-                      polygon: {
-                        shapeOptions: { color: 'black' },
-                      },
-                    }}
-                    edit={{ edit: false, remove: false }}
-                    onCreated={(e: any) => {
-                      if (e.layerType === 'polygon') {
-                        const latlngs = e.layer.getLatLngs();
-                        // Support simple polygon (first ring)
-                        const ring: L.LatLng[] = Array.isArray(latlngs[0])
-                          ? latlngs[0]
-                          : latlngs;
-                        const polyLngLat: [number, number][] = (
-                          ring as any[]
-                        ).map((ll: any) => [
-                          ll.lng as number,
-                          ll.lat as number,
-                        ]);
-                        if (
-                          polyLngLat[0][0] !==
-                          polyLngLat[polyLngLat.length - 1][0] ||
-                          polyLngLat[0][1] !==
-                          polyLngLat[polyLngLat.length - 1][1]
-                        ) {
-                          polyLngLat.push(polyLngLat[0]);
-                        }
-                        const poly = turf.polygon([polyLngLat]);
-                        // Find enclosed images using displayed positions
-                        const enclosedImgs = segmentedImages.filter((img) => {
-                          const pos = adjustedPositions[img.id] || {
-                            latitude: img.latitude,
-                            longitude: img.longitude,
-                          };
-                          const pt = turf.point([pos.longitude, pos.latitude]);
-                          return turf.booleanPointInPolygon(pt, poly);
-                        });
-                        if (enclosedImgs.length) {
-                          const enclosedIds = new Set(
-                            enclosedImgs.map((img) => img.id)
-                          );
-                          // Keep polygon visible and present options
-                          setDrawnPolygonLayer(e.layer);
-                          // position popup at polygon center
-                          const center = e.layer.getBounds().getCenter();
-                          const pos: [number, number] = [
-                            center.lat,
-                            center.lng,
-                          ];
-                          setPendingPolygon({
-                            layer: e.layer,
-                            enclosedImageIds: enclosedIds,
-                            position: pos,
-                          });
-                        } else {
-                          // No points found, remove the polygon immediately
-                          try {
-                            e.layer.remove();
-                          } catch { }
-                        }
-                      }
-                    }}
-                  />
-                </FeatureGroup>
-                {exclusionCoords.map((coords, idx) => (
-                  <Polygon
-                    key={'exclusion-' + idx}
-                    positions={coords}
-                    pathOptions={{
-                      color: 'red',
-                      fill: false,
-                    }}
-                  />
-                ))}
-                {!existingData && (
-                  <FeatureGroup>
-                    <EditControl
-                      position='topright'
-                      draw={{
-                        rectangle: false,
-                        circle: false,
-                        circlemarker: false,
-                        marker: false,
-                        polygon: false,
-                        polyline: {
-                          shapeOptions: { color: 'black' },
-                        },
-                      }}
-                      onCreated={(e: any) => {
-                        if (e.layerType === 'polyline') {
-                          const latlngs = e.layer
-                            .getLatLngs()
-                            .map(
-                              (ll: L.LatLng) =>
-                                [ll.lat, ll.lng] as L.LatLngExpression
-                            );
-                          setStrataLines((prev) => [...prev, latlngs]);
-                        }
-                      }}
-                      onDeleted={(e: any) => {
-                        // Remove deleted polylines from state
-                        const layers = e.layers;
-                        const removed: L.LatLngExpression[][] = [];
-                        layers.eachLayer((layer: any) => {
-                          const latlngs = layer
-                            .getLatLngs()
-                            .map(
-                              (ll: L.LatLng) =>
-                                [ll.lat, ll.lng] as L.LatLngExpression
-                            );
-                          removed.push(latlngs);
-                        });
-                        setStrataLines((prev) =>
-                          prev.filter(
-                            (line) =>
-                              !removed.some(
-                                (r) =>
-                                  r.length === line.length &&
-                                  r.every((pt, idx) => {
-                                    const [rLat, rLng] = pt as [number, number];
-                                    const [lLat, lLng] = line[idx] as [
-                                      number,
-                                      number
-                                    ];
-                                    return rLat === lLat && rLng === lLng;
-                                  })
-                              )
-                          )
-                        );
-                      }}
-                      edit={{ remove: true, edit: false }}
-                    />
-                  </FeatureGroup>
-                )}
-                {strataSections.map((section) => (
-                  <Polygon
-                    key={`stratum-${section.id}`}
-                    positions={section.coords}
-                    pathOptions={{
-                      fillColor: strataColors[section.id % strataColors.length],
-                      color: strataColors[section.id % strataColors.length],
-                      fillOpacity: 0.1,
-                    }}
-                  >
-                    <Popup>
-                      <div>
-                        <strong>Stratum:</strong> {section.id}
-                      </div>
-                    </Popup>
-                  </Polygon>
-                ))}
-                {partsLoading === null &&
-                  segmentedImages.map((img) => {
-                    const isSelected = selectedTransectIds.has(img.transectId);
-                    return (
-                      <CircleMarker
-                        pane='markerPane'
-                        key={img.id}
-                        center={[
-                          adjustedPositions[img.id]?.latitude ?? img.latitude,
-                          adjustedPositions[img.id]?.longitude ?? img.longitude,
-                        ]}
-                        radius={5}
-                        pathOptions={{
-                          color: isSelected
-                            ? 'black'
-                            : transectColors[
-                            img.transectId % transectColors.length
-                            ],
-                          weight: isSelected ? 2 : 1,
-                          fillColor:
-                            transectColors[
-                            img.transectId % transectColors.length
-                            ],
-                          fillOpacity: 1,
-                        }}
-                        eventHandlers={{
-                          click: (e: any) => {
-                            const ctrl = !!(
-                              e?.originalEvent?.ctrlKey ||
-                              e?.originalEvent?.metaKey
-                            );
-                            setSelectedTransectIds((prev) => {
-                              const next = new Set(prev);
-                              if (ctrl) {
-                                if (next.has(img.transectId))
-                                  next.delete(img.transectId);
-                                else next.add(img.transectId);
-                              } else {
-                                if (
-                                  next.size === 1 &&
-                                  next.has(img.transectId)
-                                ) {
-                                  next.clear();
-                                } else {
-                                  next.clear();
-                                  next.add(img.transectId);
-                                }
-                              }
-                              return next;
-                            });
-                          },
-                          contextmenu: (e: any) => {
-                            const selected = Array.from(selectedTransectIds);
-                            if (selected.length >= 2) {
-                              setTransectInfo(null);
-                              setMergePrompt({
-                                position: e.latlng,
-                                ids: selected.sort((a, b) => a - b),
-                              });
-                            } else {
-                              setMergePrompt(null);
-                              setTransectInfo({
-                                position: e.latlng,
-                                transectId: img.transectId,
-                              });
-                            }
-                          },
-                        }}
-                      />
-                    );
-                  })}
-                {transectInfo && (
-                  <Popup
-                    position={transectInfo.position}
-                    eventHandlers={{ remove: () => setTransectInfo(null) }}
-                  >
-                    <div>
-                      <div>
-                        <strong>Transect:</strong> {transectInfo.transectId}
-                      </div>
-                      <div>
-                        <strong>Images:</strong>{' '}
-                        {transectImageCounts[transectInfo.transectId] || 0}
-                      </div>
-                    </div>
-                  </Popup>
-                )}
-                {mergePrompt && (
-                  <Popup
-                    position={mergePrompt.position}
-                    eventHandlers={{ remove: () => setMergePrompt(null) }}
-                  >
-                    {(() => {
-                      const ids = mergePrompt.ids;
-                      const primary = Math.min(...ids);
-                      const label =
-                        ids.length === 2
-                          ? `Merge transect ${ids[0]} and ${ids[1]}`
-                          : `Merge ${ids.length} selected transects`;
-                      return (
-                        <div
-                          style={{ cursor: 'pointer' }}
-                          onClick={() => {
-                            handleMergeSelectedInto(primary);
-                            setMergePrompt(null);
-                          }}
-                        >
-                          {label}
-                        </div>
-                      );
-                    })()}
-                  </Popup>
-                )}
-                {pendingPolygon && (
-                  <Popup
-                    position={pendingPolygon.position}
-                    eventHandlers={{
-                      remove: () => clearPendingSelection(false),
-                    }}
-                  >
-                    <div className='d-flex flex-column gap-2'>
-                      <div className='mb-1'>
-                        <strong>{pendingPolygon.enclosedImageIds.size}</strong>{' '}
-                        points selected
-                      </div>
-                      <Button
-                        variant='primary'
-                        size='sm'
-                        onClick={assignPendingToNewTransect}
-                      >
-                        Merge points
-                      </Button>
-                    </div>
-                  </Popup>
-                )}
-                {/* Merge Selected Transects Button */}
-                {selectedTransectIds.size >= 2 && (
-                  <div
-                    className='d-flex flex-row gap-2 p-2'
-                    style={{
-                      position: 'absolute',
-                      bottom: '10px',
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      zIndex: 1000,
-                      backgroundColor: 'rgba(255,255,255,0.9)',
-                      border: '2px solid rgba(0, 0, 0, 0.28)',
-                      borderRadius: '4px',
-                    }}
-                  >
-                    <Button
-                      variant='primary'
-                      onClick={() => {
-                        const selected = Array.from(selectedTransectIds);
-                        const primary = Math.min(...selected);
-                        handleMergeSelectedInto(primary);
-                        // Remove the drawn polygon after merging
-                        if (drawnPolygonLayer) {
-                          try {
-                            drawnPolygonLayer.remove();
-                          } catch { }
-                          setDrawnPolygonLayer(null);
-                        }
-                      }}
-                    >
-                      Merge Selected Transects ({selectedTransectIds.size})
-                    </Button>
-                  </div>
-                )}
-              </MapContainer>
-            )}
-          </div>
-          {saving && (
-            <div className='d-flex justify-content-center align-items-center mt-3'>
-              <Spinner animation='border' size='sm' />
-              <span className='ms-2'>
-                Saving images to transects:{' '}
-                {savingImageCount > 0
-                  ? Math.round((savingProgress / savingImageCount) * 100)
-                  : 0}
-                %
-              </span>
+                {activeTool === 'strata' ? 'Drawing line…' : 'Draw strata line'}
+              </Button>
+              <Button
+                size='sm'
+                variant={
+                  activeTool === 'select' ? 'primary' : 'outline-primary'
+                }
+                onClick={() => toggleTool('select')}
+                disabled={toolsDisabled}
+              >
+                {activeTool === 'select' ? 'Editing lines…' : 'Edit lines'}
+              </Button>
+              {activeTool === 'select' && (
+                <Button
+                  size='sm'
+                  variant='outline-danger'
+                  onClick={deleteSelectedLine}
+                  disabled={!selectedLineId}
+                >
+                  Delete selected line
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className='survey-map'>
+          <div
+            ref={mapDivRef}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+            }}
+          />
+
+          {/* Merge Selected Transects button */}
+          {selectedTransectIds.size >= 2 && (
+            <div
+              className='d-flex flex-row gap-2 p-2'
+              style={{
+                position: 'absolute',
+                bottom: '10px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 2,
+                backgroundColor: 'rgba(255,255,255,0.9)',
+                border: '2px solid rgba(0, 0, 0, 0.28)',
+                borderRadius: '4px',
+              }}
+            >
+              <Button
+                variant='primary'
+                onClick={() => {
+                  const selected = Array.from(selectedTransectIds);
+                  const primary = Math.min(...selected);
+                  handleMergeSelectedInto(primary);
+                }}
+              >
+                Merge Selected Transects ({selectedTransectIds.size})
+              </Button>
             </div>
           )}
+
+          {/* Loading overlay */}
+          {partsLoading !== null && (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                backgroundColor: 'rgba(255,255,255,0.8)',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                zIndex: 1000,
+              }}
+            >
+              <Spinner animation='border' />
+              <span className='ms-2'>Loading data</span>
+            </div>
+          )}
+        </div>
+        {saving && (
+          <div className='d-flex justify-content-center align-items-center mt-3'>
+            <Spinner animation='border' size='sm' />
+            <span className='ms-2'>
+              Saving images to transects:{' '}
+              {savingImageCount > 0
+                ? Math.round((savingProgress / savingImageCount) * 100)
+                : 0}
+              %
+            </span>
+          </div>
+        )}
       </Form>
       <Footer>
         <Button
