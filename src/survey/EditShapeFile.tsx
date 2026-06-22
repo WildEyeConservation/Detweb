@@ -1,15 +1,14 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useContext } from 'react';
+import { useState, useEffect, useCallback, useRef, useContext } from 'react';
 import { GlobalContext } from '../Context';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import {
-  MapContainer,
-  TileLayer,
-  FeatureGroup,
-  useMap,
-  Polygon,
-} from 'react-leaflet';
-import { EditControl } from 'react-leaflet-draw';
-import L from 'leaflet';
+  TerraDraw,
+  TerraDrawPolygonMode,
+  TerraDrawSelectMode,
+  TerraDrawRenderMode,
+} from 'terra-draw';
+import { TerraDrawMapLibreGLAdapter } from 'terra-draw-maplibre-gl-adapter';
 import {
   parseShapefileToLatLngs,
   saveShapefileForProject,
@@ -17,21 +16,93 @@ import {
 import { Form, Spinner, Button } from 'react-bootstrap';
 import { Footer } from '../Modal';
 import FileInput from '../FileInput';
-import 'leaflet/dist/leaflet.css';
-import 'leaflet-draw/dist/leaflet.draw.css';
+import { BASE_STYLE } from './surveyMapStyle';
 import './surveyMap.css';
 
-export default function EditShapeFile({ projectId, organizationId }: { projectId: string; organizationId: string }) {
+// Terra Draw mode names. The boundary and exclusion zones are two separate
+// named polygon modes so they can be styled (and edited) independently; the
+// select mode edits either, and the render mode is an inert "idle" state.
+const MODE_SHAPEFILE = 'shapefile';
+const MODE_EXCLUSION = 'exclusion';
+const MODE_SELECT = 'select';
+const MODE_IDLE = 'idle';
+
+type LatLng = [number, number]; // [lat, lng]
+
+// [lat,lng] ring -> Terra Draw Polygon feature ([lng,lat], closed ring).
+function latLngsToPolygonFeature(
+  latlngs: LatLng[],
+  mode: string,
+  id: string | number,
+  coordinatePrecision: number
+): any {
+  const scale = 10 ** coordinatePrecision;
+  const round = (value: number) => Math.round(value * scale) / scale;
+  const ring: [number, number][] = [];
+  for (const [lat, lng] of latlngs) {
+    const point: [number, number] = [round(lng), round(lat)];
+    const previous = ring[ring.length - 1];
+    if (!previous || previous[0] !== point[0] || previous[1] !== point[1]) {
+      ring.push(point);
+    }
+  }
+  const [fx, fy] = ring[0];
+  const [lx, ly] = ring[ring.length - 1];
+  if (ring.length > 1 && fx === lx && fy === ly) ring.pop();
+  ring.push([ring[0][0], ring[0][1]]);
+  return {
+    id,
+    type: 'Feature',
+    geometry: { type: 'Polygon', coordinates: [ring] },
+    properties: { mode },
+  };
+}
+
+function addPolygonFeatures(
+  draw: TerraDraw,
+  polygons: Array<{ coords: LatLng[]; mode: string }>,
+  coordinatePrecision: number
+) {
+  const results = draw.addFeatures(
+    polygons.map(({ coords, mode }) =>
+      latLngsToPolygonFeature(
+        coords,
+        mode,
+        draw.getFeatureId(),
+        coordinatePrecision
+      )
+    )
+  );
+  const invalid = results.filter((result) => !result.valid);
+  if (invalid.length) {
+    console.error('Failed to add shapefile geometry:', invalid);
+  }
+}
+
+// Terra Draw Polygon feature ([lng,lat], closed) -> [lat,lng] ring (open).
+function polygonFeatureToLatLngs(feature: any): LatLng[] {
+  const ring = (feature.geometry.coordinates[0] as [number, number][]).map(
+    ([lng, lat]) => [lat, lng] as LatLng
+  );
+  if (ring.length > 1) {
+    const [fx, fy] = ring[0];
+    const [lx, ly] = ring[ring.length - 1];
+    if (fx === lx && fy === ly) ring.pop();
+  }
+  return ring;
+}
+
+export default function EditShapeFile({
+  projectId,
+  organizationId,
+}: {
+  projectId: string;
+  organizationId: string;
+}) {
   const { client, showModal } = useContext(GlobalContext)!;
-  const [polygonCoords, setPolygonCoords] = useState<
-    L.LatLngExpression[] | null
-  >(null);
-  const featureGroupRef = useRef<L.FeatureGroup>(null);
+  const [polygonCoords, setPolygonCoords] = useState<LatLng[] | null>(null);
   const [shapefileBuffer, setShapefileBuffer] = useState<ArrayBuffer>();
-  const [exclusionPolygons, setExclusionPolygons] = useState<
-    [number, number][][]
-  >([]);
-  const exclusionFeatureGroupRef = useRef<L.FeatureGroup>(null);
+  const [exclusionPolygons, setExclusionPolygons] = useState<LatLng[][]>([]);
   const [saving, setSaving] = useState(false);
   const [loadingShapefile, setLoadingShapefile] = useState(false);
   const [drawMode, setDrawMode] = useState<'shapefile' | 'exclusions'>(
@@ -41,224 +112,451 @@ export default function EditShapeFile({ projectId, organizationId }: { projectId
   const [disabledClose, setDisabledClose] = useState(false);
   const [saveDisabled, setSaveDisabled] = useState(false);
 
-  // Adaptive simplification shared utility is imported as simplifyPolygonToRange
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const [activeTool, setActiveTool] = useState<'draw' | 'edit' | null>(null);
+  const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(
+    null
+  );
 
-  // Fit map bounds to polygon coordinates
-  const FitBoundsToCoords: React.FC<{ coords: L.LatLngExpression[] }> = ({
-    coords,
-  }) => {
-    const map = useMap();
-    useEffect(() => {
-      if (coords && coords.length) {
-        const bounds = L.latLngBounds(coords as [number, number][]);
-        map.fitBounds(bounds);
-      }
-    }, [coords, map]);
-    return null;
-  };
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const drawRef = useRef<TerraDraw | null>(null);
+  const drawAdapterRef =
+    useRef<TerraDrawMapLibreGLAdapter<maplibregl.Map> | null>(null);
+  const seededRef = useRef(false);
+  const fittedRef = useRef(false);
+  // Latest values for the seed effect / one-time map handlers.
+  const polygonCoordsRef = useRef(polygonCoords);
+  polygonCoordsRef.current = polygonCoords;
+  const exclusionPolygonsRef = useRef(exclusionPolygons);
+  exclusionPolygonsRef.current = exclusionPolygons;
 
-  // fetch existing shapefile if any
-  useEffect(() => {
-    async function loadShapefile() {
-      setLoadingShapefile(true);
-      // load existing shapefile (cast query function to any)
-      const result = (await (
-        client.models.Shapefile.shapefilesByProjectId as any
-      )({ projectId })) as any;
-      const data = result.data as Array<{ coordinates: (number | null)[] }>;
-      if (data.length > 0 && data[0].coordinates) {
-        // filter out any null entries
-        const coordsArr = data[0].coordinates.filter(
-          (n): n is number => n != null
-        );
-        const coords: L.LatLngExpression[] = [];
-        for (let i = 0; i < coordsArr.length; i += 2) {
-          coords.push([coordsArr[i], coordsArr[i + 1]]);
-        }
-        setPolygonCoords(coords);
-      }
-      setLoadingShapefile(false);
+  // Fit the map to a set of [lat,lng] points.
+  const fitToLatLngs = useCallback((pts: LatLng[]) => {
+    const map = mapRef.current;
+    if (!map || pts.length === 0) return;
+    let minLng = Infinity,
+      minLat = Infinity,
+      maxLng = -Infinity,
+      maxLat = -Infinity;
+    for (const [lat, lng] of pts) {
+      if (lng < minLng) minLng = lng;
+      if (lat < minLat) minLat = lat;
+      if (lng > maxLng) maxLng = lng;
+      if (lat > maxLat) maxLat = lat;
     }
-    loadShapefile();
-  }, [client, projectId]);
+    if (!Number.isFinite(minLng)) return;
+    map.fitBounds(
+      [
+        [minLng, minLat],
+        [maxLng, maxLat],
+      ],
+      { padding: 40, maxZoom: 16, duration: 0 }
+    );
+  }, []);
 
-  // fetch existing exclusion polygons if any
+  // -----------------------------------------------------------------------
+  // Load existing shapefile + exclusions (in parallel), then mark data ready.
+  // -----------------------------------------------------------------------
   useEffect(() => {
-    async function loadExclusions() {
-      const result = (await (
-        client.models.ShapefileExclusions.shapefileExclusionsByProjectId as any
-      )({ projectId })) as any;
-      const data = result.data as Array<{ coordinates: (number | null)[] }>;
-      const loadedPolys: [number, number][][] = [];
-      data.forEach((item) => {
-        if (item.coordinates) {
-          const coordsArr = item.coordinates.filter(
+    let cancelled = false;
+    async function load() {
+      setLoadingShapefile(true);
+      try {
+        const [shpRes, exRes] = await Promise.all([
+          (client.models.Shapefile.shapefilesByProjectId as any)({ projectId }),
+          (
+            client.models.ShapefileExclusions
+              .shapefileExclusionsByProjectId as any
+          )({ projectId }),
+        ]);
+        if (cancelled) return;
+
+        const shpData = (shpRes?.data ?? []) as Array<{
+          coordinates: (number | null)[] | null;
+        }>;
+        if (shpData.length > 0 && shpData[0].coordinates) {
+          const flat = shpData[0].coordinates.filter(
             (n): n is number => n != null
           );
-          const poly: [number, number][] = [];
-          for (let i = 0; i < coordsArr.length; i += 2) {
-            poly.push([coordsArr[i], coordsArr[i + 1]]);
+          const coords: LatLng[] = [];
+          for (let i = 0; i + 1 < flat.length; i += 2) {
+            coords.push([flat[i], flat[i + 1]]);
           }
-          loadedPolys.push(poly);
+          if (coords.length >= 3) setPolygonCoords(coords);
         }
-      });
-      setExclusionPolygons(loadedPolys);
+
+        const exData = (exRes?.data ?? []) as Array<{
+          coordinates: (number | null)[] | null;
+        }>;
+        const loadedPolys: LatLng[][] = [];
+        for (const item of exData) {
+          if (!item.coordinates) continue;
+          const flat = item.coordinates.filter((n): n is number => n != null);
+          const poly: LatLng[] = [];
+          for (let i = 0; i + 1 < flat.length; i += 2) {
+            poly.push([flat[i], flat[i + 1]]);
+          }
+          if (poly.length >= 3) loadedPolys.push(poly);
+        }
+        setExclusionPolygons(loadedPolys);
+      } catch (err) {
+        console.error('Failed to load shapefile/exclusions:', err);
+      } finally {
+        if (!cancelled) {
+          setLoadingShapefile(false);
+          setDataLoaded(true);
+        }
+      }
     }
-    loadExclusions();
+    load();
+    return () => {
+      cancelled = true;
+    };
   }, [client, projectId]);
 
-  // parse and simplify shapefile upload into polygon coords
+  // -----------------------------------------------------------------------
+  // Map + Terra Draw initialisation (once).
+  // -----------------------------------------------------------------------
   useEffect(() => {
-    if (shapefileBuffer) {
-      parseShapefileToLatLngs(shapefileBuffer)
-        .then((latLngs) => {
-          if (latLngs)
-            setPolygonCoords(latLngs as unknown as L.LatLngExpression[]);
-        })
-        .catch(console.error);
-    }
-  }, [shapefileBuffer]);
+    if (!mapContainerRef.current) return;
 
-  // draw polygon on map when polygonCoords changes
-  useEffect(() => {
-    if (!featureGroupRef.current) return;
-    featureGroupRef.current.clearLayers();
-    if (polygonCoords) {
-      const layer = L.polygon(polygonCoords, { color: '#97009c' });
-      (layer as any).__isShapefile = true;
-      featureGroupRef.current.addLayer(layer);
-    }
-  }, [polygonCoords]);
+    const map = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: BASE_STYLE,
+      center: [0, 0],
+      zoom: 2,
+      attributionControl: { compact: true },
+    });
+    mapRef.current = map;
+    map.addControl(
+      new maplibregl.NavigationControl({ showCompass: false }),
+      'top-right'
+    );
 
-  // handle manual polygon drawn
-  const onCreated = useCallback(
-    (e: any) => {
-      if (drawMode !== 'shapefile') return;
-      const latlngs = (e.layer.getLatLngs()[0] as L.LatLng[]).map(
-        ({ lat, lng }) => [lat, lng] as L.LatLngExpression
+    // Rebuild React state (for saving) from the Terra Draw store.
+    const rebuildFromSnapshot = () => {
+      const snap = drawRef.current?.getSnapshot() ?? [];
+      const polys = snap.filter(
+        (f: any) =>
+          f.geometry?.type === 'Polygon' &&
+          (f.properties?.mode === MODE_SHAPEFILE ||
+            f.properties?.mode === MODE_EXCLUSION)
       );
-      setPolygonCoords(latlngs);
-    },
-    [drawMode]
-  );
+      const shp = polys.find((f: any) => f.properties.mode === MODE_SHAPEFILE);
+      const exc = polys.filter(
+        (f: any) => f.properties.mode === MODE_EXCLUSION
+      );
+      setPolygonCoords(shp ? polygonFeatureToLatLngs(shp) : null);
+      setExclusionPolygons(exc.map((f: any) => polygonFeatureToLatLngs(f)));
+    };
 
-  // handle polygon edits
-  const onEdited = useCallback(
-    (_e: any) => {
-      if (drawMode !== 'shapefile') return;
-      _e.layers.eachLayer((layer: any) => {
-        if (
-          featureGroupRef.current &&
-          featureGroupRef.current.hasLayer(layer) &&
-          (layer as any).__isShapefile
-        ) {
-          const latlngs = (layer.getLatLngs()[0] as L.LatLng[]).map(
-            ({ lat, lng }) => [lat, lng] as L.LatLngExpression
-          );
-          setPolygonCoords(latlngs);
+    map.on('load', () => {
+      const adapter = new TerraDrawMapLibreGLAdapter({ map });
+      drawAdapterRef.current = adapter;
+      const draw = new TerraDraw({
+        adapter,
+        modes: [
+          new TerraDrawPolygonMode({
+            modeName: MODE_SHAPEFILE,
+            styles: {
+              fillColor: '#97009c',
+              fillOpacity: 0.08,
+              outlineColor: '#97009c',
+              outlineWidth: 2,
+            },
+          }),
+          new TerraDrawPolygonMode({
+            modeName: MODE_EXCLUSION,
+            styles: {
+              fillColor: '#ff0000',
+              fillOpacity: 0.25,
+              outlineColor: '#ff0000',
+              outlineWidth: 2,
+            },
+          }),
+          new TerraDrawSelectMode({
+            flags: {
+              [MODE_SHAPEFILE]: {
+                feature: {
+                  draggable: true,
+                  coordinates: {
+                    draggable: true,
+                    midpoints: { draggable: true },
+                    deletable: true,
+                  },
+                },
+              },
+              [MODE_EXCLUSION]: {
+                feature: {
+                  draggable: true,
+                  coordinates: {
+                    draggable: true,
+                    midpoints: { draggable: true },
+                    deletable: true,
+                  },
+                },
+              },
+            },
+          }),
+          new TerraDrawRenderMode({ modeName: MODE_IDLE, styles: {} }),
+        ],
+      });
+      drawRef.current = draw;
+      draw.start();
+      draw.setMode(MODE_IDLE);
+
+      draw.on('finish', (id, ctx) => {
+        // Only one boundary polygon may exist: drop any older ones.
+        if (ctx.action === 'draw' && ctx.mode === MODE_SHAPEFILE) {
+          const others = draw
+            .getSnapshot()
+            .filter(
+              (f: any) =>
+                f.geometry?.type === 'Polygon' &&
+                f.properties?.mode === MODE_SHAPEFILE &&
+                f.id !== id
+            )
+            .map((f: any) => f.id);
+          if (others.length) draw.removeFeatures(others);
+        }
+        rebuildFromSnapshot();
+        // A boundary is a single shape — return to idle once it's drawn.
+        if (ctx.action === 'draw' && ctx.mode === MODE_SHAPEFILE) {
+          draw.setMode(MODE_IDLE);
+          setActiveTool(null);
         }
       });
-    },
-    [drawMode]
-  );
+      draw.on('change', (_ids, type, context) => {
+        const fromApi =
+          !!context && 'origin' in context && context.origin === 'api';
+        if (type === 'delete' && !fromApi) {
+          rebuildFromSnapshot();
+        }
+      });
+      draw.on('select', (id) => setSelectedFeatureId(String(id)));
+      draw.on('deselect', () => setSelectedFeatureId(null));
 
-  // handle polygon deletion
-  const onDeleted = useCallback(
-    (_e?: any) => {
-      if (drawMode !== 'shapefile') return;
-      let shapefileWasDeleted = false;
-      if (_e && _e.layers && typeof _e.layers.eachLayer === 'function') {
-        _e.layers.eachLayer((layer: any) => {
-          if ((layer as any).__isShapefile) shapefileWasDeleted = true;
-        });
+      setMapLoaded(true);
+    });
+
+    return () => {
+      setMapLoaded(false);
+      try {
+        drawRef.current?.stop();
+      } catch {
+        /* ignore */
       }
-      if (shapefileWasDeleted) setPolygonCoords(null);
-    },
-    [drawMode]
-  );
+      drawRef.current = null;
+      drawAdapterRef.current = null;
+      map.remove();
+      mapRef.current = null;
+      seededRef.current = false;
+      fittedRef.current = false;
+    };
+  }, []);
+
+  // Seed existing geometry into Terra Draw once the map and data are ready.
+  useEffect(() => {
+    if (!mapLoaded || !dataLoaded || seededRef.current) return;
+    const draw = drawRef.current;
+    if (!draw) return;
+    const polygons: Array<{ coords: LatLng[]; mode: string }> = [];
+    if (polygonCoordsRef.current && polygonCoordsRef.current.length >= 3) {
+      polygons.push({
+        coords: polygonCoordsRef.current,
+        mode: MODE_SHAPEFILE,
+      });
+    }
+    for (const ex of exclusionPolygonsRef.current) {
+      if (ex.length >= 3) {
+        polygons.push({ coords: ex, mode: MODE_EXCLUSION });
+      }
+    }
+    if (polygons.length) {
+      try {
+        addPolygonFeatures(
+          draw,
+          polygons,
+          drawAdapterRef.current?.getCoordinatePrecision() ?? 9
+        );
+      } catch (err) {
+        console.error('Failed to seed shapefile geometry:', err);
+      }
+    }
+    seededRef.current = true;
+    if (!fittedRef.current && polygonCoordsRef.current?.length) {
+      fitToLatLngs(polygonCoordsRef.current);
+      fittedRef.current = true;
+    }
+  }, [mapLoaded, dataLoaded, fitToLatLngs]);
+
+  // Parse an uploaded shapefile and set it as the boundary.
+  useEffect(() => {
+    if (!shapefileBuffer) return;
+    let cancelled = false;
+    parseShapefileToLatLngs(shapefileBuffer)
+      .then((latLngs) => {
+        if (cancelled || !latLngs) return;
+        setPolygonCoords(latLngs);
+        const draw = drawRef.current;
+        if (seededRef.current && draw) {
+          const old = draw
+            .getSnapshot()
+            .filter(
+              (f: any) =>
+                f.geometry?.type === 'Polygon' &&
+                f.properties?.mode === MODE_SHAPEFILE
+            )
+            .map((f: any) => f.id);
+          if (old.length) draw.removeFeatures(old);
+          try {
+            addPolygonFeatures(
+              draw,
+              [{ coords: latLngs as LatLng[], mode: MODE_SHAPEFILE }],
+              drawAdapterRef.current?.getCoordinatePrecision() ?? 9
+            );
+          } catch (err) {
+            console.error('Failed to add uploaded shapefile:', err);
+          }
+        }
+        fitToLatLngs(latLngs as LatLng[]);
+        fittedRef.current = true;
+      })
+      .catch(console.error);
+    return () => {
+      cancelled = true;
+    };
+  }, [shapefileBuffer, fitToLatLngs]);
+
+  // When the draw target (radio) changes while drawing, switch the active mode.
+  useEffect(() => {
+    if (!mapLoaded || !drawRef.current) return;
+    if (activeTool === 'draw') {
+      drawRef.current.setMode(
+        drawMode === 'shapefile' ? MODE_SHAPEFILE : MODE_EXCLUSION
+      );
+    }
+  }, [drawMode, activeTool, mapLoaded]);
 
   // enable submit only when polygon defined
   useEffect(() => {
     setSaveDisabled(!polygonCoords);
   }, [polygonCoords]);
 
+  // Tool handlers
+  const toggleDraw = useCallback(() => {
+    const draw = drawRef.current;
+    if (!draw) return;
+    if (activeTool === 'draw') {
+      draw.setMode(MODE_IDLE);
+      setActiveTool(null);
+    } else {
+      draw.setMode(drawMode === 'shapefile' ? MODE_SHAPEFILE : MODE_EXCLUSION);
+      setActiveTool('draw');
+    }
+  }, [activeTool, drawMode]);
+
+  const toggleEdit = useCallback(() => {
+    const draw = drawRef.current;
+    if (!draw) return;
+    if (activeTool === 'edit') {
+      draw.setMode(MODE_IDLE);
+      setActiveTool(null);
+      setSelectedFeatureId(null);
+    } else {
+      draw.setMode(MODE_SELECT);
+      setActiveTool('edit');
+    }
+  }, [activeTool]);
+
+  const deleteSelected = useCallback(() => {
+    const draw = drawRef.current;
+    if (!draw || !selectedFeatureId) return;
+    try {
+      draw.removeFeatures([selectedFeatureId]);
+    } catch (err) {
+      console.error('Failed to delete feature:', err);
+    }
+    setSelectedFeatureId(null);
+    // removeFeatures is an API change (no 'change' rebuild), so sync manually.
+    const snap = draw.getSnapshot();
+    const shp = snap.find(
+      (f: any) =>
+        f.geometry?.type === 'Polygon' && f.properties?.mode === MODE_SHAPEFILE
+    );
+    const exc = snap.filter(
+      (f: any) =>
+        f.geometry?.type === 'Polygon' && f.properties?.mode === MODE_EXCLUSION
+    );
+    setPolygonCoords(shp ? polygonFeatureToLatLngs(shp) : null);
+    setExclusionPolygons(exc.map((f: any) => polygonFeatureToLatLngs(f)));
+  }, [selectedFeatureId]);
+
   const saveShapefile = async () => {
     setDisabledClose(true);
     setSaving(true);
+    try {
+      if (!polygonCoords) return;
+      const latLngs: LatLng[] = polygonCoords.map((pt) => [pt[0], pt[1]]);
+      await saveShapefileForProject(client, projectId, latLngs, organizationId);
 
-    if (!polygonCoords) return;
-    const latLngs: [number, number][] = polygonCoords.map((pt) =>
-      Array.isArray(pt)
-        ? [pt[0] as number, pt[1] as number]
-        : [pt.lat as number, pt.lng as number]
-    );
-    await saveShapefileForProject(
-      client,
-      projectId,
-      latLngs as [number, number][],
-      organizationId
-    );
-    // save exclusion polygons
-    const exResult = (await (
-      client.models.ShapefileExclusions.shapefileExclusionsByProjectId as any
-    )({ projectId })) as any;
-    const existingExclusions = exResult.data as Array<{ id: string }>;
-    // delete old exclusions
-    await Promise.all(
-      existingExclusions.map((ex: any) =>
-        (client.models.ShapefileExclusions.delete as any)({ id: ex.id })
-      )
-    );
-    // create new exclusions
-    await Promise.all(
-      exclusionPolygons.map((poly) => {
-        const flatEx: number[] = [];
-        poly.forEach((pt) => {
-          const [lat, lng] = pt;
-          flatEx.push(lat, lng);
-        });
-        return (client.models.ShapefileExclusions.create as any)({
-          projectId,
-          coordinates: flatEx,
-          group: organizationId,
-        });
-      })
-    );
-
-    // delete strata information and jolly results
-    const { data: strata } = await (
-      client.models.Stratum.strataByProjectId as any
-    )({
-      projectId,
-    });
-    const { data: jollyResults } = await (
-      client.models.JollyResult.jollyResultsBySurveyId as any
-    )({
-      surveyId: projectId,
-    });
-
-    await Promise.all(
-      (strata as any[]).map((s: any) =>
-        (client.models.Stratum.delete as any)({ id: s.id })
-      )
-    );
-    await Promise.all(
-      (jollyResults as any[]).map((r: any) =>
-        (client.models.JollyResult.delete as any)({
-          surveyId: projectId,
-          stratumId: r.stratumId,
-          annotationSetId: r.annotationSetId,
-          categoryId: r.categoryId,
+      // save exclusion polygons
+      const exResult = (await (
+        client.models.ShapefileExclusions.shapefileExclusionsByProjectId as any
+      )({ projectId })) as any;
+      const existingExclusions = exResult.data as Array<{ id: string }>;
+      await Promise.all(
+        existingExclusions.map((ex: any) =>
+          (client.models.ShapefileExclusions.delete as any)({ id: ex.id })
+        )
+      );
+      await Promise.all(
+        exclusionPolygons.map((poly) => {
+          const flatEx: number[] = [];
+          poly.forEach(([lat, lng]) => {
+            flatEx.push(lat, lng);
+          });
+          return (client.models.ShapefileExclusions.create as any)({
+            projectId,
+            coordinates: flatEx,
+            group: organizationId,
+          });
         })
-      )
-    );
+      );
 
-    alert(
-      'You have successfully updated the shapefile. Please review your strata and transects on the next tab and save your work whether you made any changes or not.'
-    );
+      // delete strata information and jolly results
+      const { data: strata } = await (
+        client.models.Stratum.strataByProjectId as any
+      )({ projectId });
+      const { data: jollyResults } = await (
+        client.models.JollyResult.jollyResultsBySurveyId as any
+      )({ surveyId: projectId });
 
-    setDisabledClose(false);
-    setSaving(false);
+      await Promise.all(
+        (strata as any[]).map((s: any) =>
+          (client.models.Stratum.delete as any)({ id: s.id })
+        )
+      );
+      await Promise.all(
+        (jollyResults as any[]).map((r: any) =>
+          (client.models.JollyResult.delete as any)({
+            surveyId: projectId,
+            stratumId: r.stratumId,
+            annotationSetId: r.annotationSetId,
+            categoryId: r.categoryId,
+          })
+        )
+      );
+
+      alert(
+        'You have successfully updated the shapefile. Please review your strata and transects on the next tab and save your work whether you made any changes or not.'
+      );
+    } finally {
+      setDisabledClose(false);
+      setSaving(false);
+    }
   };
 
   return (
@@ -329,130 +627,54 @@ export default function EditShapeFile({ projectId, organizationId }: { projectId
               />
             </div>
             <span className='text-muted mt-1' style={{ fontSize: '14px' }}>
-              Use the polygon tool with the selected mode to draw or edit.
-              Exclusion zones will be deducted from the total area when
-              computing results.
+              Pick a mode, then use <strong>Draw</strong> to add a polygon (click
+              the first point to finish). Use <strong>Edit</strong> to drag
+              vertices, and <strong>Delete selected</strong> to remove a polygon.
+              Exclusion zones are deducted from the total area when computing
+              results.
             </span>
           </Form.Group>
-          <div className='survey-map'>
-            <MapContainer
-              style={{ height: '100%', width: '100%' }}
-              center={[0, 0]}
-              zoom={2}
+
+          {/* Map toolbar */}
+          <div className='d-flex gap-2 mb-2 flex-wrap'>
+            <Button
+              size='sm'
+              variant={activeTool === 'draw' ? 'primary' : 'outline-primary'}
+              onClick={toggleDraw}
+              disabled={!mapLoaded || saving}
             >
-              {polygonCoords && <FitBoundsToCoords coords={polygonCoords} />}
-              <TileLayer
-                attribution='&copy; OpenStreetMap contributors'
-                url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-              />
-              {/* Shapefile feature group (single polygon) */}
-              <FeatureGroup ref={featureGroupRef}>
-                {drawMode === 'shapefile' && featureGroupRef.current ? (
-                  <EditControl
-                    position='topright'
-                    onCreated={onCreated}
-                    onEdited={onEdited}
-                    onDeleted={onDeleted}
-                    draw={{
-                      polygon: {
-                        allowIntersection: false,
-                        shapeOptions: { color: '#97009c' },
-                      },
-                      rectangle: false,
-                      circle: false,
-                      circlemarker: false,
-                      marker: false,
-                      polyline: false,
-                    }}
-                    edit={{ featureGroup: featureGroupRef.current } as any}
-                  />
-                ) : null}
-              </FeatureGroup>
-              {/* Exclusion zones feature group (multiple polygons) */}
-              <FeatureGroup ref={exclusionFeatureGroupRef}>
-                {exclusionPolygons.map((poly) => (
-                  <Polygon
-                    pane='markerPane'
-                    key={`excl-${JSON.stringify(poly)}`}
-                    positions={poly}
-                    pathOptions={{
-                      color: 'red',
-                      fillColor: 'red',
-                      fillOpacity: 0.3,
-                    }}
-                  />
-                ))}
-                {drawMode === 'exclusions' &&
-                exclusionFeatureGroupRef.current ? (
-                  <EditControl
-                    position='topright'
-                    draw={{
-                      rectangle: false,
-                      circle: false,
-                      circlemarker: false,
-                      marker: false,
-                      polyline: false,
-                      polygon: {
-                        shapeOptions: { color: 'red', fillOpacity: 0.3 },
-                      },
-                    }}
-                    onCreated={(e: any) => {
-                      if (e.layerType === 'polygon') {
-                        const latlngs = (
-                          e.layer.getLatLngs()[0] as L.LatLng[]
-                        ).map(({ lat, lng }) => [lat, lng] as [number, number]);
-                        setExclusionPolygons((prev) => [...prev, latlngs]);
-                        if (exclusionFeatureGroupRef.current) {
-                          exclusionFeatureGroupRef.current.removeLayer(e.layer);
-                        }
-                      }
-                    }}
-                    onEdited={() => {
-                      if (exclusionFeatureGroupRef.current) {
-                        const layers =
-                          exclusionFeatureGroupRef.current.getLayers();
-                        const newPolys: [number, number][][] = layers.map(
-                          (layer: any) => {
-                            const latlngs = (
-                              layer.getLatLngs()[0] as L.LatLng[]
-                            ).map(
-                              ({ lat, lng }) => [lat, lng] as [number, number]
-                            );
-                            return latlngs;
-                          }
-                        );
-                        setExclusionPolygons(newPolys);
-                      }
-                    }}
-                    onDeleted={(e: any) => {
-                      const removed: [number, number][][] = [];
-                      e.layers.eachLayer((layer: any) => {
-                        const latlngs = (
-                          layer.getLatLngs()[0] as L.LatLng[]
-                        ).map((ll) => [ll.lat, ll.lng] as [number, number]);
-                        removed.push(latlngs);
-                      });
-                      setExclusionPolygons((prev) =>
-                        prev.filter(
-                          (poly) =>
-                            !removed.some(
-                              (rem) =>
-                                rem.length === poly.length &&
-                                rem.every(([rLat, rLng], _idx) => {
-                                  const [pLat, pLng] = poly[_idx];
-                                  return rLat === pLat && rLng === pLng;
-                                })
-                            )
-                        )
-                      );
-                    }}
-                    edit={
-                      { featureGroup: exclusionFeatureGroupRef.current } as any
-                    }
-                  />
-                ) : null}
-              </FeatureGroup>
-            </MapContainer>
+              {activeTool === 'draw'
+                ? `Drawing ${drawMode === 'shapefile' ? 'boundary' : 'exclusion'}…`
+                : 'Draw'}
+            </Button>
+            <Button
+              size='sm'
+              variant={activeTool === 'edit' ? 'primary' : 'outline-primary'}
+              onClick={toggleEdit}
+              disabled={!mapLoaded || saving}
+            >
+              {activeTool === 'edit' ? 'Editing…' : 'Edit'}
+            </Button>
+            <Button
+              size='sm'
+              variant='outline-danger'
+              onClick={deleteSelected}
+              disabled={!selectedFeatureId || saving}
+            >
+              Delete selected
+            </Button>
+          </div>
+
+          <div className='survey-map'>
+            <div
+              ref={mapContainerRef}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+              }}
+            />
           </div>
           {saving && (
             <div className='d-flex justify-content-center align-items-center mt-3'>
