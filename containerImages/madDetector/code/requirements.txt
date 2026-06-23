@@ -1,6 +1,6 @@
 boto3
 gql[all]
-requests_aws4auth
+requests_aws4auth>=1.2
 numpy==2.1.2
 matplotlib==3.10.5
 scipy==1.15.3

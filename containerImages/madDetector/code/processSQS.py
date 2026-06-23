@@ -4,6 +4,7 @@ import time
 from tempfile import NamedTemporaryFile
 
 import boto3
+from botocore.exceptions import ClientError
 from requests_aws4auth import AWS4Auth
 from gql import gql
 from gql.client import Client
@@ -47,9 +48,15 @@ CHECKPOINT_S3_URI = os.environ.get('MAD_CHECKPOINT_S3', '')  # s3://bucket/key
 
 sqs = boto3.client('sqs', REGION)
 s3 = boto3.client('s3', REGION)
-aws = boto3.Session()
-credentials = aws.get_credentials().get_frozen_credentials()
-auth = AWS4Auth(credentials.access_key, credentials.secret_key, REGION, 'appsync', session_token=credentials.token)
+# Keep credentials refreshable: ECS task-role credentials rotate every few hours,
+# so pass the live botocore credentials object (not a frozen snapshot) to AWS4Auth.
+# A frozen snapshot expires mid-run and every AppSync write fails with
+# ExpiredTokenException until the container restarts.
+auth = AWS4Auth(
+    region=REGION,
+    service='appsync',
+    refreshable_credentials=boto3.Session().get_credentials(),
+)
 transport = RequestsHTTPTransport(url=API_ENDPOINT, headers={'Accept': 'application/json', 'Content-Type': 'application/json'}, auth=auth)
 client = Client(transport=transport, fetch_schema_from_transport=False)
 
@@ -266,6 +273,16 @@ def main():
                 sqs.delete_message(QueueUrl=QUEUE_URL, ReceiptHandle=receipt)
             except Exception as e:
                 print(f"Error processing message: {e}")
+                # Reset visibility to 0 so a failed message retries / reaches the DLQ
+                # promptly instead of squatting in flight for the full timeout.
+                try:
+                    sqs.change_message_visibility(
+                        QueueUrl=QUEUE_URL,
+                        ReceiptHandle=receipt,
+                        VisibilityTimeout=0,
+                    )
+                except ClientError as visibility_error:
+                    print(f"Failed to reset message visibility: {visibility_error}")
 
 if __name__ == '__main__':
     main()

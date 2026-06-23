@@ -42,14 +42,14 @@ headers = {
     'Accept': 'application/json',
     'Content-Type': 'application/json',
 }
-aws = boto3.Session()
-credentials = aws.get_credentials().get_frozen_credentials()
+# Keep credentials refreshable: ECS task-role credentials rotate every few hours,
+# so pass the live botocore credentials object (not a frozen snapshot) to AWS4Auth.
+# A frozen snapshot expires mid-run and every AppSync write fails with
+# ExpiredTokenException until the container restarts.
 auth = AWS4Auth(
-    credentials.access_key,
-    credentials.secret_key,
-    os.environ['REGION'],
-    'appsync',
-    session_token=credentials.token,
+    region=os.environ['REGION'],
+    service='appsync',
+    refreshable_credentials=boto3.Session().get_credentials(),
 )
 transport = RequestsHTTPTransport(url=os.environ['API_ENDPOINT'],
                                     headers=headers,

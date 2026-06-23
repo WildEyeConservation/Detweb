@@ -2,5 +2,5 @@ kornia
 opencv-python-headless
 boto3
 gql[all]
-requests_aws4auth
+requests_aws4auth>=1.2
 shapely

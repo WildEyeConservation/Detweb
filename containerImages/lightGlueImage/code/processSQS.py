@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from tempfile import NamedTemporaryFile
 
 import boto3
+from botocore.exceptions import ClientError
 import cv2
 import kornia as K
 import kornia.feature as KF
@@ -121,14 +122,14 @@ mutation IncBucket($projectId: ID!, $bucketKey: String!, $cameraPairKey: String!
 sqs = boto3.client("sqs", os.environ["REGION"])
 queue_url = os.environ["QUEUE_URL"]
 
-aws = boto3.Session()
-credentials = aws.get_credentials().get_frozen_credentials()
+# Keep credentials refreshable: ECS task-role credentials rotate every few hours,
+# so pass the live botocore credentials object (not a frozen snapshot) to AWS4Auth.
+# A frozen snapshot expires mid-run and every AppSync write fails with
+# ExpiredTokenException until the container restarts.
 auth = AWS4Auth(
-    credentials.access_key,
-    credentials.secret_key,
-    os.environ["REGION"],
-    "appsync",
-    session_token=credentials.token,
+    region=os.environ["REGION"],
+    service="appsync",
+    refreshable_credentials=boto3.Session().get_credentials(),
 )
 transport = RequestsHTTPTransport(
     url=os.environ["API_ENDPOINT"],
@@ -576,6 +577,16 @@ while True:
             else:
                 # Without a DLQ this can infinite-loop on a poison message.
                 print(f'Task {message["Body"]} could not be completed.')
+                # Reset visibility to 0 so a failed message retries / reaches the DLQ
+                # promptly instead of squatting in flight for the full timeout.
+                try:
+                    sqs.change_message_visibility(
+                        QueueUrl=queue_url,
+                        ReceiptHandle=message["ReceiptHandle"],
+                        VisibilityTimeout=0,
+                    )
+                except ClientError as visibility_error:
+                    print(f'Failed to reset message visibility: {visibility_error}')
     except KeyError:
         print("Queue empty.")
         time.sleep(60)
