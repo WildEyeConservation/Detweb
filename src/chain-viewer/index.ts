@@ -4,3 +4,4 @@
  */
 export { ChainViewerPage } from './ChainViewerPage';
 export { ChainReviewTaskPage } from './ChainReviewTaskPage';
+export { SharedChainViewerPage } from './shared/SharedChainViewerPage';

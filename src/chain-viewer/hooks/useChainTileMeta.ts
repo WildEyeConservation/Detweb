@@ -1,12 +1,10 @@
 import { useContext, useEffect, useState } from 'react';
 import { GlobalContext } from '../../Context';
 import type { AnnotationImageMeta, Chain } from '../types';
-
-type ImageFileRow = {
-  key?: string | null;
-  path?: string | null;
-  type?: string | null;
-};
+import {
+  selectSourceKeyForImage,
+  type ImageFileRow,
+} from '../utils/imageSourceKey';
 
 type ChainImageRow = {
   width: number;
@@ -26,50 +24,6 @@ type ListImageFilesByImageId = (
   input: { imageId: string },
   options: { selectionSet: readonly string[] }
 ) => Promise<{ data?: ImageFileRow[] | null }>;
-
-function normalizeImagePath(value: string | null | undefined): string | null {
-  if (!value) return null;
-  return value.replace(/\\/g, '/').replace(/^images\//, '');
-}
-
-function isJpegFile(file: ImageFileRow): boolean {
-  const type = file.type?.toLowerCase() ?? '';
-  const key = normalizeImagePath(file.key);
-  const path = normalizeImagePath(file.path);
-  return (
-    type === 'image/jpeg' ||
-    type === 'image/jpg' ||
-    !!key?.match(/\.jpe?g$/i) ||
-    !!path?.match(/\.jpe?g$/i)
-  );
-}
-
-function imageFileMatchesOriginalPath(
-  file: ImageFileRow,
-  originalPath: string | null | undefined
-): boolean {
-  const original = normalizeImagePath(originalPath);
-  if (!original) return false;
-  const key = normalizeImagePath(file.key);
-  const path = normalizeImagePath(file.path);
-  return (
-    key === original ||
-    path === original ||
-    !!key?.endsWith(`/${original}`) ||
-    !!path?.endsWith(`/${original}`)
-  );
-}
-
-function selectSourceKeyForImage(
-  files: ImageFileRow[],
-  originalPath: string | null | undefined
-): string | null {
-  const jpgs = files.filter(isJpegFile);
-  const exact = jpgs.find((file) =>
-    imageFileMatchesOriginalPath(file, originalPath)
-  );
-  return exact?.key ?? jpgs[0]?.key ?? null;
-}
 
 /**
  * Lazily fetches per-annotation image / camera metadata for a chain's tiles

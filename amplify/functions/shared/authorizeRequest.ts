@@ -11,3 +11,14 @@ export function authorizeRequest(
 
   throw new Error('Unauthorized: user does not belong to the project organization');
 }
+
+export function assertSysadmin(
+  identity: { sub?: string; groups?: string[] | null } | null | undefined
+): void {
+  if (!identity?.sub) return;
+
+  const groups = identity.groups ?? [];
+  if (groups.includes('sysadmin')) return;
+
+  throw new Error('Unauthorized: sysadmin role required');
+}

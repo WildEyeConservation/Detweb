@@ -19,6 +19,8 @@ interface Props {
   /** Image-pixel → map lng/lat converter for this map. */
   px2lngLat: (x: number, y: number) => [number, number];
   sources: LocationSourceConfig[];
+  /** Preloaded rows; when supplied, skips the live Location query. */
+  locationRows?: LocationOverlayRow[];
 }
 
 interface LocationBox {
@@ -29,7 +31,7 @@ interface LocationBox {
   confidence: number | null;
 }
 
-interface LocationRow {
+export interface LocationOverlayRow {
   x: number;
   y: number;
   width: number | null;
@@ -53,7 +55,13 @@ const LABEL_LAYER = 'location-boxes-label';
  * Self-contained: it owns its own GeoJSON source/layers and checkbox state, so
  * dropping `<MapLocationOverlay>` inside a map is all that's needed.
  */
-export function MapLocationOverlay({ map, imageId, px2lngLat, sources }: Props) {
+export function MapLocationOverlay({
+  map,
+  imageId,
+  px2lngLat,
+  sources,
+  locationRows,
+}: Props) {
   const { client } = useContext(GlobalContext)!;
   const [enabled, setEnabled] = useState<Record<string, boolean>>({});
   const [boxesBySource, setBoxesBySource] = useState<
@@ -69,6 +77,27 @@ export function MapLocationOverlay({ map, imageId, px2lngLat, sources }: Props) 
     let cancelled = false;
     setLoading(true);
     setBoxesBySource({});
+
+    if (locationRows) {
+      const grouped: Record<string, LocationBox[]> = {};
+      for (const r of locationRows) {
+        // Drop the zero-size "no detections" placeholder rows.
+        if ((r.width ?? 0) <= 0 || (r.height ?? 0) <= 0) continue;
+        (grouped[r.source] ??= []).push({
+          x: r.x,
+          y: r.y,
+          width: r.width as number,
+          height: r.height as number,
+          confidence: r.confidence ?? null,
+        });
+      }
+      setBoxesBySource(grouped);
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     fetchAllPaginatedResults(client.models.Location.locationsByImageKey, {
       imageId,
       filter: { or: sources.map((c) => ({ source: { eq: c.source } })) },
@@ -78,7 +107,7 @@ export function MapLocationOverlay({ map, imageId, px2lngLat, sources }: Props) 
       .then((rows) => {
         if (cancelled) return;
         const grouped: Record<string, LocationBox[]> = {};
-        for (const r of rows as LocationRow[]) {
+        for (const r of rows as LocationOverlayRow[]) {
           // Drop the zero-size "no detections" placeholder rows.
           if ((r.width ?? 0) <= 0 || (r.height ?? 0) <= 0) continue;
           (grouped[r.source] ??= []).push({
@@ -100,7 +129,7 @@ export function MapLocationOverlay({ map, imageId, px2lngLat, sources }: Props) 
     return () => {
       cancelled = true;
     };
-  }, [sources, imageId, client]);
+  }, [sources, imageId, client, locationRows]);
 
   // Only offer sources that actually have boxes on this image.
   const availableSources = sources.filter(

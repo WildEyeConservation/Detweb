@@ -13,7 +13,7 @@ import QuickTest from './QuickTest';
 import { Review } from './Review';
 import { PairLoader } from './PairLoader';
 import RegisterOrganization from './RegisterOrganization';
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import ErrorPage from './error-page';
 import ProjectView from './ProjectView';
 import Jobs from './user/Jobs.tsx';
@@ -22,7 +22,11 @@ import Permissions from './Permissions.tsx';
 import Testing from './Testing/Testing';
 import { Registration } from './Registration';
 import { IndividualIdPairTaskPage, IndividualIdTaskPage } from './individual-id';
-import { ChainReviewTaskPage, ChainViewerPage } from './chain-viewer';
+import {
+  ChainReviewTaskPage,
+  ChainViewerPage,
+  SharedChainViewerPage,
+} from './chain-viewer';
 import HomographyTask from './homography/HomographyTask';
 import HomographyViewer from './homography/HomographyViewer';
 import HomographyEditPage from './homography/HomographyEditPage';
@@ -31,6 +35,11 @@ import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persist
 import Admin from './Admin';
 import JollyResults from './JollyResults';
 import SharedResults from './SharedResults.tsx';
+import SharedChains from './SharedChains.tsx';
+import ChainShareAdminLayout from './chain-viewer/admin/ChainShareAdminLayout.tsx';
+import ManageShares from './chain-viewer/admin/ManageShares.tsx';
+import ChainShareResults from './chain-viewer/admin/ChainShareResults.tsx';
+import DisagreementExplorer from './chain-viewer/admin/DisagreementExplorer.tsx';
 import ImageNeighbourViewer from './ImageNeighbourViewer';
 import QCReviewTask from './QCReviewTask';
 import { lazy, Suspense } from 'react';
@@ -91,6 +100,24 @@ const router = createBrowserRouter([
       {
         path: 'shared-results',
         element: <SharedResults />,
+      },
+      {
+        path: 'shared-chains',
+        element: <SharedChains />,
+      },
+      {
+        path: 'shared-chains/:shareId',
+        element: <SharedChainViewerPage />,
+      },
+      {
+        path: 'chain-share-admin',
+        element: <ChainShareAdminLayout />,
+        children: [
+          { index: true, element: <Navigate to='shares' replace /> },
+          { path: 'shares', element: <ManageShares /> },
+          { path: 'results', element: <ChainShareResults /> },
+          { path: 'disagreements', element: <DisagreementExplorer /> },
+        ],
       },
       {
         path: 'image-neighbour-viewer',

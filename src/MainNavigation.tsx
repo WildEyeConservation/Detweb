@@ -8,7 +8,7 @@ import Container from 'react-bootstrap/Container';
 import Notifications from './user/Notifications.tsx';
 import { UserContext, GlobalContext } from './Context.tsx';
 import Settings from './user/Settings.tsx';
-import { Card, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Card /*, OverlayTrigger, Tooltip */ } from 'react-bootstrap';
 import UploadProgress from './upload/UploadProgress.tsx';
 import { verifyToken } from './utils/jwt.ts';
 import { useQueryClient } from '@tanstack/react-query';
@@ -231,6 +231,14 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                   >
                     Admin
                   </Nav.Link>
+                  <Nav.Link
+                    as={NavLink}
+                    eventKey={`chain-share-admin`}
+                    to={`chain-share-admin`}
+                    className='px-2'
+                  >
+                    Chain Shares
+                  </Nav.Link>
                   {process.env.NODE_ENV === 'development' && (
                     <Nav.Link
                       as={NavLink}
@@ -243,6 +251,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                   )}
                 </>
               )}
+              {/* Shared Results hidden for now.
               <OverlayTrigger
                 placement='bottom'
                 overlay={<Tooltip id='shared-results-tooltip'>Under maintenance</Tooltip>}
@@ -260,6 +269,18 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                   </Nav.Link>
                 </div>
               </OverlayTrigger>
+              */}
+              {(cognitoGroups.includes('sysadmin') ||
+                cognitoGroups.some((g) => g.startsWith('chainshare-'))) && (
+                <Nav.Link
+                  as={NavLink}
+                  eventKey={`shared-chains`}
+                  to={`shared-chains`}
+                  className='px-2'
+                >
+                  Shared Chains
+                </Nav.Link>
+              )}
             </Nav>
           )}
           <div className='d-flex flex-column flex-lg-row flex-grow-1 align-items-center justify-content-end gap-3 gap-lg-0 mt-2 mt-lg-0'>
@@ -279,8 +300,10 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
           belongsToOrganization ||
           location.pathname.startsWith('/jolly') ||
           location.pathname.startsWith('/shared-results') ||
+          location.pathname.startsWith('/shared-chains') ||
           (cognitoGroups.includes('sysadmin') &&
-            location.pathname === '/SSAdmin') ? (
+            (location.pathname === '/SSAdmin' ||
+              location.pathname.startsWith('/chain-share-admin'))) ? (
           <Outlet />
         ) : (
           <Card
