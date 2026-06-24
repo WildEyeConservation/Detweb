@@ -20,11 +20,19 @@ type FeedbackRow = {
   comment?: string | null;
 };
 
+function isConditionalCheckError(
+  errors: ReadonlyArray<{ message?: string; errorType?: string }>
+): boolean {
+  return errors.some(
+    (e) =>
+      e.errorType === 'DynamoDB:ConditionalCheckFailedException' ||
+      /conditional (request|check)/i.test(e.message ?? '')
+  );
+}
+
 /**
- * Loads the signed-in reviewer's own feedback for a share and exposes upserts
- * for obscured / relabel. Rows are keyed deterministically per reviewer so a
- * toggle updates in place; writes never touch the read-only snapshot. Each row
- * carries the user's sub in its id so two reviewers never collide.
+ * Loads the signed-in reviewer's own feedback for a share and exposes upserts.
+ * Row ids are scoped by share and reviewer to keep reshares separate.
  */
 export function useChainReviewFeedback(shareId: string | undefined) {
   const { client } = useContext(GlobalContext)!;
@@ -86,8 +94,8 @@ export function useChainReviewFeedback(shareId: string | undefined) {
 
   const rowId = useCallback(
     (sharedAnnotationId: string, kind: FeedbackKind) =>
-      `${userSub}#${sharedAnnotationId}#${kind}`,
-    [userSub]
+      `${shareId}#${userSub}#${sharedAnnotationId}#${kind}`,
+    [shareId, userSub]
   );
 
   const persist = useCallback(
@@ -111,19 +119,23 @@ export function useChainReviewFeedback(shareId: string | undefined) {
         kind,
         ...fields,
       };
-      const exists = existingIds.has(id);
-      const op = exists
-        ? client.models.ChainReviewFeedback.update
-        : client.models.ChainReviewFeedback.create;
-      const res = await op(input);
+      const runOp = (asUpdate: boolean) =>
+        (asUpdate
+          ? client.models.ChainReviewFeedback.update
+          : client.models.ChainReviewFeedback.create)(input);
+
+      let asUpdate = existingIds.has(id);
+      let res = await runOp(asUpdate);
+      if (res?.errors?.length && isConditionalCheckError(res.errors)) {
+        asUpdate = !asUpdate;
+        res = await runOp(asUpdate);
+      }
       if (res?.errors?.length) {
         throw new Error(
           res.errors.map((e: { message: string }) => e.message).join('; ')
         );
       }
-      if (!exists) {
-        setExistingIds((prev) => new Set(prev).add(id));
-      }
+      setExistingIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
     },
     [client, existingIds, rowId, shareId]
   );
