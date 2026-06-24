@@ -10,6 +10,7 @@ import type { CandidateStatus, PixelTransform } from './types';
 import { nameFor } from './utils/identity';
 import {
   MapLocationOverlay,
+  type LocationOverlayRow,
   type LocationSourceConfig,
 } from './MapLocationOverlay';
 
@@ -142,6 +143,8 @@ interface Props {
    * Chain" action. Requires `simplifiedActions` to surface the button.
    */
   onMarkerViewChainTiles?: (candidateKey: string) => void;
+  /** Comment button appears in the popup whenever this handler is supplied. */
+  onMarkerComment?: (candidateKey: string) => void;
   /**
    * Strip the popup down to the herd-view action set: Change Label, the
    * obscured toggle and "View chain tiles". Hides Delete / Split chain / Move
@@ -181,6 +184,8 @@ interface Props {
    * that don't want the overlay (e.g. the ChainLinker).
    */
   locationSources?: LocationSourceConfig[];
+  /** Preloaded location rows for this image, used by shared chain reviews. */
+  locationRows?: LocationOverlayRow[];
   /**
    * When true, hides this map's annotation markers only — location boxes, the
    * homography preview and the image tiles stay visible. Driven by the herd
@@ -461,6 +466,7 @@ export function IndividualIdMap({
   onMarkerMoveToOov,
   onMarkerSplitChain,
   onMarkerViewChainTiles,
+  onMarkerComment,
   simplifiedActions,
   markersDraggable,
   leniency,
@@ -468,6 +474,7 @@ export function IndividualIdMap({
   previewTransform,
   otherImage,
   locationSources,
+  locationRows,
   markersHidden,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -494,6 +501,7 @@ export function IndividualIdMap({
   const moveToOovRef = useRef(onMarkerMoveToOov);
   const splitChainRef = useRef(onMarkerSplitChain);
   const viewChainTilesRef = useRef(onMarkerViewChainTiles);
+  const commentRef = useRef(onMarkerComment);
   const simplifiedActionsRef = useRef(simplifiedActions);
   const markersDraggableRef = useRef(markersDraggable);
   useEffect(() => {
@@ -526,6 +534,9 @@ export function IndividualIdMap({
   useEffect(() => {
     splitChainRef.current = onMarkerSplitChain;
   }, [onMarkerSplitChain]);
+  useEffect(() => {
+    commentRef.current = onMarkerComment;
+  }, [onMarkerComment]);
   useEffect(() => {
     viewChainTilesRef.current = onMarkerViewChainTiles;
   }, [onMarkerViewChainTiles]);
@@ -654,6 +665,10 @@ export function IndividualIdMap({
       interactive && simplified && viewChainTilesRef.current
         ? `<button data-action="view-chain-tiles" style="${btnStyle}background:#2f80ed;">View chain tiles</button>`
         : '';
+    const commentHtml =
+      interactive && !isShadow && commentRef.current
+        ? `<button data-action="comment" style="${btnStyle}background:#5B6977;">Comment</button>`
+        : '';
     el.innerHTML = `
       <div style="font-weight:600">${escape(nameFor(data.identityKey))}</div>
       <div style="font-size:10px;opacity:0.7;text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">
@@ -677,6 +692,7 @@ export function IndividualIdMap({
       ${changeLabelHtml}
       ${obscureHtml}
       ${viewChainTilesHtml}
+      ${commentHtml}
       ${viewChainHtml}
       ${moveToOovHtml}
       ${splitChainHtml}
@@ -690,6 +706,18 @@ export function IndividualIdMap({
         viewTilesBtn.addEventListener('click', (ev) => {
           ev.stopPropagation();
           viewChainTilesRef.current?.(key);
+          hidePopup();
+        });
+      }
+    }
+    if (commentHtml) {
+      const commentBtn = el.querySelector(
+        'button[data-action="comment"]'
+      ) as HTMLButtonElement | null;
+      if (commentBtn) {
+        commentBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          commentRef.current?.(key);
           hidePopup();
         });
       }
@@ -1478,6 +1506,7 @@ export function IndividualIdMap({
           imageId={image.id}
           px2lngLat={px2lngLat}
           sources={locationSources}
+          locationRows={locationRows}
         />
       )}
     </div>

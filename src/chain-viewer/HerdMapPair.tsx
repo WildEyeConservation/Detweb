@@ -15,7 +15,10 @@ import {
   type MapMarker,
   type MarkerKind,
 } from '../individual-id/IndividualIdMap';
-import type { LocationSourceConfig } from '../individual-id/MapLocationOverlay';
+import type {
+  LocationOverlayRow,
+  LocationSourceConfig,
+} from '../individual-id/MapLocationOverlay';
 import { isOov } from '../individual-id/utils/identity';
 import type { PixelTransform } from '../individual-id/types';
 import type { ChainAnnotation, HerdDisplayPair } from './types';
@@ -24,7 +27,7 @@ const DEFAULT_COLOR = '#3498db';
 const NOOP = () => {};
 
 /** Detection sources whose location boxes can be toggled on each map. */
-const LOCATION_SOURCES: LocationSourceConfig[] = [
+export const CHAIN_LOCATION_SOURCES: LocationSourceConfig[] = [
   { source: 'scoutbotv3', label: 'ScoutBot', color: '#2f80ed' },
   { source: 'heatmap', label: 'Elephant Nadir', color: '#e67e22' },
   { source: 'mad-v2', label: 'MAD', color: '#27ae60' },
@@ -41,6 +44,8 @@ interface Props {
   onToggleObscured: (annotationId: string) => void;
   onViewChainTiles: (annotationId: string) => void;
   onChangeLabel: (annotationId: string) => void;
+  /** Open a free-text comment editor for a marker. Omitted = no comment action. */
+  onComment?: (annotationId: string) => void;
   bearingForImage: (image: HerdDisplayPair['imageA']) => number;
   onImageBearingChange: (
     image: HerdDisplayPair['imageA'],
@@ -55,6 +60,12 @@ interface Props {
   /** When set, the toolbar shows a button toggling the nav-bar lanes. */
   collapsed?: boolean;
   onCollapsedChange?: (next: boolean) => void;
+  /** Synchronous source key resolver; when provided, skips the ImageFile query. */
+  sourceKeyFor?: (imageId: string) => string | undefined;
+  /** Detection overlays to offer; pass [] to disable (e.g. for reviewers). */
+  locationSources?: LocationSourceConfig[];
+  /** Resolve preloaded location rows by image id, used by shared chain reviews. */
+  locationRowsFor?: (imageId: string) => LocationOverlayRow[] | undefined;
 }
 
 function classify(a: ChainAnnotation): MarkerKind {
@@ -79,6 +90,7 @@ export function HerdMapPair({
   onToggleObscured,
   onViewChainTiles,
   onChangeLabel,
+  onComment,
   bearingForImage,
   onImageBearingChange,
   onRequestPrevPair,
@@ -87,6 +99,9 @@ export function HerdMapPair({
   onRequestNextHerd,
   collapsed,
   onCollapsedChange,
+  sourceKeyFor,
+  locationSources = CHAIN_LOCATION_SOURCES,
+  locationRowsFor,
 }: Props) {
   const { client } = useContext(GlobalContext)!;
   const { imageA, imageB } = pair;
@@ -137,11 +152,18 @@ export function HerdMapPair({
     [annotationsB, buildMarkers]
   );
 
-  // ---- Per-image JPEG source key (drives tile loading). ----
+  // Seed synchronous keys in lazy state: `sourceKey` is in map-init deps, so
+  // an undefined→resolved flip tears down and recreates the map mid-flight,
+  // letting the discarded map's pending `load` strand markers on the dead map.
   const [sourceKeys, setSourceKeys] = useState<
     [string | undefined, string | undefined]
-  >([undefined, undefined]);
+  >(() =>
+    sourceKeyFor
+      ? [sourceKeyFor(imageA.id), sourceKeyFor(imageB.id)]
+      : [undefined, undefined]
+  );
   useEffect(() => {
+    if (sourceKeyFor) return;
     let cancelled = false;
     Promise.all(
       [imageA, imageB].map(async (img) => {
@@ -158,7 +180,7 @@ export function HerdMapPair({
     return () => {
       cancelled = true;
     };
-  }, [imageA, imageB, client]);
+  }, [imageA, imageB, client, sourceKeyFor]);
 
   // ---- Linked maps: slave the other map via the homography on move/zoom. ----
   type MapHandle = {
@@ -314,11 +336,13 @@ export function HerdMapPair({
             onMarkerToggleObscured={onToggleObscured}
             onMarkerViewChainTiles={onViewChainTiles}
             onMarkerChangeLabel={onChangeLabel}
+            onMarkerComment={onComment}
             simplifiedActions
             markersDraggable={false}
             previewTransform={pair.backward}
             otherImage={imageB}
-            locationSources={LOCATION_SOURCES}
+            locationSources={locationSources}
+            locationRows={locationRowsFor?.(imageA.id)}
             markersHidden={markersHidden}
           />
         </div>
@@ -338,11 +362,13 @@ export function HerdMapPair({
             onMarkerToggleObscured={onToggleObscured}
             onMarkerViewChainTiles={onViewChainTiles}
             onMarkerChangeLabel={onChangeLabel}
+            onMarkerComment={onComment}
             simplifiedActions
             markersDraggable={false}
             previewTransform={pair.forward}
             otherImage={imageA}
-            locationSources={LOCATION_SOURCES}
+            locationSources={locationSources}
+            locationRows={locationRowsFor?.(imageB.id)}
             markersHidden={markersHidden}
           />
         </div>

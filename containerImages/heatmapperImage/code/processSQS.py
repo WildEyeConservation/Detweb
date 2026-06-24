@@ -23,7 +23,6 @@ import json
 import os
 import queue
 import threading
-import time
 
 import boto3
 import numpy as np
@@ -361,8 +360,6 @@ def main():
         thread.start()
     for thread in threads:
         thread.join()
-        if 'Messages' not in response:
-            time.sleep(5)
 
 
 if __name__ == '__main__':

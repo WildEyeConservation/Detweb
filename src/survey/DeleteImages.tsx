@@ -1,22 +1,33 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useContext } from 'react';
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+  useContext,
+} from 'react';
 import { GlobalContext } from '../Context';
 import { Footer } from '../Modal';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { TerraDraw, TerraDrawPolygonMode } from 'terra-draw';
+import { TerraDrawMapLibreGLAdapter } from 'terra-draw-maplibre-gl-adapter';
+import { booleanPointInPolygon } from '@turf/turf';
 import {
-  MapContainer,
-  TileLayer,
-  FeatureGroup,
-  CircleMarker,
-  useMap,
-  Popup,
-  Polygon,
-} from 'react-leaflet';
-import { EditControl } from 'react-leaflet-draw';
-import L from 'leaflet';
-import { Button, Spinner, Alert, ProgressBar, Badge, Form } from 'react-bootstrap';
+  Button,
+  Spinner,
+  Alert,
+  ProgressBar,
+  Badge,
+  Form,
+} from 'react-bootstrap';
 import { fetchAllPaginatedResults } from '../utils';
-import 'leaflet/dist/leaflet.css';
-import 'leaflet-draw/dist/leaflet.draw.css';
+import {
+  BASE_STYLE,
+  EMPTY_FC,
+  escapeHtml,
+  type FeatureCollection,
+} from './surveyMapStyle';
 import './surveyMap.css';
 
 type ImageData = {
@@ -44,23 +55,209 @@ type DeletionCounters = {
   filesDeleted: number;
   neighboursDeleted: number;
   imageSetsUpdated: number;
-  failures: number;
+  /** Images that could not be fully removed (fetch or delete errors). */
+  imagesFailed: number;
+  /** True when the user cancelled the run partway through. */
+  cancelled: boolean;
 };
 
-// Component to fit map bounds to image locations
-function FitBoundsToImages({ images }: { images: ImageData[] }) {
-  const map = useMap();
+// ---------------------------------------------------------------------------
+// Map constants
+// ---------------------------------------------------------------------------
 
-  useEffect(() => {
-    if (images.length > 0) {
-      const bounds = L.latLngBounds(
-        images.map((img) => [img.latitude, img.longitude])
-      );
-      map.fitBounds(bounds, { padding: [50, 50] });
+const SRC_IMAGES = 'images';
+const LYR_IMAGES = 'images-points';
+const SRC_SHAPEFILE = 'shapefile';
+const LYR_SHAPEFILE = 'shapefile-line';
+
+// ---------------------------------------------------------------------------
+// Resilience helpers — retry with backoff, idempotency detection and a bounded
+// concurrency pool. Kept module-scope (like DensityMap's helpers) so the bulk
+// delete survives AppSync/DynamoDB throttling on huge surveys instead of
+// aborting the whole operation on the first transient error.
+// ---------------------------------------------------------------------------
+
+const DELETE_CONCURRENCY = 6;
+const FETCH_CONCURRENCY = 6;
+
+/** Abortable sleep used between retry attempts. */
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'));
+      return;
     }
-  }, [images, map]);
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
 
-  return null;
+/** Flatten an error (thrown error or a GraphQL error object) to a string. */
+function errToString(err: any): string {
+  if (!err) return '';
+  if (typeof err === 'string') return err;
+  const parts = [err.errorType, err.name, err.code, err.message].filter(
+    Boolean
+  );
+  if (Array.isArray(err.errors)) {
+    for (const e of err.errors) {
+      parts.push(e?.errorType, e?.message);
+    }
+  }
+  return parts.filter(Boolean).join(' ') || String(err);
+}
+
+const TRANSIENT_PATTERNS = [
+  'throttl',
+  'toomanyrequests',
+  'too many requests',
+  'rate exceeded',
+  'serviceunavailable',
+  'service unavailable',
+  'internalfailure',
+  'internal failure',
+  'internalservererror',
+  'networkerror',
+  'network error',
+  'failed to fetch',
+  'load failed',
+  'timeout',
+  'timed out',
+  'econnreset',
+  '429',
+  '502',
+  '503',
+  '504',
+];
+
+/** True for errors worth retrying (throttling / transient network / 5xx). */
+function isTransientError(err: any): boolean {
+  const s = errToString(err).toLowerCase();
+  if (!s) return false;
+  if (s.includes('abort')) return false; // a cancellation, never retry
+  return TRANSIENT_PATTERNS.some((p) => s.includes(p));
+}
+
+const GONE_PATTERNS = [
+  'conditionalcheckfailed',
+  'not found',
+  'does not exist',
+  'no item',
+  'item not found',
+];
+
+/** True when a delete failed because the record is already gone (idempotent). */
+function isAlreadyGone(err: any): boolean {
+  const s = errToString(err).toLowerCase();
+  return GONE_PATTERNS.some((p) => s.includes(p));
+}
+
+/** Exponential backoff (capped) with full jitter. */
+function backoffDelay(attempt: number, baseDelay: number): number {
+  const capped = Math.min(baseDelay * Math.pow(2, attempt - 1), 8000);
+  return Math.round(capped / 2 + Math.random() * (capped / 2));
+}
+
+interface RunOpOpts {
+  retries?: number;
+  baseDelay?: number;
+  signal?: AbortSignal;
+}
+
+/**
+ * Run an Amplify data operation with retries. The data client resolves with
+ * `{ data, errors }` rather than throwing on GraphQL errors, so we inspect
+ * BOTH the thrown path and the returned `errors` array. Transient failures are
+ * retried with backoff; a non-transient `errors` array is surfaced as a throw
+ * so callers can record a real failure (the previous code silently treated
+ * GraphQL errors as success).
+ */
+async function runOp<T>(
+  fn: () => Promise<T>,
+  opts: RunOpOpts = {}
+): Promise<T> {
+  const { retries = 5, baseDelay = 300, signal } = opts;
+  let attempt = 0;
+  for (;;) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    let res: T;
+    try {
+      res = await fn();
+    } catch (err) {
+      if (!signal?.aborted && attempt < retries && isTransientError(err)) {
+        attempt += 1;
+        await sleep(backoffDelay(attempt, baseDelay), signal);
+        continue;
+      }
+      throw err;
+    }
+    const errors = (res as any)?.errors as any[] | null | undefined;
+    if (errors && errors.length) {
+      if (!signal?.aborted && attempt < retries && errors.some(isTransientError)) {
+        attempt += 1;
+        await sleep(backoffDelay(attempt, baseDelay), signal);
+        continue;
+      }
+      const e: any = new Error(
+        errors.map((x) => x?.message || x?.errorType || String(x)).join('; ')
+      );
+      e.graphQLErrors = errors;
+      throw e;
+    }
+    return res;
+  }
+}
+
+/**
+ * Wrap a paginated query function so each page request retries via runOp.
+ * Returns `any` so it slots into `fetchAllPaginatedResults`' overloaded query
+ * parameter without fighting its generic inference (the call sites cast the
+ * resulting rows, as the rest of this file does).
+ */
+function makeRetrying(queryFn: any, signal?: AbortSignal): any {
+  return (...args: any[]) => runOp(() => queryFn(...args), { signal });
+}
+
+/**
+ * Bounded-concurrency worker pool. N workers pull from a shared cursor, giving
+ * a steady, capped request rate instead of the unbounded `Promise.all` fan-out
+ * that self-throttled on large surveys. Worker throws are swallowed so one
+ * failure can't collapse the pool — workers record their own failures.
+ */
+async function runPool<T>(
+  items: T[],
+  worker: (item: T, index: number) => Promise<void>,
+  concurrency: number,
+  signal?: AbortSignal
+): Promise<void> {
+  let cursor = 0;
+  const workerCount = Math.max(1, Math.min(concurrency, items.length));
+  const runners: Promise<void>[] = [];
+  for (let i = 0; i < workerCount; i++) {
+    runners.push(
+      (async () => {
+        for (;;) {
+          if (signal?.aborted) return;
+          const index = cursor++;
+          if (index >= items.length) return;
+          try {
+            await worker(items[index], index);
+          } catch {
+            // Worker is expected to record its own failures; this is only a
+            // backstop so an unexpected throw doesn't kill the pool.
+          }
+        }
+      })()
+    );
+  }
+  await Promise.all(runners);
 }
 
 export default function DeleteImages({ projectId }: { projectId: string }) {
@@ -79,18 +276,33 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
   const [deleteResult, setDeleteResult] = useState<DeletionCounters | null>(
     null
   );
-  const [popupImage, setPopupImage] = useState<ImageData | null>(null);
   const [showInstructions, setShowInstructions] = useState(false);
   const [shapefileCoords, setShapefileCoords] = useState<
     [number, number][] | null
   >(null);
   const [showShapefile, setShowShapefile] = useState(true);
   const [loadingShapefile, setLoadingShapefile] = useState(false);
-  const featureGroupRef = useRef<L.FeatureGroup>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [drawing, setDrawing] = useState(false);
+
   const isActiveRef = useRef(true);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const drawRef = useRef<TerraDraw | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  // Selection currently reflected in MapLibre feature-state, so the sync effect
+  // can apply only the delta rather than rewriting every feature.
+  const appliedSelectionRef = useRef<Set<string>>(new Set());
+
+  // Latest values for the once-registered map event handlers to read.
+  const imagesRef = useRef(images);
+  imagesRef.current = images;
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
+  const drawingRef = useRef(false);
 
   // Fetch images with GPS coordinates
-  const fetchImages = useCallback(async () => {
+  const fetchImages = useCallback(async (): Promise<ImageData[]> => {
     isActiveRef.current = true;
     setLoading(true);
     setError(null);
@@ -99,7 +311,7 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
 
     try {
       const allImages = (await fetchAllPaginatedResults(
-        client.models.Image.imagesByProjectId,
+        makeRetrying(client.models.Image.imagesByProjectId),
         {
           projectId,
           selectionSet: ['id', 'latitude', 'longitude', 'originalPath'],
@@ -117,7 +329,7 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
         originalPath?: string | null;
       }>;
 
-      if (!isActiveRef.current) return;
+      if (!isActiveRef.current) return [];
 
       // Filter to only images with valid GPS coordinates
       const gpsImages: ImageData[] = allImages
@@ -142,12 +354,14 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
         `Loaded ${gpsImages.length} images with GPS coordinates (${allImages.length - gpsImages.length
         } without GPS)`
       );
+      return gpsImages;
     } catch (err) {
       console.error('Failed to fetch images:', err);
       setError(
         `Failed to fetch images: ${err instanceof Error ? err.message : String(err)
         }`
       );
+      return [];
     } finally {
       setLoading(false);
     }
@@ -167,9 +381,9 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
     async function loadShapefile() {
       setLoadingShapefile(true);
       try {
-        const result = await (
-          client.models.Shapefile.shapefilesByProjectId as any
-        )({ projectId });
+        const result = (await runOp(() =>
+          (client.models.Shapefile.shapefilesByProjectId as any)({ projectId })
+        )) as any;
         const data = (result?.data ?? []) as Array<{
           coordinates: (number | null)[] | null;
         }>;
@@ -200,7 +414,7 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
     };
   }, [client, projectId]);
 
-  // Ray-casting point-in-polygon over [lat, lng] ring
+  // Ray-casting point-in-polygon over [lat, lng] ring (shapefile selection).
   const pointInPolygon = useCallback(
     (lat: number, lng: number, polygon: [number, number][]) => {
       let inside = false;
@@ -233,80 +447,345 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
     setSelectedIds(newSelected);
   }, [images, shapefileCoords, pointInPolygon]);
 
-  // Handle polygon selection
-  const onPolygonCreated = useCallback(
-    (e: any) => {
-      if (e.layerType !== 'polygon') return;
-
-      const layer = e.layer;
-      const polygonLatLngs = layer.getLatLngs()[0] as L.LatLng[];
-
-      // Find all images within the polygon
-      const newSelectedIds = new Set<string>();
-      for (const img of images) {
-        const point = L.latLng(img.latitude, img.longitude);
-        // Check if point is inside polygon using ray casting
-        let inside = false;
-        for (
-          let i = 0, j = polygonLatLngs.length - 1;
-          i < polygonLatLngs.length;
-          j = i++
-        ) {
-          const xi = polygonLatLngs[i].lat;
-          const yi = polygonLatLngs[i].lng;
-          const xj = polygonLatLngs[j].lat;
-          const yj = polygonLatLngs[j].lng;
-
-          if (
-            yi > point.lng !== yj > point.lng &&
-            point.lat < ((xj - xi) * (point.lng - yi)) / (yj - yi) + xi
-          ) {
-            inside = !inside;
-          }
-        }
-
-        if (inside) {
-          newSelectedIds.add(img.id);
-        }
-      }
-
-      // Replace selection with polygon selection (not merge)
-      setSelectedIds(newSelectedIds);
-
-      // Remove the drawn shape after selection
-      if (featureGroupRef.current) {
-        featureGroupRef.current.removeLayer(layer);
-      }
-    },
+  // GeoJSON for the image points. Rebuilt only when the image list changes
+  // (e.g. after a delete refresh) — selection is handled via feature-state.
+  const imagesFC = useMemo<FeatureCollection>(
+    () => ({
+      type: 'FeatureCollection',
+      features: images.map((img) => ({
+        type: 'Feature',
+        id: img.id,
+        properties: { id: img.id },
+        geometry: { type: 'Point', coordinates: [img.longitude, img.latitude] },
+      })),
+    }),
     [images]
   );
 
-  // Handle marker click
-  const handleMarkerClick = useCallback(
-    (imageId: string, e: L.LeafletMouseEvent) => {
-      const isCtrlPressed = e.originalEvent.ctrlKey;
+  // -----------------------------------------------------------------------
+  // Map initialisation (once). The Tabs component only mounts the active tab,
+  // so the container is already sized when this runs.
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
 
-      setSelectedIds((prev) => {
-        const newSet = new Set(prev);
-        if (isCtrlPressed) {
-          if (newSet.has(imageId)) {
-            newSet.delete(imageId);
-          } else {
-            newSet.add(imageId);
-          }
-        } else {
-          newSet.clear();
-          newSet.add(imageId);
-        }
-        return newSet;
+    const map = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: BASE_STYLE,
+      center: [0, 0],
+      zoom: 2,
+      attributionControl: { compact: true },
+    });
+    mapRef.current = map;
+
+    map.addControl(
+      new maplibregl.NavigationControl({ showCompass: false }),
+      'top-right'
+    );
+    map.addControl(
+      new maplibregl.ScaleControl({ unit: 'metric' }),
+      'bottom-left'
+    );
+
+    map.on('load', () => {
+      map.addSource(SRC_IMAGES, {
+        type: 'geojson',
+        data: EMPTY_FC as any,
+        promoteId: 'id',
       });
-    },
-    []
-  );
+      map.addSource(SRC_SHAPEFILE, { type: 'geojson', data: EMPTY_FC as any });
 
-  // Fetch all associated data for selected images
+      map.addLayer({
+        id: LYR_SHAPEFILE,
+        type: 'line',
+        source: SRC_SHAPEFILE,
+        paint: { 'line-color': '#fd7e14', 'line-width': 2 },
+      });
+
+      map.addLayer({
+        id: LYR_IMAGES,
+        type: 'circle',
+        source: SRC_IMAGES,
+        paint: {
+          'circle-radius': [
+            'case',
+            ['boolean', ['feature-state', 'selected'], false],
+            7,
+            5,
+          ],
+          'circle-color': [
+            'case',
+            ['boolean', ['feature-state', 'selected'], false],
+            '#dc3545',
+            '#0d6efd',
+          ],
+          'circle-stroke-width': [
+            'case',
+            ['boolean', ['feature-state', 'selected'], false],
+            2,
+            1,
+          ],
+          'circle-stroke-color': '#ffffff',
+          'circle-opacity': [
+            'case',
+            ['boolean', ['feature-state', 'selected'], false],
+            0.9,
+            0.6,
+          ],
+        },
+      });
+
+      // Click a marker to select it; Ctrl/⌘+click toggles in/out of the set.
+      map.on('click', LYR_IMAGES, (e) => {
+        if (drawingRef.current) return; // drawing mode owns map clicks
+        const feature = e.features?.[0];
+        if (!feature) return;
+        const id = String(feature.id);
+        const additive = e.originalEvent.ctrlKey || e.originalEvent.metaKey;
+        setSelectedIds((prev) => {
+          if (additive) {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          }
+          return new Set([id]);
+        });
+      });
+
+      // Right-click a marker to view its details.
+      map.on('contextmenu', LYR_IMAGES, (e) => {
+        const feature = e.features?.[0];
+        if (!feature) return;
+        e.originalEvent.preventDefault();
+        const id = String(feature.id);
+        const img = imagesRef.current.find((im) => im.id === id);
+        const [lng, lat] = (feature.geometry as any).coordinates as [
+          number,
+          number
+        ];
+        const path = img?.originalPath || 'Unknown';
+        new maplibregl.Popup({ closeButton: true })
+          .setLngLat([lng, lat])
+          .setHTML(
+            `<div style="max-width:300px;color:#000">
+              <strong>Path:</strong> ${escapeHtml(path)}<br/>
+              <strong>Lat:</strong> ${lat.toFixed(6)}<br/>
+              <strong>Lng:</strong> ${lng.toFixed(6)}
+            </div>`
+          )
+          .addTo(map);
+      });
+
+      map.on('mouseenter', LYR_IMAGES, () => {
+        if (!drawingRef.current) map.getCanvas().style.cursor = 'pointer';
+      });
+      map.on('mouseleave', LYR_IMAGES, () => {
+        if (!drawingRef.current) map.getCanvas().style.cursor = '';
+      });
+
+      // Polygon lasso. Terra Draw renders its own layers/sources via the
+      // adapter; we read the finished polygon and convert it into a selection.
+      const draw = new TerraDraw({
+        adapter: new TerraDrawMapLibreGLAdapter({ map }),
+        modes: [new TerraDrawPolygonMode()],
+      });
+      draw.on('finish', (id) => {
+        try {
+          const snapshot = draw.getSnapshot();
+          const feature =
+            snapshot.find((f: any) => f.id === id) ??
+            snapshot.find((f: any) => f.geometry?.type === 'Polygon');
+          if (feature && (feature.geometry as any)?.type === 'Polygon') {
+            const newSelected = new Set<string>();
+            for (const img of imagesRef.current) {
+              if (
+                booleanPointInPolygon(
+                  [img.longitude, img.latitude],
+                  feature as any
+                )
+              ) {
+                newSelected.add(img.id);
+              }
+            }
+            setSelectedIds(newSelected);
+          }
+        } catch (err) {
+          console.error('Polygon selection failed:', err);
+        } finally {
+          try {
+            draw.clear();
+            draw.stop();
+          } catch {
+            /* map torn down; ignore */
+          }
+          drawingRef.current = false;
+          setDrawing(false);
+          map.getCanvas().style.cursor = '';
+        }
+      });
+      drawRef.current = draw;
+
+      setMapLoaded(true);
+    });
+
+    return () => {
+      setMapLoaded(false);
+      try {
+        drawRef.current?.stop();
+      } catch {
+        /* ignore */
+      }
+      drawRef.current = null;
+      map.remove();
+      mapRef.current = null;
+      appliedSelectionRef.current = new Set();
+    };
+  }, []);
+
+  // Push image points into the source. setData resets feature-state, so we
+  // re-apply the current selection immediately afterwards.
+  useEffect(() => {
+    if (!mapLoaded) return;
+    const map = mapRef.current;
+    const src = map?.getSource(SRC_IMAGES) as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    if (!map || !src) return;
+    src.setData(imagesFC as any);
+    appliedSelectionRef.current = new Set();
+    for (const id of selectedIdsRef.current) {
+      try {
+        map.setFeatureState({ source: SRC_IMAGES, id }, { selected: true });
+      } catch {
+        /* feature not present; ignore */
+      }
+    }
+    appliedSelectionRef.current = new Set(selectedIdsRef.current);
+  }, [mapLoaded, imagesFC]);
+
+  // Apply selection changes via feature-state (delta only — no GeoJSON rebuild).
+  useEffect(() => {
+    if (!mapLoaded) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const prev = appliedSelectionRef.current;
+    for (const id of prev) {
+      if (!selectedIds.has(id)) {
+        try {
+          map.setFeatureState({ source: SRC_IMAGES, id }, { selected: false });
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    for (const id of selectedIds) {
+      if (!prev.has(id)) {
+        try {
+          map.setFeatureState({ source: SRC_IMAGES, id }, { selected: true });
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    appliedSelectionRef.current = new Set(selectedIds);
+  }, [mapLoaded, selectedIds]);
+
+  // Shapefile overlay. Stored coords are [lat, lng]; GeoJSON wants [lng, lat].
+  useEffect(() => {
+    if (!mapLoaded) return;
+    const src = mapRef.current?.getSource(SRC_SHAPEFILE) as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    if (!src) return;
+    if (showShapefile && shapefileCoords && shapefileCoords.length >= 3) {
+      const ring = shapefileCoords.map(([lat, lng]) => [lng, lat]);
+      const [fx, fy] = ring[0];
+      const [lx, ly] = ring[ring.length - 1];
+      if (fx !== lx || fy !== ly) ring.push([fx, fy]);
+      src.setData({
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: {},
+            geometry: { type: 'LineString', coordinates: ring },
+          },
+        ],
+      } as any);
+    } else {
+      src.setData(EMPTY_FC as any);
+    }
+  }, [mapLoaded, showShapefile, shapefileCoords]);
+
+  // Fit bounds whenever the displayed image extent changes.
+  const lastFitRef = useRef('');
+  useEffect(() => {
+    if (!mapLoaded) return;
+    const map = mapRef.current;
+    if (!map || images.length === 0) return;
+    let minLng = Infinity,
+      minLat = Infinity,
+      maxLng = -Infinity,
+      maxLat = -Infinity;
+    for (const img of images) {
+      if (img.longitude < minLng) minLng = img.longitude;
+      if (img.latitude < minLat) minLat = img.latitude;
+      if (img.longitude > maxLng) maxLng = img.longitude;
+      if (img.latitude > maxLat) maxLat = img.latitude;
+    }
+    const key = `${minLng},${minLat},${maxLng},${maxLat}`;
+    if (key === lastFitRef.current) return;
+    lastFitRef.current = key;
+    map.fitBounds(
+      [
+        [minLng, minLat],
+        [maxLng, maxLat],
+      ],
+      { padding: 50, maxZoom: 16, duration: 0 }
+    );
+  }, [mapLoaded, images]);
+
+  // Toggle the polygon-draw lasso.
+  const toggleDraw = useCallback(() => {
+    const draw = drawRef.current;
+    const map = mapRef.current;
+    if (!draw || !map) return;
+    if (drawingRef.current) {
+      try {
+        draw.clear();
+        draw.stop();
+      } catch {
+        /* ignore */
+      }
+      drawingRef.current = false;
+      setDrawing(false);
+      map.getCanvas().style.cursor = '';
+    } else {
+      try {
+        draw.start();
+        draw.setMode('polygon');
+        drawingRef.current = true;
+        setDrawing(true);
+        map.getCanvas().style.cursor = 'crosshair';
+      } catch (err) {
+        console.error('Failed to start drawing:', err);
+      }
+    }
+  }, []);
+
+  // -----------------------------------------------------------------------
+  // Fetch all associated data for the images to delete. Per-image gathering
+  // runs through a bounded pool with per-page retries; an image whose
+  // relationships can't be fetched is recorded in `failedToFetch` instead of
+  // aborting the whole run.
+  // -----------------------------------------------------------------------
   const fetchImageData = useCallback(
-    async (imageIds: string[]): Promise<Map<string, ImageAggregate>> => {
+    async (
+      imageIds: string[],
+      signal: AbortSignal,
+      failedToFetch: Set<string>
+    ): Promise<Map<string, ImageAggregate>> => {
       const imageMap = new Map<string, ImageAggregate>();
       let totalMemberships = 0;
       let totalFiles = 0;
@@ -322,15 +801,14 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
 
       const selectedSet = new Set(imageIds);
       const deletedNeighbourKeys = new Set<string>();
+      const imageById = new Map(images.map((img) => [img.id, img] as const));
 
-      // Fetch image sets (usually one) and collect memberships once
+      // Memberships are only indexed by imageSetId, so we read the set(s) once
+      // and filter to the selection. This is the known heavy step on a huge
+      // survey, hence the per-page retry.
       const imageSets = (await fetchAllPaginatedResults(
-        client.models.ImageSet.imageSetsByProjectId,
-        {
-          projectId,
-          selectionSet: ['id'],
-          limit: 10000,
-        }
+        makeRetrying(client.models.ImageSet.imageSetsByProjectId, signal),
+        { projectId, selectionSet: ['id'], limit: 10000 }
       )) as Array<{ id?: string | null }>;
 
       const membershipByImageId = new Map<
@@ -341,7 +819,10 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
       for (const imageSet of imageSets) {
         if (!imageSet?.id) continue;
         const memberships = (await fetchAllPaginatedResults(
-          client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
+          makeRetrying(
+            client.models.ImageSetMembership.imageSetMembershipsByImageSetId,
+            signal
+          ),
           {
             imageSetId: imageSet.id,
             selectionSet: ['id', 'imageId', 'imageSetId'],
@@ -362,72 +843,89 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
         }
       }
 
-      // Build aggregates per selected image using targeted queries (batched parallel)
-      const fetchBatchSize = 10;
-      for (let start = 0; start < imageIds.length; start += fetchBatchSize) {
-        const batch = imageIds.slice(start, start + fetchBatchSize);
-
-        const batchAggs = await Promise.all(
-          batch.map(async (imageId) => {
-            const baseImage = images.find((img) => img.id === imageId);
-
+      // Build aggregates per selected image, isolating per-image failures.
+      let gathered = 0;
+      await runPool(
+        imageIds,
+        async (imageId) => {
+          if (signal.aborted) return;
+          try {
             const membershipRecords = membershipByImageId.get(imageId) ?? [];
+            const [annotations, locations, files, leftNeighbours, rightNeighbours] =
+              await Promise.all([
+                fetchAllPaginatedResults(
+                  makeRetrying(
+                    client.models.Annotation.annotationsByImageIdAndSetId,
+                    signal
+                  ),
+                  { imageId, selectionSet: ['id', 'setId'], limit: 10000 }
+                ),
+                fetchAllPaginatedResults(
+                  makeRetrying(
+                    client.models.Location.locationsByImageKey,
+                    signal
+                  ),
+                  { imageId, selectionSet: ['id'], limit: 10000 }
+                ),
+                fetchAllPaginatedResults(
+                  makeRetrying(client.models.ImageFile.imagesByimageId, signal),
+                  { imageId, selectionSet: ['id'], limit: 10000 }
+                ),
+                fetchAllPaginatedResults(
+                  makeRetrying(
+                    client.models.ImageNeighbour.imageNeighboursByImage1key,
+                    signal
+                  ),
+                  {
+                    image1Id: imageId,
+                    selectionSet: ['image1Id', 'image2Id'],
+                    limit: 10000,
+                  }
+                ),
+                fetchAllPaginatedResults(
+                  makeRetrying(
+                    client.models.ImageNeighbour.imageNeighboursByImage2key,
+                    signal
+                  ),
+                  {
+                    image2Id: imageId,
+                    selectionSet: ['image1Id', 'image2Id'],
+                    limit: 10000,
+                  }
+                ),
+              ]);
 
-            const [
-              annotations,
-              locations,
-              files,
-              leftNeighbours,
-              rightNeighbours,
-            ] = await Promise.all([
-              fetchAllPaginatedResults(
-                client.models.Annotation.annotationsByImageIdAndSetId,
-                {
-                  imageId,
-                  selectionSet: ['id', 'setId'],
-                  limit: 10000,
-                }
-              ),
-              fetchAllPaginatedResults(
-                client.models.Location.locationsByImageKey,
-                {
-                  imageId,
-                  selectionSet: ['id'],
-                  limit: 10000,
-                }
-              ),
-              fetchAllPaginatedResults(
-                client.models.ImageFile.imagesByimageId,
-                {
-                  imageId,
-                  selectionSet: ['id'],
-                  limit: 10000,
-                }
-              ),
-              fetchAllPaginatedResults(
-                client.models.ImageNeighbour.imageNeighboursByImage1key,
-                {
-                  image1Id: imageId,
-                  selectionSet: ['image1Id', 'image2Id'],
-                  limit: 10000,
-                }
-              ),
-              fetchAllPaginatedResults(
-                client.models.ImageNeighbour.imageNeighboursByImage2key,
-                {
-                  image2Id: imageId,
-                  selectionSet: ['image1Id', 'image2Id'],
-                  limit: 10000,
-                }
-              ),
-            ]);
+            const agg: ImageAggregate = {
+              id: imageId,
+              originalPath: imageById.get(imageId)?.originalPath,
+              annotationIds: [],
+              locationIds: [],
+              membershipRecords,
+              fileRecords: [],
+              neighbourPairs: [],
+            };
+
+            totalMemberships += membershipRecords.length;
+
+            for (const annotation of annotations as Array<{
+              id?: string | null;
+            }>) {
+              if (!annotation?.id) continue;
+              agg.annotationIds.push(annotation.id);
+              totalAnnotations += 1;
+            }
+            for (const location of locations as Array<{ id?: string | null }>) {
+              if (!location?.id) continue;
+              agg.locationIds.push(location.id);
+              totalLocations += 1;
+            }
+            for (const file of files as Array<{ id?: string | null }>) {
+              if (!file?.id) continue;
+              agg.fileRecords.push({ id: file.id });
+              totalFiles += 1;
+            }
 
             const localNeighbourSet = new Set<string>();
-            const neighbourPairs: Array<{
-              key: string;
-              image1Id: string;
-              image2Id: string;
-            }> = [];
             const pushNeighbour = (n?: {
               image1Id?: string | null;
               image2Id?: string | null;
@@ -439,78 +937,37 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
                   : `${n.image2Id}::${n.image1Id}`;
               if (localNeighbourSet.has(key)) return;
               localNeighbourSet.add(key);
-              neighbourPairs.push({
+              if (deletedNeighbourKeys.has(key)) return;
+              deletedNeighbourKeys.add(key);
+              agg.neighbourPairs.push({
                 key,
                 image1Id: n.image1Id,
                 image2Id: n.image2Id,
               });
+              totalNeighbours += 1;
             };
-
             (leftNeighbours as Array<any>).forEach(pushNeighbour);
             (rightNeighbours as Array<any>).forEach(pushNeighbour);
 
-            return {
-              imageId,
-              baseImage,
-              membershipRecords,
-              annotations: annotations as Array<{ id?: string | null }>,
-              locations: locations as Array<{ id?: string | null }>,
-              files: files as Array<{ id?: string | null }>,
-              neighbourPairs,
-            };
-          })
-        );
-
-        for (const result of batchAggs) {
-          const agg: ImageAggregate = {
-            id: result.imageId,
-            originalPath: result.baseImage?.originalPath,
-            annotationIds: [],
-            locationIds: [],
-            membershipRecords: result.membershipRecords,
-            fileRecords: [],
-            neighbourPairs: [],
-          };
-
-          totalMemberships += agg.membershipRecords.length;
-
-          for (const annotation of result.annotations) {
-            if (!annotation?.id) continue;
-            agg.annotationIds.push(annotation.id);
-            totalAnnotations++;
+            imageMap.set(imageId, agg);
+          } catch (err) {
+            if (signal.aborted) return;
+            failedToFetch.add(imageId);
+            console.warn('Failed to gather data for image', imageId, err);
+          } finally {
+            gathered += 1;
+            if (!signal.aborted) {
+              setDeleteProgress({
+                current: gathered,
+                total: imageIds.length,
+                phase: `Fetched relationships for ${gathered}/${imageIds.length} images...`,
+              });
+            }
           }
-
-          for (const location of result.locations) {
-            if (!location?.id) continue;
-            agg.locationIds.push(location.id);
-            totalLocations++;
-          }
-
-          for (const file of result.files) {
-            if (!file?.id) continue;
-            agg.fileRecords.push({ id: file.id });
-            totalFiles++;
-          }
-
-          for (const neighbour of result.neighbourPairs) {
-            if (deletedNeighbourKeys.has(neighbour.key)) continue;
-            deletedNeighbourKeys.add(neighbour.key);
-            agg.neighbourPairs.push(neighbour);
-            totalNeighbours++;
-          }
-
-          imageMap.set(result.imageId, agg);
-        }
-
-        setDeleteProgress({
-          current: Math.min(start + fetchBatchSize, imageIds.length),
-          total: imageIds.length,
-          phase: `Fetched relationships for ${Math.min(
-            start + fetchBatchSize,
-            imageIds.length
-          )}/${imageIds.length} images...`,
-        });
-      }
+        },
+        FETCH_CONCURRENCY,
+        signal
+      );
 
       setDeleteProgress({
         current: imageMap.size,
@@ -523,21 +980,31 @@ export default function DeleteImages({ projectId }: { projectId: string }) {
     [client, images, projectId]
   );
 
-  // Delete selected images
-  const handleDelete = useCallback(async () => {
-    if (selectedIds.size === 0) return;
+  // -----------------------------------------------------------------------
+  // Delete the selected (or explicitly passed) images. Idempotent, cancellable
+  // and recoverable: records that are already gone count as success, the user
+  // can cancel mid-run, and images that fail stay selected for a retry.
+  // -----------------------------------------------------------------------
+  const handleDelete = useCallback(
+    async (retryIds?: string[]) => {
+      const imageIds =
+        retryIds && retryIds.length ? retryIds : Array.from(selectedIds);
+      if (imageIds.length === 0) return;
 
-    // Build summary of what will be deleted
-    const imageCount = selectedIds.size;
-    const selectedImages = images.filter((img) => selectedIds.has(img.id));
-    const samplePaths = selectedImages
-      .slice(0, 3)
-      .map((img) => img.originalPath || 'Unknown path');
-    const pathSummary =
-      samplePaths.join('\n') +
-      (imageCount > 3 ? `\n... and ${imageCount - 3} more` : '');
-
-    const confirmMessage = `Are you sure you want to delete ${imageCount} image(s)?
+      // Confirm on the first attempt only (a retry skips the prompt).
+      if (!retryIds) {
+        const idSet = new Set(imageIds);
+        const samplePaths: string[] = [];
+        for (const img of images) {
+          if (idSet.has(img.id)) {
+            samplePaths.push(img.originalPath || 'Unknown path');
+            if (samplePaths.length >= 3) break;
+          }
+        }
+        const pathSummary =
+          samplePaths.join('\n') +
+          (imageIds.length > 3 ? `\n... and ${imageIds.length - 3} more` : '');
+        const confirmMessage = `Are you sure you want to delete ${imageIds.length} image(s)?
 
 This will permanently delete:
 - The image records
@@ -548,18 +1015,16 @@ Sample images:
 ${pathSummary}
 
 This action cannot be undone.`;
+        if (!window.confirm(confirmMessage)) return;
+      }
 
-    if (!window.confirm(confirmMessage)) return;
+      const abort = new AbortController();
+      abortRef.current = abort;
+      const signal = abort.signal;
 
-    setDeleting(true);
-    setError(null);
-    setDeleteResult(null);
-
-    try {
-      const imageIds = Array.from(selectedIds);
-
-      // Fetch all associated data
-      const imageMap = await fetchImageData(imageIds);
+      setDeleting(true);
+      setError(null);
+      setDeleteResult(null);
 
       const counters: DeletionCounters = {
         imagesDeleted: 0,
@@ -569,160 +1034,227 @@ This action cannot be undone.`;
         filesDeleted: 0,
         neighboursDeleted: 0,
         imageSetsUpdated: 0,
-        failures: 0,
+        imagesFailed: 0,
+        cancelled: false,
       };
+      const failedImageIds = new Set<string>();
+      const failedToFetch = new Set<string>();
 
-      const deletedNeighbourKeys = new Set<string>();
-      const impactedImageSetIds = new Set<string>();
-      const batchSize = 25;
-      const aggregates = Array.from(imageMap.values());
+      try {
+        const imageMap = await fetchImageData(imageIds, signal, failedToFetch);
 
-      setDeleteProgress({
-        current: 0,
-        total: aggregates.length,
-        phase: 'Deleting images and associated data...',
-      });
+        const impactedImageSetIds = new Set<string>();
+        const deletedNeighbourKeys = new Set<string>();
+        const aggregates = Array.from(imageMap.values());
+        let processed = 0;
 
-      for (let i = 0; i < aggregates.length; i += batchSize) {
-        const batch = aggregates.slice(i, i + batchSize);
+        setDeleteProgress({
+          current: 0,
+          total: aggregates.length,
+          phase: 'Deleting images and associated data...',
+        });
 
-        await Promise.all(
-          batch.map(async (agg) => {
-            try {
-              // Delete annotations
-              for (const annotationId of agg.annotationIds) {
-                await (client as any).models.Annotation.delete({
-                  id: annotationId,
-                });
+        await runPool(
+          aggregates,
+          async (agg) => {
+            if (signal.aborted) return;
+            let imageFailed = false;
+
+            // Run one delete; returns true on success or already-gone, false on
+            // a real failure (which marks the image as failed). Re-throws on
+            // cancellation so the worker stops promptly.
+            const del = async (fn: () => Promise<any>): Promise<boolean> => {
+              try {
+                await runOp(fn, { signal });
+                return true;
+              } catch (err) {
+                if (signal.aborted) throw err;
+                if (isAlreadyGone(err)) return true;
+                imageFailed = true;
+                console.warn('Delete failed', err);
+                return false;
+              }
+            };
+
+            for (const annotationId of agg.annotationIds) {
+              if (
+                await del(() =>
+                  (client as any).models.Annotation.delete({ id: annotationId })
+                )
+              )
                 counters.annotationsDeleted += 1;
-              }
-
-              // Delete locations
-              for (const locationId of agg.locationIds) {
-                await (client as any).models.Location.delete({
-                  id: locationId,
-                });
+            }
+            for (const locationId of agg.locationIds) {
+              if (
+                await del(() =>
+                  (client as any).models.Location.delete({ id: locationId })
+                )
+              )
                 counters.locationsDeleted += 1;
-              }
-
-              // Delete memberships
-              for (const membership of agg.membershipRecords) {
-                await (client as any).models.ImageSetMembership.delete({
-                  id: membership.id,
-                });
+            }
+            for (const membership of agg.membershipRecords) {
+              if (
+                await del(() =>
+                  (client as any).models.ImageSetMembership.delete({
+                    id: membership.id,
+                  })
+                )
+              ) {
                 counters.membershipsDeleted += 1;
-                if (membership.imageSetId) {
+                if (membership.imageSetId)
                   impactedImageSetIds.add(membership.imageSetId);
-                }
               }
-
-              // Delete files
-              for (const file of agg.fileRecords) {
-                await (client as any).models.ImageFile.delete({ id: file.id });
+            }
+            for (const file of agg.fileRecords) {
+              if (
+                await del(() =>
+                  (client as any).models.ImageFile.delete({ id: file.id })
+                )
+              )
                 counters.filesDeleted += 1;
-              }
-
-              // Delete neighbours
-              for (const neighbour of agg.neighbourPairs) {
-                if (deletedNeighbourKeys.has(neighbour.key)) continue;
-                deletedNeighbourKeys.add(neighbour.key);
-                try {
-                  await (client as any).models.ImageNeighbour.delete({
+            }
+            for (const neighbour of agg.neighbourPairs) {
+              if (deletedNeighbourKeys.has(neighbour.key)) continue;
+              deletedNeighbourKeys.add(neighbour.key);
+              if (
+                await del(() =>
+                  (client as any).models.ImageNeighbour.delete({
                     image1Id: neighbour.image1Id,
                     image2Id: neighbour.image2Id,
-                  });
-                  counters.neighboursDeleted += 1;
-                } catch (err) {
-                  const msg =
-                    (err as any)?.errors?.[0]?.errorType ||
-                    (err as any)?.name ||
-                    (err as any)?.message ||
-                    '';
-                  if (!String(msg).includes('ConditionalCheckFailed')) {
-                    counters.failures += 1;
-                    console.warn('Failed to delete neighbour', neighbour, err);
-                  }
-                }
-              }
+                  })
+                )
+              )
+                counters.neighboursDeleted += 1;
+            }
 
-              // Delete the image itself
-              await (client as any).models.Image.delete({ id: agg.id });
-              counters.imagesDeleted += 1;
-            } catch (err) {
-              counters.failures += 1;
-              console.warn('Failed to delete image', agg.id, err);
-            } finally {
+            // Only delete the image once its related records are gone, so a
+            // failure never leaves orphaned annotations/locations behind.
+            if (!imageFailed && !signal.aborted) {
+              if (
+                await del(() =>
+                  (client as any).models.Image.delete({ id: agg.id })
+                )
+              )
+                counters.imagesDeleted += 1;
+            }
+            if (imageFailed) failedImageIds.add(agg.id);
+
+            processed += 1;
+            if (!signal.aborted) {
               setDeleteProgress({
-                current: counters.imagesDeleted,
+                current: processed,
                 total: aggregates.length,
                 phase: `Deleted ${counters.imagesDeleted}/${aggregates.length} images (${counters.annotationsDeleted} annotations, ${counters.locationsDeleted} locations)...`,
               });
             }
-          })
+          },
+          DELETE_CONCURRENCY,
+          signal
         );
-      }
 
-      // Update impacted image sets
-      if (impactedImageSetIds.size > 0) {
-        setDeleteProgress({
-          current: 0,
-          total: impactedImageSetIds.size,
-          phase: 'Updating image set counts...',
-        });
+        if (signal.aborted) counters.cancelled = true;
 
-        for (const imageSetId of impactedImageSetIds) {
-          try {
-            const memberships = (await fetchAllPaginatedResults(
-              (client as any).models.ImageSetMembership
-                .imageSetMembershipsByImageSetId,
-              {
-                imageSetId,
-                selectionSet: ['id'],
-                limit: 10000,
-              }
-            )) as Array<{ id: string }>;
-
-            await (client as any).models.ImageSet.update({
-              id: imageSetId,
-              imageCount: memberships.length,
-            });
-            counters.imageSetsUpdated += 1;
-          } catch (err) {
-            counters.failures += 1;
-            console.warn('Failed to update image set count', imageSetId, err);
+        // Update counts on image sets that lost members.
+        if (!signal.aborted && impactedImageSetIds.size > 0) {
+          setDeleteProgress({
+            current: 0,
+            total: impactedImageSetIds.size,
+            phase: 'Updating image set counts...',
+          });
+          for (const imageSetId of impactedImageSetIds) {
+            if (signal.aborted) break;
+            try {
+              const memberships = (await fetchAllPaginatedResults(
+                makeRetrying(
+                  (client as any).models.ImageSetMembership
+                    .imageSetMembershipsByImageSetId,
+                  signal
+                ),
+                { imageSetId, selectionSet: ['id'], limit: 10000 }
+              )) as Array<{ id: string }>;
+              await runOp(
+                () =>
+                  (client as any).models.ImageSet.update({
+                    id: imageSetId,
+                    imageCount: memberships.length,
+                  }),
+                { signal }
+              );
+              counters.imageSetsUpdated += 1;
+            } catch (err) {
+              if (signal.aborted) break;
+              console.warn('Failed to update image set count', imageSetId, err);
+            }
           }
         }
+
+        // Images we never managed to gather were never deleted either.
+        for (const id of failedToFetch) failedImageIds.add(id);
+        counters.imagesFailed = failedImageIds.size;
+        if (signal.aborted) counters.cancelled = true;
+
+        setDeleteResult(counters);
+
+        // Notify other users about the changes (best effort).
+        if (!signal.aborted) {
+          setDeleteProgress({
+            current: 0,
+            total: 0,
+            phase: 'Notifying other users...',
+          });
+          try {
+            await runOp(() =>
+              client.mutations.updateProjectMemberships({ projectId })
+            );
+          } catch (err) {
+            console.warn('Failed to notify other users', err);
+          }
+        }
+
+        // Refresh the map, then keep any images that still exist (failed,
+        // un-reached or cancelled) selected so they can be retried.
+        setDeleteProgress({ current: 0, total: 0, phase: 'Refreshing map...' });
+        const remaining = await fetchImages();
+        const targetSet = new Set(imageIds);
+        setSelectedIds(
+          new Set(
+            remaining.filter((im) => targetSet.has(im.id)).map((im) => im.id)
+          )
+        );
+        setDeleteProgress(null);
+      } catch (err) {
+        if (signal.aborted) {
+          counters.cancelled = true;
+          for (const id of failedToFetch) failedImageIds.add(id);
+          counters.imagesFailed = failedImageIds.size;
+          setDeleteResult(counters);
+          const remaining = await fetchImages();
+          const targetSet = new Set(imageIds);
+          setSelectedIds(
+            new Set(
+              remaining.filter((im) => targetSet.has(im.id)).map((im) => im.id)
+            )
+          );
+          setDeleteProgress(null);
+        } else {
+          console.error('Delete operation failed:', err);
+          setError(
+            `Delete operation failed: ${err instanceof Error ? err.message : String(err)
+            }`
+          );
+          setDeleteProgress(null);
+        }
+      } finally {
+        setDeleting(false);
+        abortRef.current = null;
       }
+    },
+    [selectedIds, images, fetchImageData, fetchImages, client, projectId]
+  );
 
-      setDeleteResult(counters);
-
-      // Notify other users about the changes
-      setDeleteProgress({
-        current: 0,
-        total: 0,
-        phase: 'Notifying other users...',
-      });
-      await client.mutations.updateProjectMemberships({ projectId });
-
-      // Refresh the map
-      setDeleteProgress({
-        current: 0,
-        total: 0,
-        phase: 'Refreshing map...',
-      });
-      await fetchImages();
-
-      setDeleteProgress(null);
-    } catch (err) {
-      console.error('Delete operation failed:', err);
-      setError(
-        `Delete operation failed: ${err instanceof Error ? err.message : String(err)
-        }`
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }, [selectedIds, images, fetchImageData, fetchImages, client]);
+  const cancelDelete = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
 
   // Clear selection
   const clearSelection = useCallback(() => {
@@ -734,8 +1266,8 @@ This action cannot be undone.`;
     setSelectedIds(new Set(images.map((img) => img.id)));
   }, [images]);
 
-  // Memoized selected count
   const selectedCount = useMemo(() => selectedIds.size, [selectedIds]);
+  const hasImages = images.length > 0;
 
   return (
     <>
@@ -751,7 +1283,9 @@ This action cannot be undone.`;
             </div>
             <span className='text-muted' style={{ fontSize: 13 }}>
               {images.length} loaded {' · '}
-              <span className={selectedCount > 0 ? 'text-danger fw-semibold' : ''}>
+              <span
+                className={selectedCount > 0 ? 'text-danger fw-semibold' : ''}
+              >
                 {selectedCount} selected
               </span>
             </span>
@@ -820,10 +1354,12 @@ This action cannot be undone.`;
             <ul className='mt-2 mb-0 text-muted' style={{ fontSize: 13 }}>
               <li>Click on an image marker to select it</li>
               <li>
-                Hold <kbd>Ctrl</kbd> + click to select multiple images
+                Hold <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + click to select multiple
+                images
               </li>
               <li>
-                Use the polygon tool (top-right) to draw around multiple images
+                Use the <strong>Draw selection</strong> button, then click on the
+                map to outline an area (click the first point to finish)
               </li>
               <li>Right-click on a marker to view image details</li>
               <li>Blue markers = unselected, Red markers = selected</li>
@@ -901,11 +1437,19 @@ This action cannot be undone.`;
         {/* Delete result */}
         {deleteResult && (
           <Alert
-            variant={deleteResult.failures > 0 ? 'warning' : 'success'}
+            variant={
+              deleteResult.cancelled || deleteResult.imagesFailed > 0
+                ? 'warning'
+                : 'success'
+            }
             dismissible
             onClose={() => setDeleteResult(null)}
           >
-            <strong>Deletion complete:</strong>
+            <strong>
+              {deleteResult.cancelled
+                ? 'Deletion cancelled:'
+                : 'Deletion complete:'}
+            </strong>
             <ul className='mb-0 mt-2'>
               <li>Images deleted: {deleteResult.imagesDeleted}</li>
               <li>Annotations deleted: {deleteResult.annotationsDeleted}</li>
@@ -914,112 +1458,67 @@ This action cannot be undone.`;
               <li>Memberships deleted: {deleteResult.membershipsDeleted}</li>
               <li>Neighbour links deleted: {deleteResult.neighboursDeleted}</li>
               <li>Image sets updated: {deleteResult.imageSetsUpdated}</li>
-              {deleteResult.failures > 0 && (
+              {deleteResult.imagesFailed > 0 && (
                 <li className='text-danger'>
-                  Failures: {deleteResult.failures}
+                  Images not deleted: {deleteResult.imagesFailed}
                 </li>
               )}
             </ul>
+            {deleteResult.imagesFailed > 0 && (
+              <Button
+                size='sm'
+                variant='warning'
+                className='mt-2'
+                onClick={() => handleDelete(Array.from(selectedIdsRef.current))}
+                disabled={deleting || loading}
+              >
+                Retry failed ({deleteResult.imagesFailed})
+              </Button>
+            )}
           </Alert>
         )}
 
         {/* Map */}
         <div className='survey-map'>
-          {images.length === 0 && !loading ? (
-            <div className='d-flex justify-content-center align-items-center h-100 text-muted'>
+          <div
+            ref={mapContainerRef}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+          />
+
+          {/* Draw selection control */}
+          {mapLoaded && hasImages && (
+            <div
+              className='position-absolute'
+              style={{ top: 10, left: 10, zIndex: 1, maxWidth: 220 }}
+            >
+              <Button
+                size='sm'
+                variant={drawing ? 'warning' : 'light'}
+                onClick={toggleDraw}
+                disabled={loading || deleting}
+                className='shadow-sm'
+              >
+                {drawing ? 'Cancel drawing' : 'Draw selection'}
+              </Button>
+              {drawing && (
+                <div
+                  className='mt-1 small bg-white rounded px-2 py-1 shadow-sm'
+                  style={{ color: '#000' }}
+                >
+                  Click to add boundary points; click the first point to finish.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* No-images overlay */}
+          {!hasImages && !loading && (
+            <div
+              className='d-flex justify-content-center align-items-center text-muted'
+              style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+            >
               No images with GPS coordinates found
             </div>
-          ) : (
-            <MapContainer
-              style={{ height: '100%', width: '100%' }}
-              center={[0, 0]}
-              zoom={2}
-            >
-              <TileLayer
-                attribution='&copy; OpenStreetMap contributors'
-                url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-              />
-
-              {images.length > 0 && <FitBoundsToImages images={images} />}
-
-              {/* Shapefile boundary overlay */}
-              {showShapefile && shapefileCoords && shapefileCoords.length >= 3 && (
-                <Polygon
-                  positions={shapefileCoords}
-                  pathOptions={{
-                    color: '#fd7e14',
-                    weight: 2,
-                    opacity: 1,
-                    fill: false,
-                    interactive: false,
-                  }}
-                />
-              )}
-
-              {/* Feature group for polygon drawing */}
-              <FeatureGroup ref={featureGroupRef}>
-                <EditControl
-                  position='topright'
-                  onCreated={onPolygonCreated}
-                  draw={{
-                    polygon: {
-                      allowIntersection: false,
-                      shapeOptions: { color: '#3388ff', weight: 2 },
-                    },
-                    rectangle: false,
-                    circle: false,
-                    circlemarker: false,
-                    marker: false,
-                    polyline: false,
-                  }}
-                  edit={{ edit: false, remove: false }}
-                />
-              </FeatureGroup>
-
-              {/* Image markers */}
-              {images.map((img) => {
-                const isSelected = selectedIds.has(img.id);
-                return (
-                  <CircleMarker
-                    key={img.id}
-                    center={[img.latitude, img.longitude]}
-                    radius={isSelected ? 8 : 5}
-                    pathOptions={{
-                      color: isSelected ? '#dc3545' : '#0d6efd',
-                      fillColor: isSelected ? '#dc3545' : '#0d6efd',
-                      fillOpacity: isSelected ? 0.8 : 0.5,
-                      weight: isSelected ? 3 : 1,
-                    }}
-                    eventHandlers={{
-                      click: (e) => handleMarkerClick(img.id, e),
-                      contextmenu: (e) => {
-                        e.originalEvent.preventDefault();
-                        setPopupImage(img);
-                      },
-                    }}
-                  />
-                );
-              })}
-
-              {/* Popup for right-clicked image */}
-              {popupImage && (
-                <Popup
-                  position={[popupImage.latitude, popupImage.longitude]}
-                  eventHandlers={{
-                    remove: () => setPopupImage(null),
-                  }}
-                >
-                  <div style={{ maxWidth: '300px' }}>
-                    <strong>Path:</strong>{' '}
-                    {popupImage.originalPath || 'Unknown'}
-                    <br />
-                    <strong>Lat:</strong> {popupImage.latitude.toFixed(6)}
-                    <br />
-                    <strong>Lng:</strong> {popupImage.longitude.toFixed(6)}
-                  </div>
-                </Popup>
-              )}
-            </MapContainer>
           )}
 
           {/* Loading overlay */}
@@ -1047,9 +1546,14 @@ This action cannot be undone.`;
         </div>
       </div>
       <Footer>
+        {deleting && (
+          <Button variant='outline-light' onClick={cancelDelete}>
+            Cancel
+          </Button>
+        )}
         <Button
           variant='danger'
-          onClick={handleDelete}
+          onClick={() => handleDelete()}
           disabled={loading || deleting || selectedCount === 0}
         >
           {deleting ? (

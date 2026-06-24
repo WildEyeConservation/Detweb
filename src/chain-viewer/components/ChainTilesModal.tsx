@@ -6,7 +6,7 @@ import { ChainTilePaginator } from './ChainTilePaginator';
 import { buildChains } from '../utils/chainBuilder';
 import { useChainTileMeta } from '../hooks/useChainTileMeta';
 import { nameFor } from '../../individual-id/utils/identity';
-import type { ChainAnnotation } from '../types';
+import type { AnnotationImageMeta, ChainAnnotation } from '../types';
 
 const DEFAULT_COLOR = '#ff8c1a';
 
@@ -22,6 +22,9 @@ interface Props {
   categoryColors: Record<string, string>;
   onToggleObscured: (annotationId: string) => void;
   openImageHrefFor: (annotation: ChainAnnotation) => string;
+  /** Preloaded meta; when provided, skips the live useChainTileMeta fetch. */
+  metaByAnnotationId?: Map<string, AnnotationImageMeta>;
+  metaLoading?: boolean;
 }
 
 /**
@@ -37,6 +40,8 @@ export function ChainTilesModal({
   categoryColors,
   onToggleObscured,
   openImageHrefFor,
+  metaByAnnotationId: metaOverride,
+  metaLoading: metaLoadingOverride,
 }: Props) {
   const chain = useMemo(() => {
     if (!show || !chainId) return null;
@@ -46,7 +51,10 @@ export function ChainTilesModal({
     return buildChains(members)[0] ?? null;
   }, [show, chainId, annotations]);
 
-  const { metaByAnnotationId, loading } = useChainTileMeta(chain);
+  // Pass null to skip the live fetch when meta is already preloaded.
+  const live = useChainTileMeta(metaOverride ? null : chain);
+  const metaByAnnotationId = metaOverride ?? live.metaByAnnotationId;
+  const loading = metaOverride ? !!metaLoadingOverride : live.loading;
 
   const [cameraRotations, setCameraRotations] = useState<Map<string, number>>(
     () => new Map()

@@ -47,6 +47,8 @@ import { claimIndividualIdTransect } from '../functions/claimIndividualIdTransec
 import { completeIndividualIdTransect } from '../functions/completeIndividualIdTransect/resource';
 import { reconcileIndividualId } from '../functions/reconcileIndividualId/resource';
 import { releaseIndividualIdTransects } from '../functions/releaseIndividualIdTransects/resource';
+import { createChainShare } from '../functions/createChainShare/resource';
+import { revokeChainShare } from '../functions/revokeChainShare/resource';
 import { generateTile } from '../storage/generateTile/resource';
 
 const schema = a
@@ -956,6 +958,119 @@ const schema = a
           .queryField('jollyResultsMembershipsBySurveyId')
           .sortKeys(['annotationSetId']),
       ]),
+    // Reviewer access is scoped via a per-share Cognito group `chainshare-<shareId>`.
+    ChainShare: a
+      .model({
+        shareId: a.id().required(),
+        surveyId: a.id().required(),
+        annotationSetId: a.id().required(),
+        surveyName: a.string(),
+        annotationSetName: a.string(),
+        status: a.string().default('active'),
+        createdBy: a.string(),
+        group: a.string(),
+      })
+      .identifier(['shareId'])
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group').to(['read'])])
+      .secondaryIndexes((index) => [
+        index('annotationSetId').queryField('chainSharesByAnnotationSetId'),
+      ]),
+    SharedChainAnnotation: a
+      .model({
+        shareId: a.id().required(),
+        sourceAnnotationId: a.id().required(),
+        x: a.integer().required(),
+        y: a.integer().required(),
+        imageId: a.id().required(),
+        objectId: a.id(),
+        categoryId: a.id().required(),
+        obscured: a.boolean(),
+        oov: a.boolean(),
+        imageTimestamp: a.timestamp(),
+        group: a.string(),
+      })
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group').to(['read'])])
+      .secondaryIndexes((index) => [
+        index('shareId').queryField('sharedChainAnnotationsByShareId'),
+      ]),
+    SharedChainImage: a
+      .model({
+        shareId: a.id().required(),
+        sourceImageId: a.id().required(),
+        width: a.integer().required(),
+        height: a.integer().required(),
+        originalPath: a.string(),
+        timestamp: a.timestamp(),
+        cameraId: a.id(),
+        cameraName: a.string(),
+        cameraSerial: a.string(),
+        // Precomputed at snapshot time; reviewers can't read ImageFile directly.
+        sourceKey: a.string(),
+        group: a.string(),
+      })
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group').to(['read'])])
+      .secondaryIndexes((index) => [
+        index('shareId').queryField('sharedChainImagesByShareId'),
+      ]),
+    SharedChainLocation: a
+      .model({
+        shareId: a.id().required(),
+        sourceLocationId: a.id().required(),
+        imageId: a.id().required(),
+        x: a.integer().required(),
+        y: a.integer().required(),
+        width: a.integer(),
+        height: a.integer(),
+        confidence: a.float(),
+        source: a.string().required(),
+        group: a.string(),
+      })
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group').to(['read'])])
+      .secondaryIndexes((index) => [
+        index('shareId').queryField('sharedChainLocationsByShareId'),
+      ]),
+    SharedChainNeighbour: a
+      .model({
+        shareId: a.id().required(),
+        image1Id: a.id().required(),
+        image2Id: a.id().required(),
+        homography: a.float().array(),
+        homographySource: a.string(),
+        skipped: a.boolean().default(false),
+        group: a.string(),
+      })
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group').to(['read'])])
+      .secondaryIndexes((index) => [
+        index('shareId').queryField('sharedChainNeighboursByShareId'),
+      ]),
+    SharedChainCategory: a
+      .model({
+        shareId: a.id().required(),
+        sourceCategoryId: a.id().required(),
+        name: a.string().required(),
+        color: a.string(),
+        shortcutKey: a.string(),
+        group: a.string(),
+      })
+      .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group').to(['read'])])
+      .secondaryIndexes((index) => [
+        index('shareId').queryField('sharedChainCategoriesByShareId'),
+      ]),
+    ChainReviewFeedback: a
+      .model({
+        shareId: a.id().required(),
+        sharedAnnotationId: a.id().required(),
+        chainId: a.string(),
+        kind: a.string().required(),
+        proposedObscured: a.boolean(),
+        proposedCategoryId: a.id(),
+        comment: a.string(),
+        owner: a.string(),
+      })
+      .authorization((allow) => [allow.owner(), allow.group('sysadmin')])
+      .secondaryIndexes((index) => [
+        index('shareId').sortKeys(['owner']).queryField('chainReviewFeedbackByShareId'),
+      ]),
     ClientLog: a
       .model({
         userId: a.string().required(),
@@ -1127,6 +1242,25 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(generateSurveyResults)),
+    // Named `snapshot...` to avoid clashing with the auto-generated `createChainShare` mutation.
+    snapshotChainShare: a
+      .mutation()
+      .arguments({
+        annotationSetId: a.string().required(),
+        shareId: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.group('sysadmin')])
+      .handler(a.handler.function(createChainShare)),
+    // NB: reviewer Cognito group membership must be revoked separately.
+    revokeChainShare: a
+      .mutation()
+      .arguments({
+        shareId: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.group('sysadmin')])
+      .handler(a.handler.function(revokeChainShare)),
     launchAnnotationSet: a
       .mutation()
       .arguments({
@@ -1328,6 +1462,8 @@ const schema = a
     allow.resource(completeIndividualIdTransect),
     allow.resource(reconcileIndividualId),
     allow.resource(releaseIndividualIdTransects),
+    allow.resource(createChainShare),
+    allow.resource(revokeChainShare),
   ]);
 
 export type ServerSchema = typeof schema;
@@ -1388,6 +1524,8 @@ export type UpdateActiveOrganizationsHandler = MutationHandler<{ activatedOrgani
 export type LaunchIndividualIdHandler = MutationHandler<{ request: string }>;
 export type ClaimIndividualIdTransectHandler = MutationHandler<{ jobId: string }>;
 export type CompleteIndividualIdTransectHandler = MutationHandler<{ transectRowId: string }>;
+export type CreateChainShareHandler = MutationHandler<{ annotationSetId: string; shareId: string }>;
+export type RevokeChainShareHandler = MutationHandler<{ shareId: string }>;
 
 export const data = defineData({
   schema,
