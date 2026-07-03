@@ -3,7 +3,7 @@ import { Modal, Body, Header, Footer, Title } from '../Modal';
 import { useState, useContext, useEffect } from 'react';
 import { Tabs, Tab } from '../Tabs';
 import { Schema } from '../amplify/client-schema';
-import { GlobalContext, UserContext } from '../Context';
+import { GlobalContext } from '../Context';
 import SpeciesLabelling from './SpeciesLabelling';
 import FalseNegatives from './FalseNegatives';
 import QCReview from './QCReview';
@@ -45,18 +45,14 @@ export default function LaunchAnnotationSetModal({
 
   // set up queue creation helper
   const { client, showModal } = useContext(GlobalContext)! as any;
-  const { cognitoGroups } = useContext(UserContext)!;
-  const isSysadmin = cognitoGroups.includes('sysadmin');
 
-  // Task type for each tab, in render order. The Individual ID tab is only
-  // shown to sysadmins, so its presence shifts subsequent tab indices.
+  // Task type for each tab, in render order.
   const tabTaskTypes: TaskType[] = [
     'species-labelling',
     'false-negatives',
     'qc-review',
     'homographies',
-    ...(isSysadmin ? (['individual-id'] as TaskType[]) : []),
-    'registration',
+    'individual-id',
   ];
 
   useEffect(() => {
@@ -191,25 +187,16 @@ export default function LaunchAnnotationSetModal({
                 setHomographyLaunchHandler={setHomographyLaunchHandler as any}
               />
             </Tab>
-            {isSysadmin && (
-              <Tab label='ChainLinker'>
-                <IndividualId
-                  project={project}
-                  annotationSet={annotationSet}
-                  launching={launching}
-                  setLaunchDisabled={setLaunchDisabled}
-                  setIndividualIdLaunchHandler={
-                    setIndividualIdLaunchHandler as any
-                  }
-                />
-              </Tab>
-            )}
-            <Tab label='Registration'>
-              <div className='p-3'>
-                <p className='m-0'>
-                  This will launch a registration task for the annotation set.
-                </p>
-              </div>
+            <Tab label='ChainLinker'>
+              <IndividualId
+                project={project}
+                annotationSet={annotationSet}
+                launching={launching}
+                setLaunchDisabled={setLaunchDisabled}
+                setIndividualIdLaunchHandler={
+                  setIndividualIdLaunchHandler as any
+                }
+              />
             </Tab>
           </Tabs>
         </Form>
