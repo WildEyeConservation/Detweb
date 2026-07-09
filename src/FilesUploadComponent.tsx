@@ -5,7 +5,10 @@ import Modal from 'react-bootstrap/Modal';
 import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import Alert from 'react-bootstrap/Alert';
-import { GlobalContext, UploadContext, UserContext } from './Context.tsx';
+import { GlobalContext, UserContext } from './Context.tsx';
+import { uploadOrchestrator } from './upload/core/UploadOrchestrator.ts';
+import { saveDirectoryHandle } from './upload/core/dirHandles.ts';
+import type { UploadBackend } from './upload/core/types.ts';
 import exifr from 'exifr';
 import { DateTime } from 'luxon';
 import { fetchAllPaginatedResults } from './utils';
@@ -135,15 +138,15 @@ export function FileUploadCore({
   project,
 }: FilesUploadBaseProps) {
   const [name, setName] = useState('');
-  const { client } = useContext(GlobalContext)!;
-  const { cognitoGroups } = useContext(UserContext)!;
+  const { client, backend } = useContext(GlobalContext)!;
+  const { cognitoGroups, user } = useContext(UserContext)!;
   const [scannedFiles, setScannedFiles] = useState<File[]>([]);
+  const [directoryHandle, setDirectoryHandle] = useState<unknown>(null);
   const [cameraSelection, setCameraSelection] = useState<
     [string, string[]] | null
   >(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [filteredImageFiles, setFilteredImageFiles] = useState<File[]>([]);
-  const { setTask } = useContext(UploadContext)!;
   const [totalImageSize, setTotalImageSize] = useState(0);
   const [exifData, setExifData] = useState<ExifData>({});
   const [commonTimezone, setCommonTimezone] = useState<string | undefined>(
@@ -1492,7 +1495,7 @@ export function FileUploadCore({
   }
 
   const handleSubmit = useCallback(
-    async (projectId: string, fromStaleUpload?: boolean) => {
+    async (projectId: string) => {
       if (!projectId) {
         alert('Survey is required');
         return;
@@ -1536,10 +1539,7 @@ export function FileUploadCore({
         allCameras.push(camera);
       }
 
-      // Get all folder-level camera names from cameraSelection, defaulting to
-      // single camera if null. When folder->camera mapping is active these are
-      // folder names that must be resolved through `folderCameraMapping` to
-      // match the existing cameras in the database.
+      // Resolve folder names through the saved camera mapping when active.
       const folderCameraNames = cameraSelection
         ? cameraSelection[1]
         : ['Survey Camera'];
@@ -1556,8 +1556,7 @@ export function FileUploadCore({
           (c) => c.name === effectiveName
         );
 
-        // Mapped folders point at a camera that already exists — use it as-is
-        // so we don't clobber its saved specs with zeros.
+        // Mapped folders reuse the existing camera without overwriting specs.
         if (isMapped) {
           if (existingCamera) allCameras.push(existingCamera);
           continue;
@@ -1570,7 +1569,6 @@ export function FileUploadCore({
         };
 
         if (existingCamera) {
-          // Update existing camera with specs (even if 0 values)
           await client.models.Camera.update({
             id: existingCamera.id,
             name: effectiveName,
@@ -1579,7 +1577,6 @@ export function FileUploadCore({
             tiltDegrees: spec.tiltDegrees || 0,
           });
         } else {
-          // Create new camera with specs (even if 0 values)
           const { data: newCamera } = await client.models.Camera.create({
             name: effectiveName,
             projectId: projectId,
@@ -1620,13 +1617,12 @@ export function FileUploadCore({
         }
       }
 
-      // Simplify return type to avoid complex union
       const imageSets = await fetchAllPaginatedResults(
         client.models.ImageSet.list,
         { filter: { projectId: { eq: projectId } }, selectionSet: ['id'] }
       );
 
-      // only one image set exists for a survey
+      // Create the survey image set if it is missing.
       if (imageSets.length === 0) {
         await client.models.ImageSet.create({
           name: name,
@@ -1635,43 +1631,35 @@ export function FileUploadCore({
         });
       }
 
-      // Exclude failed files from processing
       const failedFilePaths = new Set(failedFiles.map((f) => f.path));
 
       const gpsFilteredImageFiles = filteredImageFiles.filter((file) => {
-        // Skip files that failed validation/corruption checks
         if (failedFilePaths.has(file.webkitRelativePath)) {
           return false;
         }
 
         const exifMeta = exifData[file.webkitRelativePath];
 
-        // Skip files without EXIF metadata (shouldn't happen for non-failed files, but safety check)
         if (!exifMeta) {
           return false;
         }
 
         if (exifMeta.gpsData) {
-          // image metadata
           const csvRow = csvData.data.find(
             (row) => row.timestamp === exifMeta.timestamp
           );
           return csvRow !== undefined;
         } else {
-          // csv/gpx file
           if (associateByTimestamp) {
             const csvRow = csvData.data.find(
               (row) => row.timestamp === exifMeta.timestamp
             );
             if (csvRow) {
-              // Exact timestamp match found
               return true;
             } else {
-              // No exact timestamp match found - determine if the timestamp is valid based on surrounding CSV data
               const sortedCsvData = csvData.data.sort(
                 (a, b) => a.timestamp! - b.timestamp!
               );
-              // Ensure the timestamp is within the CSV bounds
               if (
                 exifMeta.timestamp < sortedCsvData[0].timestamp! ||
                 exifMeta.timestamp >
@@ -1679,7 +1667,6 @@ export function FileUploadCore({
               ) {
                 return false;
               }
-              // Find the two CSV timestamps that bound this image timestamp
               let lower = null,
                 upper = null;
               for (let i = 0; i < sortedCsvData.length - 1; i++) {
@@ -1695,21 +1682,19 @@ export function FileUploadCore({
               if (lower === null || upper === null) {
                 return false;
               }
-              // Compute the gap in this interval
               const intervalGap = upper - lower;
-              // Calculate average gap over all CSV timestamps
               const avgInterval =
                 (sortedCsvData[sortedCsvData.length - 1].timestamp! -
                   sortedCsvData[0].timestamp!) /
                 (sortedCsvData.length - 1);
-              const thresholdFactor = 2; // adjustable factor; if the gap is > than 2x the average, assume dropped data
+              // Treat much larger gaps as dropped GPS data.
+              const thresholdFactor = 2;
               if (intervalGap > avgInterval * thresholdFactor) {
                 return false;
               }
               return true;
             }
           } else {
-            // Associate by filepath
             const csvRow = csvData.data.find(
               (row) =>
                 row.filepath?.toLowerCase() ===
@@ -1733,8 +1718,7 @@ export function FileUploadCore({
         altitude_agl?: number;
       }[];
 
-      // Phash dedup runs during upload (see UploadManager) so we don't
-      // pre-filter here.
+      // Phash dedup runs during upload.
       for (const file of gpsFilteredImageFiles) {
         const exifmeta = exifData[file.webkitRelativePath];
         const gpsData = getGpsForFile(file);
@@ -1746,7 +1730,6 @@ export function FileUploadCore({
           continue;
         }
 
-        // Validate width and height are valid positive numbers
         const width = exifmeta.width;
         const height = exifmeta.height;
         if (
@@ -1780,10 +1763,7 @@ export function FileUploadCore({
         });
       }
 
-      //store image data & model in local storage
-      // Merge with existing stored images so that retries/resumes preserve
-      // metadata for files already uploaded in a prior session.  New entries
-      // overwrite any with the same originalPath.
+      // Merge stored manifest entries so retry/resume keeps prior metadata.
       const existingStoredImages =
         ((await fileStore.getItem(projectId)) as typeof images) ?? [];
       const newPaths = new Set(images.map((img) => img.originalPath));
@@ -1800,13 +1780,17 @@ export function FileUploadCore({
         folderCameraMapping: useFolderCameraMapping ? folderCameraMapping : {},
       });
 
-      // push new task to upload manager
-      setTask({
+      // Save the handle so reload resume can avoid another folder picker.
+      if (directoryHandle) {
+        await saveDirectoryHandle(projectId, directoryHandle);
+      }
+
+      uploadOrchestrator.start({
+        client,
+        backend: backend as unknown as UploadBackend,
         projectId,
-        newProject,
-        fromStaleUpload: fromStaleUpload ?? false,
+        userId: user.userId,
         files: gpsFilteredImageFiles,
-        retryDelay: 0,
       });
     },
     [
@@ -1820,11 +1804,12 @@ export function FileUploadCore({
       cameraSpecs,
       overlaps,
       client,
+      backend,
+      user.userId,
       name,
       model,
       masks,
-      setTask,
-      newProject,
+      directoryHandle,
       useFolderCameraMapping,
       folderCameraMapping,
     ]
@@ -2361,6 +2346,7 @@ export function FileUploadCore({
               id='filepicker'
               webkitdirectory=''
               onFileChange={handleFileInputChange}
+              onDirectoryHandle={setDirectoryHandle}
             >
               <p style={{ margin: 0 }}>
                 {scannedFiles.length > 0

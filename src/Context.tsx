@@ -30,45 +30,6 @@ export interface GlobalContextType {
   showModal: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
-export interface UploadContextType {
-  task: {
-    newProject: boolean;
-    projectId: string;
-    fromStaleUpload?: boolean;
-    files: File[];
-    retryDelay: number;
-    resumeId?: string;
-    deleteId?: string;
-    pauseId?: string;
-  };
-  setTask: React.Dispatch<
-    React.SetStateAction<{
-      newProject: boolean;
-      projectId: string;
-      fromStaleUpload?: boolean;
-      files: File[];
-      retryDelay: number;
-      resumeId?: string;
-      deleteId?: string;
-      pauseId?: string;
-    }>
-  >;
-  progress: {
-    processed: number;
-    total: number;
-    isComplete: boolean;
-    error: string | null;
-  };
-  setProgress: React.Dispatch<
-    React.SetStateAction<{
-      processed: number;
-      total: number;
-      isComplete: boolean;
-      error: string | null;
-    }>
-  >;
-}
-
 export interface UserContextType {
   user: AuthUser;
   getSqsClient: () => Promise<SQSClient>;
@@ -197,7 +158,6 @@ export const ImageContext = createContext<ImageContextType | undefined>(
 export const TestingContext = createContext<TestingContextType | null>(null);
 // export const OrganizationContext =
 //   createContext<OrganizationContextType | null>(null);
-export const UploadContext = createContext<UploadContextType | null>(null);
 
 export const GlobalContext = createContext<GlobalContextType>({
   backend: outputs,

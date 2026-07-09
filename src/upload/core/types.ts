@@ -1,0 +1,79 @@
+import type { DataClient } from '../../../amplify/shared/data-schema.generated';
+
+// Session lifecycle. Transitions are owned exclusively by UploadOrchestrator:
+//   idle -> preparing -> uploading -> finalizing -> completed
+//   uploading -> waiting-retry -> preparing (retryable error, backoff)
+//   uploading/waiting-retry -> paused (user, offline or fatal error)
+//   any active -> cancelled (delete flow)
+//   waiting-retry -> failed (fatal error or attempts exhausted)
+export type SessionPhase =
+  | 'idle'
+  | 'preparing'
+  | 'uploading'
+  | 'waiting-retry'
+  | 'paused'
+  | 'finalizing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+export type PauseReason = 'user' | 'offline' | 'fatal-error';
+
+export const ACTIVE_PHASES: SessionPhase[] = [
+  'preparing',
+  'uploading',
+  'waiting-retry',
+  'finalizing',
+];
+
+export interface ItemFailure {
+  originalPath: string;
+  message: string;
+}
+
+export interface SessionSnapshot {
+  projectId: string;
+  phase: SessionPhase;
+  pauseReason?: PauseReason;
+  /** Human-readable message for failed / fatal-paused sessions. */
+  errorMessage?: string;
+  processed: number;
+  total: number;
+  /** Bytes transferred / expected for the S3-upload portion of this run. */
+  bytesUploaded: number;
+  bytesTotal: number;
+  /** Moving-window throughput; null until enough samples exist. */
+  throughputBps: number | null;
+  etaSeconds: number | null;
+  /** Per-file failures from the most recent transfer run. */
+  failures: ItemFailure[];
+  /** > 0 while in waiting-retry; the delay currently being waited out. */
+  retryDelayMs: number;
+  attempt: number;
+}
+
+export interface DuplicateRecord {
+  originalPath: string;
+  matchedPath: string;
+  scope: 'batch' | 'db';
+}
+
+export interface UploadMetadata {
+  model?: string;
+  masks?: number[][][];
+  folderCameraMapping?: Record<string, string>;
+}
+
+export interface UploadBackend {
+  custom: {
+    generalBucketName: string;
+    lightglueTaskQueueUrl: string;
+    scoutbotTaskQueueUrl: string;
+    elephantDetectorTaskQueueUrl: string;
+    madDetectorTaskQueueUrl: string;
+    stormflyDetectorTaskQueueUrl: string;
+  };
+  storage: { buckets: { bucket_name: string }[] };
+}
+
+export type UploadClient = DataClient;
