@@ -2284,8 +2284,8 @@ export function FileUploadCore({
               value: 'mad',
             },
             {
-              label: 'Stormfly (testing model)',
-              value: 'stormfly-testing',
+              label: 'OWL-D',
+              value: 'owl-d',
             },
             {
               label: 'Manual (images may be processed later)',

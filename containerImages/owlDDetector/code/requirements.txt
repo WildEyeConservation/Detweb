@@ -1,0 +1,4 @@
+boto3
+gql[all]
+pillow>=9.0
+requests_aws4auth>=1.2

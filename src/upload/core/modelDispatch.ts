@@ -45,7 +45,16 @@ export const DETECTOR_DISPATCH: Record<string, DetectorConfig> = {
     dispatch: (client, args) =>
       void client.mutations.runMadDetector(args, { retry: false }),
   },
-  // TESTING ONLY: Stormfly is not approved as a production model yet.
+  'owl-d': {
+    setSuffix: '_owl-d',
+    processedSource: 'owl-d',
+    nextStatus: 'processing-owl-d',
+    queueUrl: (backend) => backend.custom.owlDDetectorTaskQueueUrl,
+    dispatch: (client, args) =>
+      void client.mutations.runOwlDDetector(args, { retry: false }),
+  },
+  // No longer selectable in the uploader. Retained so uploads started with
+  // Stormfly before its removal still dispatch a detector when resumed.
   'stormfly-testing': {
     setSuffix: '_stormfly-testing',
     processedSource: 'stormfly-testing',

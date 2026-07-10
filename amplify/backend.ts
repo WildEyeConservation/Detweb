@@ -22,6 +22,7 @@ import { runImageRegistration } from './functions/runImageRegistration/resource'
 import { runScoutbot } from './functions/runScoutbot/resource';
 import { runMadDetector } from './functions/runMadDetector/resource';
 import { runStormflyDetector } from './functions/runStormflyDetector/resource';
+import { runOwlDDetector } from './functions/runOwlDDetector/resource';
 import { runElephantDetector } from './functions/runElephantDetector/resource';
 import { launchAnnotationSet } from './functions/launchAnnotationSet/resource';
 import { launchFalseNegatives } from './functions/launchFalseNegatives/resource';
@@ -76,6 +77,7 @@ const backend = defineBackend({
   runScoutbot,
   runMadDetector,
   runStormflyDetector,
+  runOwlDDetector,
   runElephantDetector,
   cleanupJobs,
   launchAnnotationSet,
@@ -323,6 +325,8 @@ const enableMadDetector =
   (process.env.AMPLIFY_ENABLE_ECS_MAD ?? 'true').toLowerCase() === 'true';
 const enableStormflyDetector =
   (process.env.AMPLIFY_ENABLE_ECS_STORMFLY ?? 'true').toLowerCase() === 'true';
+const enableOwlDDetector =
+  (process.env.AMPLIFY_ENABLE_ECS_OWL_D ?? 'true').toLowerCase() === 'true';
 const enableElephantDetector =
   (process.env.AMPLIFY_ENABLE_ECS_ELEPHANT ?? 'true').toLowerCase() === 'true';
 
@@ -333,6 +337,7 @@ let lightglueQueueUrl: string | undefined;
 let scoutbotQueueUrl: string | undefined;
 let madDetectorQueueUrl: string | undefined;
 let stormflyDetectorQueueUrl: string | undefined;
+let owlDDetectorQueueUrl: string | undefined;
 let elephantDetectorQueueUrl: string | undefined;
 
 if (enableEcs) {
@@ -504,6 +509,55 @@ if (enableEcs) {
     stormflyDetectorQueueUrl = stormflyDetectorAutoProcessor.queue.queueUrl;
   }
 
+  if (enableOwlDDetector) {
+    const owlDDetectorAutoProcessor = new AutoProcessor(
+      ecsStack,
+      'OwlDDetectorAutoProcessor',
+      {
+        vpc: ecsvpc,
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.G5,
+          ec2.InstanceSize.XLARGE
+        ),
+        ecsImage: ecs.ContainerImage.fromAsset('containerImages/owlDDetector'),
+        ecsTaskRole,
+        memoryLimitMiB: 1024 * 12,
+        gpuCount: 1,
+        environment: {
+          API_ENDPOINT: backend.data.graphqlUrl,
+          OWL_MODEL_S3:
+            process.env.OWL_D_MODEL_S3 ?? 's3://surveyscope/testing/OWL-D.pth',
+          OWL_MODEL_PATH: '/workspace/model_cache/OWL-D.pth',
+          OWL_MODEL_SHA256:
+            process.env.OWL_D_MODEL_SHA256 ??
+            'e28fc06d28fe010faefaffc5eb9bd0b85f98dad0805fca9f5256562cc3403d5b',
+          OWL_VARIANT: 'owl-d',
+          OWL_THRESHOLD: process.env.OWL_D_THRESHOLD ?? '0.2',
+          OWL_AMP: process.env.OWL_D_AMP ?? 'fp16',
+          OWL_BATCH_SIZE: process.env.OWL_D_BATCH_SIZE ?? '1',
+          OWL_OVERLAP: process.env.OWL_D_OVERLAP ?? '160',
+          OWL_BOX_SIZE: process.env.OWL_D_BOX_SIZE ?? '64',
+        },
+        machineImage: ecs.EcsOptimizedImage.amazonLinux2(
+          ecs.AmiHardwareType.GPU
+        ),
+        rootVolumeSize: 200,
+        messagesPerTask: Number(process.env.OWL_D_MESSAGES_PER_TASK ?? '5'),
+        maxTasks: Number(process.env.OWL_D_MAX_TASKS ?? '20'),
+        visibilityTimeout: Duration.minutes(
+          Number(process.env.OWL_D_VISIBILITY_MINUTES ?? '60')
+        ),
+        spotPrice: process.env.OWL_D_SPOT_PRICE ?? '2.00',
+        capacityRebalance: true,
+      }
+    );
+
+    owlDDetectorAutoProcessor.asg.role.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppSyncInvokeFullAccess')
+    );
+    owlDDetectorQueueUrl = owlDDetectorAutoProcessor.queue.queueUrl;
+  }
+
   if (enableElephantDetector) {
     const elephantDetectorAutoProcessor = new AutoProcessor(
       ecsStack,
@@ -570,6 +624,12 @@ backend.runMadDetector.resources.lambda.addToRolePolicy(
   })
 );
 backend.runStormflyDetector.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes', 'sqs:GetQueueUrl'],
+    resources: ['*'],
+  })
+);
+backend.runOwlDDetector.resources.lambda.addToRolePolicy(
   new iam.PolicyStatement({
     actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes', 'sqs:GetQueueUrl'],
     resources: ['*'],
@@ -1055,6 +1115,7 @@ backend.addOutput({
     scoutbotTaskQueueUrl: scoutbotQueueUrl ?? '',
     madDetectorTaskQueueUrl: madDetectorQueueUrl ?? '',
     stormflyDetectorTaskQueueUrl: stormflyDetectorQueueUrl ?? '',
+    owlDDetectorTaskQueueUrl: owlDDetectorQueueUrl ?? '',
     elephantDetectorTaskQueueUrl: elephantDetectorQueueUrl ?? '',
     generalBucketName: generalBucketName,
   },

@@ -13,6 +13,15 @@ export interface ProgressType {
 }
 
 type ClientType = DataClient;
+export type BackendOutputs = Omit<typeof outputs, 'custom'> & {
+  custom: typeof outputs.custom & {
+    owlDDetectorTaskQueueUrl: string;
+  };
+};
+
+// The new custom output is written to amplify_outputs.json on deployment.
+const backendOutputs = outputs as BackendOutputs;
+
 type ModelType = keyof ClientType['models'];
 export type CRUDhook<T extends ModelType> = {
   data: Schema[T]['type'][];
@@ -24,7 +33,7 @@ export type AnnotationsHook = CRUDhook<'Annotation'>;
 
 export interface GlobalContextType {
   client: DataClient;
-  backend: typeof outputs;
+  backend: BackendOutputs;
   region: string;
   modalToShow: string | null;
   showModal: React.Dispatch<React.SetStateAction<string | null>>;
@@ -160,7 +169,7 @@ export const TestingContext = createContext<TestingContextType | null>(null);
 //   createContext<OrganizationContextType | null>(null);
 
 export const GlobalContext = createContext<GlobalContextType>({
-  backend: outputs,
+  backend: backendOutputs,
   region: outputs.auth.aws_region,
   client: limitedClient,
   showModal: () => {},

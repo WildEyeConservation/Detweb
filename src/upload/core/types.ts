@@ -72,6 +72,7 @@ export interface UploadBackend {
     elephantDetectorTaskQueueUrl: string;
     madDetectorTaskQueueUrl: string;
     stormflyDetectorTaskQueueUrl: string;
+    owlDDetectorTaskQueueUrl: string;
   };
   storage: { buckets: { bucket_name: string }[] };
 }

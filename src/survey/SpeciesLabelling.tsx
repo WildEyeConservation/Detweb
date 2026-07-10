@@ -9,7 +9,7 @@ import LabeledToggleSwitch from '../LabeledToggleSwitch';
 import { logAdminAction } from '../utils/adminActionLogger';
 
 const defaultLowerConfidence = (modelValue?: string) =>
-  modelValue === 'stormfly-testing' ? 0.3 : 0.6;
+  modelValue === 'owl-d' ? 0.2 : modelValue === 'stormfly-testing' ? 0.3 : 0.6;
 
 export default function SpeciesLabelling({
   project,
@@ -146,6 +146,11 @@ export default function SpeciesLabelling({
         if (n.includes('mad')) {
           if (!options.some((o) => o.value === 'mad')) {
             options.push({ label: 'MAD AI', value: 'mad' });
+          }
+        }
+        if (n.includes('owl-d')) {
+          if (!options.some((o) => o.value === 'owl-d')) {
+            options.push({ label: 'OWL-D', value: 'owl-d' });
           }
         }
         if (n.includes('stormfly-testing')) {
