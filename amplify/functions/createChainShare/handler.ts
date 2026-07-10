@@ -206,6 +206,7 @@ const CHAIN_LOCATION_SOURCES = new Set([
   'heatmap',
   'mad-v2',
   'stormfly-testing',
+  'owl-d',
 ]);
 
 interface PagedList<T> {

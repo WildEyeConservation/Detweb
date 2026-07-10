@@ -13,6 +13,15 @@ export interface ProgressType {
 }
 
 type ClientType = DataClient;
+export type BackendOutputs = Omit<typeof outputs, 'custom'> & {
+  custom: typeof outputs.custom & {
+    owlDDetectorTaskQueueUrl: string;
+  };
+};
+
+// The new custom output is written to amplify_outputs.json on deployment.
+const backendOutputs = outputs as BackendOutputs;
+
 type ModelType = keyof ClientType['models'];
 export type CRUDhook<T extends ModelType> = {
   data: Schema[T]['type'][];
@@ -24,49 +33,10 @@ export type AnnotationsHook = CRUDhook<'Annotation'>;
 
 export interface GlobalContextType {
   client: DataClient;
-  backend: typeof outputs;
+  backend: BackendOutputs;
   region: string;
   modalToShow: string | null;
   showModal: React.Dispatch<React.SetStateAction<string | null>>;
-}
-
-export interface UploadContextType {
-  task: {
-    newProject: boolean;
-    projectId: string;
-    fromStaleUpload?: boolean;
-    files: File[];
-    retryDelay: number;
-    resumeId?: string;
-    deleteId?: string;
-    pauseId?: string;
-  };
-  setTask: React.Dispatch<
-    React.SetStateAction<{
-      newProject: boolean;
-      projectId: string;
-      fromStaleUpload?: boolean;
-      files: File[];
-      retryDelay: number;
-      resumeId?: string;
-      deleteId?: string;
-      pauseId?: string;
-    }>
-  >;
-  progress: {
-    processed: number;
-    total: number;
-    isComplete: boolean;
-    error: string | null;
-  };
-  setProgress: React.Dispatch<
-    React.SetStateAction<{
-      processed: number;
-      total: number;
-      isComplete: boolean;
-      error: string | null;
-    }>
-  >;
 }
 
 export interface UserContextType {
@@ -197,10 +167,9 @@ export const ImageContext = createContext<ImageContextType | undefined>(
 export const TestingContext = createContext<TestingContextType | null>(null);
 // export const OrganizationContext =
 //   createContext<OrganizationContextType | null>(null);
-export const UploadContext = createContext<UploadContextType | null>(null);
 
 export const GlobalContext = createContext<GlobalContextType>({
-  backend: outputs,
+  backend: backendOutputs,
   region: outputs.auth.aws_region,
   client: limitedClient,
   showModal: () => {},

@@ -4,7 +4,25 @@ import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import { Construct } from 'constructs';
+
+function metricAutoscalingQueueDemand(
+  queue: sqs.Queue,
+  messagesPerWorker: number,
+): cloudwatch.IMetric {
+  const period = cdk.Duration.minutes(1);
+
+  return new cloudwatch.MathExpression({
+    expression: `MAX([visible, inFlight * ${messagesPerWorker}])`,
+    usingMetrics: {
+      visible: queue.metricApproximateNumberOfMessagesVisible({ period }),
+      inFlight: queue.metricApproximateNumberOfMessagesNotVisible({ period }),
+    },
+    period,
+    label: 'AutoscalingQueueDemand',
+  });
+}
 
 function createUserData(inputqueue: any,outputqueue: any) {
   const multipartUserData = new ec2.MultipartUserData();
@@ -46,6 +64,9 @@ type AutoProcessorProps={
   maxTasks?: number; // maximum desired ECS tasks to allow
   messagesPerTask?: number;
   allowSelfRequeue?: boolean;
+  visibilityTimeout?: cdk.Duration;
+  spotPrice?: string;
+  capacityRebalance?: boolean;
 }
 
 export class AutoProcessor extends Construct {
@@ -67,7 +88,7 @@ export class AutoProcessor extends Construct {
         maxReceiveCount: 3,
       },
       // Match expected scoutbot processing time; avoid re-delivery during work.
-      visibilityTimeout: cdk.Duration.minutes(30),
+      visibilityTimeout: props.visibilityTimeout ?? cdk.Duration.minutes(30),
     });
 
     // Create ECS Cluster
@@ -91,6 +112,8 @@ export class AutoProcessor extends Construct {
       desiredCapacity: 0,
       keyName: "wildcru2",
       associatePublicIpAddress: true, // Ensure instances get a public IP
+      spotPrice: props.spotPrice,
+      capacityRebalance: props.capacityRebalance,
       blockDevices: props.rootVolumeSize ? [
         {
           deviceName: '/dev/xvda',
@@ -160,7 +183,9 @@ export class AutoProcessor extends Construct {
     }
 
     scaling.scaleOnMetric('ScaleOnSQSMessages', {
-      metric: this.queue.metricApproximateNumberOfMessagesVisible({ period: cdk.Duration.minutes(1) }),
+      // Preserve the visible-backlog thresholds while ensuring the target
+      // capacity never drops below the number of workers processing messages.
+      metric: metricAutoscalingQueueDemand(this.queue, messagesPerTask),
       scalingSteps: steps,
       adjustmentType: autoscaling.AdjustmentType.EXACT_CAPACITY,
       evaluationPeriods: 1,
@@ -234,7 +259,7 @@ export class AutoProcessorEC2 extends Construct {
     }
 
     scaling.scaleOnMetric('ScaleOnSQSMessages', {
-      metric: processingQueue.metricApproximateNumberOfMessagesVisible({ period: cdk.Duration.minutes(1) }),
+      metric: metricAutoscalingQueueDemand(processingQueue, messagesPerInstance),
       scalingSteps: ec2Steps,
       adjustmentType: autoscaling.AdjustmentType.EXACT_CAPACITY,
       evaluationPeriods: 1,

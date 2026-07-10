@@ -92,6 +92,7 @@ const formatCount = (value: MaybeNumber): string =>
 const SHORT_NAME_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/lightglue/i, 'Lightglue'],
   [/stormfly/i, 'Stormfly'],
+  [/owl.?d/i, 'OWL-D'],
   [/elephant/i, 'Elephant Detector'],
   [/scoutbot/i, 'Scoutbot'],
   [/mad/i, 'MAD'],

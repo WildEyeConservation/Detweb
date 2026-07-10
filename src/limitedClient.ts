@@ -92,6 +92,23 @@ declare module '../amplify/shared/data-schema.generated' {
   interface OperationOptions {
     retry?: boolean;
   }
+
+  // amplify_outputs.json is refreshed by the next backend deployment. Keep the
+  // new operation typed locally until that generated introspection catches up.
+  interface DataMutations {
+    runOwlDDetector(
+      args: {
+        bucket: string;
+        images?: string[] | null;
+        landscape?: boolean | null;
+        projectId: string;
+        queueUrl: string;
+        rotation?: number | null;
+        setId: string;
+      },
+      options?: CustomOperationOptions
+    ): CustomOperationResult<unknown>;
+  }
 }
 
 // Recursive function to wrap client methods with retry logic

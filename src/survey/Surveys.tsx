@@ -1,6 +1,12 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
-import { UserContext, GlobalContext, UploadContext } from '../Context.tsx';
+import { UserContext, GlobalContext } from '../Context.tsx';
+import {
+  requestDelete,
+  requestResume,
+  useActiveUploadProjectId,
+  useUploadUi,
+} from '../upload/uploadUi.ts';
 import { Schema } from '../amplify/client-schema.ts';
 import { Card, Button, Form } from 'react-bootstrap';
 import MyTable from '../Table.tsx';
@@ -63,7 +69,9 @@ export default function Surveys() {
     isOrganizationAdmin,
     user,
   } = useContext(UserContext)!;
-  const { task, setTask } = useContext(UploadContext)!;
+  const activeUploadProjectId = useActiveUploadProjectId();
+  const { deletingProjectId } = useUploadUi();
+  const uploadActive = activeUploadProjectId !== null;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState(0);
@@ -675,10 +683,7 @@ export default function Surveys() {
                 variant='info'
                 onClick={() => {
                   if (showResumeButton) {
-                    setTask((task) => ({
-                      ...task,
-                      resumeId: project.id,
-                    }));
+                    requestResume({ id: project.id, name: project.name });
                     return;
                   }
 
@@ -694,14 +699,9 @@ export default function Surveys() {
               <Button
                 size={size}
                 variant='danger'
-                disabled={
-                  task.pauseId === project.id || task.deleteId === project.id
-                }
+                disabled={deletingProjectId === project.id}
                 onClick={() => {
-                  setTask((task) => ({
-                    ...task,
-                    deleteId: project.id,
-                  }));
+                  requestDelete({ id: project.id, name: project.name });
                 }}
               >
                 <Trash />
@@ -731,12 +731,12 @@ export default function Surveys() {
     const hasJobs = hasQueueOrRegisterJob || hasIndividualIdJob;
 
     const showResumeButton =
-      !task.projectId &&
+      !uploadActive &&
       project.status === 'uploading' &&
       hasUploadedFiles[project.id];
 
     const showPauseButton =
-      task.projectId === project.id && project.status === 'uploading';
+      activeUploadProjectId === project.id && project.status === 'uploading';
 
     const isStale =
       project.status === 'uploading' &&
@@ -892,12 +892,12 @@ export default function Surveys() {
     const hasJobs = hasQueueOrRegisterJob || hasIndividualIdJob;
 
     const showResumeButton =
-      !task.projectId &&
+      !uploadActive &&
       project.status === 'uploading' &&
       hasUploadedFiles[project.id];
 
     const showPauseButton =
-      task.projectId === project.id && project.status === 'uploading';
+      activeUploadProjectId === project.id && project.status === 'uploading';
 
     const isStale =
       project.status === 'uploading' &&

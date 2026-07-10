@@ -27,7 +27,6 @@ import {
 //import {TaskProgressHandler} from './TaskProgressHandler';
 import UploadManager from './upload/UploadManager.tsx';
 import ClientLogger from './ClientLogger.tsx';
-import { Upload } from './UserContext.tsx';
 
 configure({ ignoreRepeatedEventsWhenKeyHeldDown: false });
 
@@ -117,20 +116,16 @@ function App({ signOut = () => { }, user }: AppProps) {
     continueOnMobile ? (
       <User user={user! as any} cognitoGroups={cognitoGroups}>
         {user?.userId && <ClientLogger userId={user.userId} />}
-        <Upload>
-          <UploadManager />
-          <MainNavigation signOut={signOut} />
-        </Upload>
+        <UploadManager />
+        <MainNavigation signOut={signOut} />
       </User>
     ) : (
       <>
         <BrowserView>
           <User user={user! as any} cognitoGroups={cognitoGroups}>
             {user?.userId && <ClientLogger userId={user.userId} />}
-            <Upload>
-              <UploadManager />
-              <MainNavigation signOut={signOut} />
-            </Upload>
+            <UploadManager />
+            <MainNavigation signOut={signOut} />
           </User>
         </BrowserView>
         <MobileView>

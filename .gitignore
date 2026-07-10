@@ -11,6 +11,7 @@ node_modules/
 !amplify/layers/
 dist
 dist-ssr
+docs/
 *.local
 
 # Editor directories and files

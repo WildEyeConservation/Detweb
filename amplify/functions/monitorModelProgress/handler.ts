@@ -489,6 +489,11 @@ export const handler: Handler = async (event, context) => {
         await updateProgress(project, projectImages, 'stormfly-testing');
       }
 
+      if (project.status?.includes('owl-d')) {
+        console.log(`Project ${project.id} is running OWL-D`);
+        await updateProgress(project, projectImages, 'owl-d');
+      }
+
       // Finalize elephant detector results reported as pointFinder progress.
       if (project.status?.includes('pointFinder')) {
         console.log(`Project ${project.id} is running pointFinder`);

@@ -221,26 +221,25 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
           });
         }
         break;
-      case 'stormfly-testing':
+      case 'owl-d':
         for (let i = 0; i < unprocessedImages.length; i += BATCH_SIZE) {
           const batch = unprocessedImages.slice(i, i + BATCH_SIZE);
           const batchStrings = batch.map(
             (image) => `${image.id}---${makeKey(image.originalPath)}`
           );
 
-          // The generated client schema is refreshed during deployment.
-          client.mutations.runStormflyDetector({
+          client.mutations.runOwlDDetector({
             projectId,
             images: batchStrings,
             setId: locationSet.id,
             bucket: backend.storage.buckets[1].bucket_name,
-            queueUrl: backend.custom.stormflyDetectorTaskQueueUrl,
+            queueUrl: backend.custom.owlDDetectorTaskQueueUrl,
           }, { retry: false });
         }
 
         await client.models.Project.update({
           id: projectId,
-          status: 'processing-stormfly-testing',
+          status: 'processing-owl-d',
         });
         break;
     }
@@ -267,7 +266,7 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
               { label: 'ScoutBot', value: 'scoutbotv3' },
               { label: 'Elephant Detection Nadir', value: 'elephant' },
               { label: 'MAD', value: 'mad' },
-              { label: 'Stormfly (testing model)', value: 'stormfly-testing' },
+              { label: 'OWL-D', value: 'owl-d' },
             ]}
             placeholder='Select a model'
             className='text-black'

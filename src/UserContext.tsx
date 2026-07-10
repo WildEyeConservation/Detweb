@@ -13,7 +13,6 @@ import {
   ManagementContextType,
   ProgressContext,
   ProgressType,
-  UploadContext,
 } from './Context.tsx';
 import { useOptimisticUpdates, useQueues } from './useOptimisticUpdates.tsx';
 import { useQuery } from '@tanstack/react-query';
@@ -91,52 +90,6 @@ export function Project({
         {currentProject && children}
       </ProjectContext.Provider>
     )
-  );
-}
-
-export function Upload({ children }: { children: React.ReactNode }) {
-  const [task, setTask] = useState<{
-    projectId: string;
-    files: File[];
-    retryDelay: number;
-    resumeId?: string;
-    deleteId?: string;
-    pauseId?: string;
-    fromStaleUpload?: boolean;
-    newProject: boolean;
-  }>({
-    projectId: '',
-    files: [],
-    retryDelay: 0,
-    resumeId: undefined,
-    deleteId: undefined,
-    pauseId: undefined,
-    fromStaleUpload: false,
-    newProject: false,
-  });
-  const [progress, setProgress] = useState<{
-    processed: number;
-    total: number;
-    isComplete: boolean;
-    error: string | null;
-  }>({
-    processed: 0,
-    total: 0,
-    isComplete: false,
-    error: null,
-  });
-
-  return (
-    <UploadContext.Provider
-      value={{
-        task,
-        progress,
-        setTask,
-        setProgress,
-      }}
-    >
-      {children}
-    </UploadContext.Provider>
   );
 }
 
