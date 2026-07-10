@@ -532,7 +532,7 @@ if (enableEcs) {
             process.env.OWL_D_MODEL_SHA256 ??
             'e28fc06d28fe010faefaffc5eb9bd0b85f98dad0805fca9f5256562cc3403d5b',
           OWL_VARIANT: 'owl-d',
-          OWL_THRESHOLD: process.env.OWL_D_THRESHOLD ?? '0.2',
+          OWL_THRESHOLD: process.env.OWL_D_THRESHOLD ?? '0.05',
           OWL_AMP: process.env.OWL_D_AMP ?? 'fp16',
           OWL_BATCH_SIZE: process.env.OWL_D_BATCH_SIZE ?? '1',
           OWL_OVERLAP: process.env.OWL_D_OVERLAP ?? '160',

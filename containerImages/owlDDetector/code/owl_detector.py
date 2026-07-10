@@ -132,7 +132,7 @@ def _image_tensor(image):
 
 
 class OwlDDetector:
-    def __init__(self, model_path, threshold=0.2):
+    def __init__(self, model_path, threshold=0.05):
         if not os.path.isfile(model_path):
             raise FileNotFoundError(f'OWL-D checkpoint not found: {model_path}')
 
