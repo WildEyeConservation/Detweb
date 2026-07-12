@@ -1,4 +1,11 @@
-import { useEffect, useState, useContext, useCallback, useMemo } from 'react';
+import {
+  useEffect,
+  useState,
+  useContext,
+  useCallback,
+  useMemo,
+  useRef,
+} from 'react';
 // import moment from 'moment'
 // import {MD5,enc} from 'crypto-js'
 import Modal from 'react-bootstrap/Modal';
@@ -9,6 +16,12 @@ import { GlobalContext, UserContext } from './Context.tsx';
 import { uploadOrchestrator } from './upload/core/UploadOrchestrator.ts';
 import { saveDirectoryHandle } from './upload/core/dirHandles.ts';
 import type { UploadBackend } from './upload/core/types.ts';
+import {
+  orientationCorrectionFor,
+  orientationGroupForDimensions,
+  type CameraOrientationRotations,
+  type ImageOrientationGroup,
+} from './types/Orientation.ts';
 import exifr from 'exifr';
 import { DateTime } from 'luxon';
 import { fetchAllPaginatedResults } from './utils';
@@ -27,6 +40,16 @@ import { Schema } from './amplify/client-schema.ts';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css';
 import UTM from 'utm-latlng';
+import {
+  buildGpsIndex,
+  bracketTimestamp,
+  interpolateAt,
+  minMaxOf,
+} from './survey/new-survey/gpsIndex';
+import OrientationReview, {
+  OrientationCameraGroup,
+} from './survey/new-survey/OrientationReview';
+import StepIndicator from './survey/new-survey/StepIndicator';
 
 // Configure a dedicated storage instance for file paths
 const fileStore = localforage.createInstance({
@@ -46,6 +69,15 @@ interface FilesUploadComponentProps {
   fromStaleUpload?: boolean;
 }
 
+// Wizard steps the upload form is split into. 'none' hides every section
+// (used while the parent wizard shows its own step, e.g. survey details).
+export type UploadWizardStep =
+  | 'images'
+  | 'georeference'
+  | 'cameras'
+  | 'review'
+  | 'none';
+
 // Shared props for both modal and form versions
 interface FilesUploadBaseProps {
   project?: { id: string; name: string };
@@ -58,6 +90,16 @@ interface FilesUploadBaseProps {
   setGpsDataReady?: React.Dispatch<React.SetStateAction<boolean>>;
   newProject?: boolean;
   onShapefileParsed?: (latLngs: [number, number][]) => void;
+  /**
+   * Wizard step whose section is visible. Undefined renders all sections at
+   * once (legacy single-page layout). State lives here regardless of the
+   * visible step, so scanning/uploads continue while the user navigates.
+   */
+  currentStep?: UploadWizardStep;
+  /** Signals when the images step is complete (files picked and scanned). */
+  setImagesReady?: React.Dispatch<React.SetStateAction<boolean>>;
+  /** Values captured by a parent-owned wizard step, shown in the review summary. */
+  summaryDetails?: { label: string; value: string }[];
 }
 
 // Props for form-compatible version
@@ -136,6 +178,9 @@ export function FileUploadCore({
   newProject = true,
   onShapefileParsed,
   project,
+  currentStep,
+  setImagesReady,
+  summaryDetails,
 }: FilesUploadBaseProps) {
   const [name, setName] = useState('');
   const { client, backend } = useContext(GlobalContext)!;
@@ -170,6 +215,10 @@ export function FileUploadCore({
     {}
   );
   const [masks, setMasks] = useState<number[][][]>([]);
+  // Independent CCW corrections for each camera's landscape and portrait
+  // source-image groups; baked into the stored JPEG before processing.
+  const [cameraRotations, setCameraRotations] =
+    useState<CameraOrientationRotations>({});
   // toUploadFiles / toUploadSize are derived later via useMemo so they
   // automatically reflect the latest existing-image and map-filter state.
   const [existingSurveyImages, setExistingSurveyImages] = useState<
@@ -241,6 +290,23 @@ export function FileUploadCore({
   // UTM handling
   const [useUtm, setUseUtm] = useState(false);
   const [utmColumn, setUtmColumn] = useState<string | undefined>(undefined);
+
+  // Track visited wizard steps so heavy children (the MapLibre map, the
+  // Leaflet mask editor) only mount once their section is actually visible —
+  // maps initialise with a broken 0x0 canvas inside display:none containers.
+  const visitedStepsRef = useRef<Set<UploadWizardStep>>(new Set());
+  if (currentStep && currentStep !== 'none') {
+    visitedStepsRef.current.add(currentStep);
+  }
+  const stepVisited = (step: UploadWizardStep) =>
+    currentStep === undefined || visitedStepsRef.current.has(step);
+  // Class-based visibility: Bootstrap's d-flex is display:flex !important,
+  // which would defeat an inline display:none, so hidden sections drop the
+  // flex class entirely and use d-none instead.
+  const sectionClass = (step: UploadWizardStep) =>
+    currentStep === undefined || currentStep === step
+      ? 'd-flex flex-column gap-2'
+      : 'd-none';
 
   // Helper function to convert altitude from feet to meters if needed
   const convertAltitude = (altitude: number): number => {
@@ -321,6 +387,90 @@ export function FileUploadCore({
     () => toUploadFiles.reduce((acc, f) => acc + f.size, 0),
     [toUploadFiles]
   );
+
+  // Indexed lookups over the working (filtered) and full GPS row sets. Every
+  // per-image matcher below goes through these instead of scanning the row
+  // arrays, which turns several O(n^2) paths into O(n log n) at ~100k images.
+  const csvIndex = useMemo(
+    () => buildGpsIndex(csvData?.data ?? []),
+    [csvData]
+  );
+  const fullCsvIndex = useMemo(
+    () => buildGpsIndex(fullCsvData ?? []),
+    [fullCsvData]
+  );
+
+  // One landscape/portrait group per camera. Grouping uses the source image's
+  // displayed dimensions after its existing EXIF orientation is respected.
+  const orientationCameraGroups = useMemo<OrientationCameraGroup[]>(() => {
+    const makeGroups = (cameraName: string, files: File[]) => {
+      const grouped: Record<ImageOrientationGroup, File[]> = {
+        landscape: [],
+        portrait: [],
+      };
+      for (const file of files) {
+        const meta = exifData[file.webkitRelativePath];
+        if (!meta) continue;
+        grouped[
+          orientationGroupForDimensions(meta.width, meta.height)
+        ].push(file);
+      }
+      return (['landscape', 'portrait'] as const)
+        .filter((orientationGroup) => grouped[orientationGroup].length > 0)
+        .map((orientationGroup) => ({
+          cameraName,
+          orientationGroup,
+          files: grouped[orientationGroup],
+        }));
+    };
+
+    if (filteredImageFiles.length === 0) return [];
+    if (!multipleCameras || !cameraSelection || cameraSelection[1].length === 0) {
+      return makeGroups('Survey Camera', filteredImageFiles);
+    }
+
+    const filesByCamera = new Map<string, File[]>();
+    for (const folderName of cameraSelection[1]) {
+      const effectiveName =
+        (useFolderCameraMapping && folderCameraMapping[folderName]) ||
+        folderName;
+      const files = filteredImageFiles.filter((file) => {
+        const segments = file.webkitRelativePath.split('/');
+        segments.pop(); // filename
+        return segments.includes(folderName);
+      });
+      filesByCamera.set(effectiveName, [
+        ...(filesByCamera.get(effectiveName) ?? []),
+        ...files,
+      ]);
+    }
+    return Array.from(filesByCamera.entries()).flatMap(
+      ([cameraName, files]) => makeGroups(cameraName, files)
+    );
+  }, [
+    filteredImageFiles,
+    exifData,
+    multipleCameras,
+    cameraSelection,
+    useFolderCameraMapping,
+    folderCameraMapping,
+  ]);
+
+  const orientationRotationByPath = useMemo(() => {
+    const result = new Map<string, number>();
+    for (const group of orientationCameraGroups) {
+      const rotation = orientationCorrectionFor(
+        cameraRotations,
+        group.cameraName,
+        group.orientationGroup
+      );
+      if (rotation % 360 === 0) continue;
+      for (const file of group.files) {
+        result.set(file.webkitRelativePath, rotation);
+      }
+    }
+    return result;
+  }, [orientationCameraGroups, cameraRotations]);
 
   // Handler to confirm column mapping before processing
   const handleConfirmMapping = () => {
@@ -460,243 +610,259 @@ export function FileUploadCore({
       setScanningEXIF(true);
       setFailedFiles([]); // Clear previous failures when starting new scan
 
-      // Get EXIF metadata for each file (sample first, then selective fast path if no GPS)
-      const sampleSize = Math.min(5, mapFiles.length);
-      const sampleFiles = mapFiles.slice(0, sampleSize);
-      const restFiles = mapFiles.slice(sampleSize);
-
-      // Helper to safely extract EXIF with error handling and validation
-      const safeExtractExif = async (
-        file: File,
-        extractor: (file: File) => Promise<ImageExif>
-      ): Promise<ImageExif | null> => {
-        try {
-          const exif = await extractor(file);
-
-          // Validation checks for corrupted files
-          const validationErrors: string[] = [];
-
-          // Check 1: Image dimensions must be valid
-          if (!exif.width || !exif.height || exif.width <= 0 || exif.height <= 0) {
-            validationErrors.push('Invalid image dimensions');
-          }
-
-          // Check 2: Timestamp must be valid (not 0, not NaN, and reasonable date)
-          if (!exif.timestamp || !Number.isFinite(exif.timestamp)) {
-            validationErrors.push('Invalid timestamp');
-          } else {
-            // Check if timestamp is reasonable (between 1970 and 2100)
-            const minTimestamp = new Date('1970-01-01').getTime();
-            const maxTimestamp = new Date('2100-01-01').getTime();
-            if (exif.timestamp < minTimestamp || exif.timestamp > maxTimestamp) {
-              validationErrors.push('Timestamp out of valid range');
-            }
-          }
-
-          // Check 3: File size should be reasonable for an image (at least 1KB)
-          if (file.size < 1024) {
-            validationErrors.push('File size suspiciously small');
-          }
-
-          // Check 4: File size should not be 0
-          if (file.size === 0) {
-            validationErrors.push('File is empty');
-          }
-
-          // If validation failed, treat as corrupted file
-          if (validationErrors.length > 0) {
-            const errorMessage = validationErrors.join('; ');
-            console.error(
-              `File validation failed for ${file.webkitRelativePath}:`,
-              errorMessage
-            );
-            setFailedFiles((prev) => [
-              ...prev,
-              {
-                path: file.webkitRelativePath,
-                error: errorMessage,
-              },
-            ]);
-            return null;
-          }
-
-          return exif;
-        } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : String(error);
-          console.error(
-            `Failed to extract EXIF from ${file.webkitRelativePath}:`,
-            error
-          );
-          setFailedFiles((prev) => [
-            ...prev,
-            {
-              path: file.webkitRelativePath,
-              error: errorMessage || 'Unknown error',
-            },
-          ]);
-          return null;
+      // Progress is accumulated locally and flushed to state on a timer: one
+      // state update per file re-renders the whole form ~100k times on large
+      // surveys and locks the tab.
+      const progress = {
+        scanned: 0,
+        failed: [] as { path: string; error: string }[],
+        flushedFailures: 0,
+      };
+      const flushProgress = () => {
+        setScanCount(progress.scanned);
+        if (progress.failed.length !== progress.flushedFailures) {
+          progress.flushedFailures = progress.failed.length;
+          setFailedFiles([...progress.failed]);
         }
       };
+      const flushTimer = setInterval(flushProgress, 250);
 
-      // Sample with full EXIF to check for GPS
-      const sampleResults = await Promise.all(
-        sampleFiles.map(async (file) => {
-          const exif = await safeExtractExif(file, getExifmeta);
-          if (!exif) return null;
+      try {
+        // Get EXIF metadata for each file (sample first, then selective fast path if no GPS)
+        const sampleSize = Math.min(5, mapFiles.length);
+        const sampleFiles = mapFiles.slice(0, sampleSize);
+        const restFiles = mapFiles.slice(sampleSize);
 
-          // Validate and convert GPS data
-          let gpsData: GpsData | null = null;
-          if (exif.gpsData && exif.gpsData.alt && exif.gpsData.lat && exif.gpsData.lng) {
-            const lat = Number(exif.gpsData.lat);
-            const lng = Number(exif.gpsData.lng);
-            // Only set GPS data if coordinates are valid and in range
-            if (
-              Number.isFinite(lat) &&
-              Number.isFinite(lng) &&
-              lat >= -90 &&
-              lat <= 90 &&
-              lng >= -180 &&
-              lng <= 180
-            ) {
-              gpsData = {
-                lat,
-                lng,
-                alt: convertAltitude(Number(exif.gpsData.alt)),
-              };
+        // Helper to safely extract EXIF with error handling and validation
+        const safeExtractExif = async (
+          file: File,
+          extractor: (file: File) => Promise<ImageExif>
+        ): Promise<ImageExif | null> => {
+          try {
+            const exif = await extractor(file);
+
+            // Validation checks for corrupted files
+            const validationErrors: string[] = [];
+
+            // Check 1: Image dimensions must be valid
+            if (!exif.width || !exif.height || exif.width <= 0 || exif.height <= 0) {
+              validationErrors.push('Invalid image dimensions');
             }
-          }
 
-          const updatedExif: ImageExif = {
-            ...exif,
-            width: exif.width || 0,
-            height: exif.height || 0,
-            gpsData,
-          };
-          return updatedExif;
-        })
-      );
-
-      // Filter out null results (failed files)
-      const sampleRaw: ImageExif[] = sampleResults.filter(
-        (exif): exif is ImageExif => exif !== null
-      );
-      // Update count for all attempts (including failures) to show accurate progress
-      setScanCount((prev) => prev + sampleResults.length);
-
-      const gpsLikely = sampleRaw.some((x) => x.gpsData !== null);
-      const extractor = gpsLikely ? getExifmeta : getTimestampOnlyExif;
-
-      for (const updatedExif of sampleRaw) {
-        if (updatedExif.gpsData === null) {
-          missing = true;
-        } else {
-          gpsToCSVData.push({
-            timestamp: updatedExif.timestamp,
-            lat: updatedExif.gpsData.lat as number,
-            lng: updatedExif.gpsData.lng as number,
-            alt: convertAltitude(updatedExif.gpsData.alt as number),
-          });
-        }
-      }
-
-      // Process the rest with limited concurrency using chosen extractor
-      const restResults = await mapWithLimit(
-        restFiles,
-        4,
-        async (file) => {
-          const exif = await safeExtractExif(file as File, extractor);
-          if (!exif) return null;
-
-          // Validate and convert GPS data
-          let gpsData: GpsData | null = null;
-          if (
-            exif.gpsData &&
-            (exif.gpsData as any).alt !== undefined &&
-            (exif.gpsData as any).lat !== undefined &&
-            (exif.gpsData as any).lng !== undefined
-          ) {
-            const lat = Number((exif.gpsData as any).lat);
-            const lng = Number((exif.gpsData as any).lng);
-            // Only set GPS data if coordinates are valid and in range
-            if (
-              Number.isFinite(lat) &&
-              Number.isFinite(lng) &&
-              lat >= -90 &&
-              lat <= 90 &&
-              lng >= -180 &&
-              lng <= 180
-            ) {
-              gpsData = {
-                lat,
-                lng,
-                alt: convertAltitude(Number((exif.gpsData as any).alt)),
-              };
+            // Check 2: Timestamp must be valid (not 0, not NaN, and reasonable date)
+            if (!exif.timestamp || !Number.isFinite(exif.timestamp)) {
+              validationErrors.push('Invalid timestamp');
+            } else {
+              // Check if timestamp is reasonable (between 1970 and 2100)
+              const minTimestamp = new Date('1970-01-01').getTime();
+              const maxTimestamp = new Date('2100-01-01').getTime();
+              if (exif.timestamp < minTimestamp || exif.timestamp > maxTimestamp) {
+                validationErrors.push('Timestamp out of valid range');
+              }
             }
+
+            // Check 3: File size should be reasonable for an image (at least 1KB)
+            if (file.size < 1024) {
+              validationErrors.push('File size suspiciously small');
+            }
+
+            // Check 4: File size should not be 0
+            if (file.size === 0) {
+              validationErrors.push('File is empty');
+            }
+
+            // If validation failed, treat as corrupted file
+            if (validationErrors.length > 0) {
+              const errorMessage = validationErrors.join('; ');
+              console.error(
+                `File validation failed for ${file.webkitRelativePath}:`,
+                errorMessage
+              );
+              progress.failed.push({
+                path: file.webkitRelativePath,
+                error: errorMessage,
+              });
+              return null;
+            }
+
+            return exif;
+          } catch (error) {
+            const errorMessage =
+              error instanceof Error ? error.message : String(error);
+            console.error(
+              `Failed to extract EXIF from ${file.webkitRelativePath}:`,
+              error
+            );
+            progress.failed.push({
+              path: file.webkitRelativePath,
+              error: errorMessage || 'Unknown error',
+            });
+            return null;
           }
+        };
 
-          const updatedExif: ImageExif = {
-            ...exif,
-            width: exif.width || 0,
-            height: exif.height || 0,
-            gpsData,
-          };
-          return updatedExif;
-        },
-        () => setScanCount((prev) => prev + 1)
-      );
+        // Sample with full EXIF to check for GPS
+        const sampleResults = await Promise.all(
+          sampleFiles.map(async (file) => {
+            const exif = await safeExtractExif(file, getExifmeta);
+            if (!exif) return null;
 
-      // Filter out null results (failed files)
-      const restRaw: ImageExif[] = restResults.filter(
-        (exif): exif is ImageExif => exif !== null
-      );
+            // Validate and convert GPS data
+            let gpsData: GpsData | null = null;
+            if (exif.gpsData && exif.gpsData.alt && exif.gpsData.lat && exif.gpsData.lng) {
+              const lat = Number(exif.gpsData.lat);
+              const lng = Number(exif.gpsData.lng);
+              // Only set GPS data if coordinates are valid and in range
+              if (
+                Number.isFinite(lat) &&
+                Number.isFinite(lng) &&
+                lat >= -90 &&
+                lat <= 90 &&
+                lng >= -180 &&
+                lng <= 180
+              ) {
+                gpsData = {
+                  lat,
+                  lng,
+                  alt: convertAltitude(Number(exif.gpsData.alt)),
+                };
+              }
+            }
 
-      for (const updatedExif of restRaw) {
-        if (updatedExif.gpsData === null) {
-          missing = true;
-        } else {
-          gpsToCSVData.push({
-            timestamp: updatedExif.timestamp,
-            lat: (updatedExif.gpsData as any).lat as number,
-            lng: (updatedExif.gpsData as any).lng as number,
-            alt: convertAltitude((updatedExif.gpsData as any).alt as number),
-          });
+            const updatedExif: ImageExif = {
+              ...exif,
+              width: exif.width || 0,
+              height: exif.height || 0,
+              gpsData,
+            };
+            return updatedExif;
+          })
+        );
+
+        // Filter out null results (failed files)
+        const sampleRaw: ImageExif[] = sampleResults.filter(
+          (exif): exif is ImageExif => exif !== null
+        );
+        // Update count for all attempts (including failures) to show accurate progress
+        progress.scanned += sampleResults.length;
+
+        const gpsLikely = sampleRaw.some((x) => x.gpsData !== null);
+        const extractor = gpsLikely ? getExifmeta : getTimestampOnlyExif;
+
+        for (const updatedExif of sampleRaw) {
+          if (updatedExif.gpsData === null) {
+            missing = true;
+          } else {
+            gpsToCSVData.push({
+              timestamp: updatedExif.timestamp,
+              lat: updatedExif.gpsData.lat as number,
+              lng: updatedExif.gpsData.lng as number,
+              alt: convertAltitude(updatedExif.gpsData.alt as number),
+            });
+          }
         }
-      }
 
-      const exifData: ImageExif[] = [...sampleRaw, ...restRaw];
+        // Process the rest with limited concurrency using chosen extractor
+        const restResults = await mapWithLimit(
+          restFiles,
+          8,
+          async (file) => {
+            const exif = await safeExtractExif(file as File, extractor);
+            if (!exif) return null;
 
-      setScanningEXIF(false);
+            // Validate and convert GPS data
+            let gpsData: GpsData | null = null;
+            if (
+              exif.gpsData &&
+              (exif.gpsData as any).alt !== undefined &&
+              (exif.gpsData as any).lat !== undefined &&
+              (exif.gpsData as any).lng !== undefined
+            ) {
+              const lat = Number((exif.gpsData as any).lat);
+              const lng = Number((exif.gpsData as any).lng);
+              // Only set GPS data if coordinates are valid and in range
+              if (
+                Number.isFinite(lat) &&
+                Number.isFinite(lng) &&
+                lat >= -90 &&
+                lat <= 90 &&
+                lng >= -180 &&
+                lng <= 180
+              ) {
+                gpsData = {
+                  lat,
+                  lng,
+                  alt: convertAltitude(Number((exif.gpsData as any).alt)),
+                };
+              }
+            }
 
-      setMissingGpsData(missing);
-      if (!missing) {
-        setCsvData({
-          data: gpsToCSVData,
-        });
-        setFullCsvData(gpsToCSVData);
-        setAssociateByTimestamp(true);
-        setMinTimestamp(
-          Math.min(...gpsToCSVData.map((row) => row.timestamp || 0))
+            const updatedExif: ImageExif = {
+              ...exif,
+              width: exif.width || 0,
+              height: exif.height || 0,
+              gpsData,
+            };
+            return updatedExif;
+          },
+          () => {
+            progress.scanned += 1;
+          }
         );
-        setMaxTimestamp(
-          Math.max(...gpsToCSVData.map((row) => row.timestamp || 0))
+
+        // Filter out null results (failed files)
+        const restRaw: ImageExif[] = restResults.filter(
+          (exif): exif is ImageExif => exif !== null
         );
+
+        for (const updatedExif of restRaw) {
+          if (updatedExif.gpsData === null) {
+            missing = true;
+          } else {
+            gpsToCSVData.push({
+              timestamp: updatedExif.timestamp,
+              lat: (updatedExif.gpsData as any).lat as number,
+              lng: (updatedExif.gpsData as any).lng as number,
+              alt: convertAltitude((updatedExif.gpsData as any).alt as number),
+            });
+          }
+        }
+
+        const exifData: ImageExif[] = [...sampleRaw, ...restRaw];
+
+        setMissingGpsData(missing);
+        if (!missing) {
+          setCsvData({
+            data: gpsToCSVData,
+          });
+          setFullCsvData(gpsToCSVData);
+          setAssociateByTimestamp(true);
+          const tsRange = minMaxOf(
+            gpsToCSVData.map((row) => row.timestamp || 0)
+          );
+          setMinTimestamp(tsRange?.min ?? 0);
+          setMaxTimestamp(tsRange?.max ?? 0);
+        }
+
+        setExifData(
+          (exifData as ImageExif[]).reduce((acc, x) => {
+            acc[x.key] = x;
+            return acc;
+          }, {} as ExifData)
+        );
+
+        // Extract common timezone from EXIF data
+        const timezones = (exifData as ImageExif[])
+          .map((e) => e.timezone)
+          .filter(Boolean) as string[];
+        const mostCommonTimezone =
+          timezones.length > 0 ? timezones[0] : undefined;
+        setCommonTimezone(mostCommonTimezone);
+      } finally {
+        clearInterval(flushTimer);
+        flushProgress();
+        setScanningEXIF(false);
       }
-
-      setExifData(
-        (exifData as ImageExif[]).reduce((acc, x) => {
-          acc[x.key] = x;
-          return acc;
-        }, {} as ExifData)
-      );
-
-      // Extract common timezone from EXIF data
-      const timezones = (exifData as ImageExif[])
-        .map((e) => e.timezone)
-        .filter(Boolean) as string[];
-      const mostCommonTimezone =
-        timezones.length > 0 ? timezones[0] : undefined;
-      setCommonTimezone(mostCommonTimezone);
 
     }
     if (imageFiles.length > 0) {
@@ -728,10 +894,12 @@ export function FileUploadCore({
     }
   }, [multipleCameras]);
 
-  // Reset the folder -> camera mapping whenever the detected folder names change
+  // Reset the folder -> camera mapping (and any orientation corrections keyed
+  // by those cameras) whenever the detected folder names change
   const folderNamesKey = cameraSelection?.[1].join('|') ?? '';
   useEffect(() => {
     setFolderCameraMapping({});
+    setCameraRotations({});
   }, [folderNamesKey]);
 
   useEffect(() => {
@@ -1100,56 +1268,6 @@ export function FileUploadCore({
     return false;
   }
 
-  const interpolateGpsData = (
-    csvData: { timestamp: number; lat: number; lng: number; alt: number }[],
-    queryTimestamp: number
-  ) => {
-    if (csvData.length === 0) {
-      throw new Error('No GPS data available for interpolation.');
-    }
-
-    const sortedCsvData = csvData.sort((a, b) => a.timestamp - b.timestamp);
-
-    let low = 0;
-    let high = sortedCsvData.length - 1;
-
-    while (low <= high) {
-      const mid = Math.floor((low + high) / 2);
-      const midData = sortedCsvData[mid];
-
-      if (midData.timestamp === queryTimestamp) {
-        return midData;
-      } else if (midData.timestamp < queryTimestamp) {
-        low = mid + 1;
-      } else {
-        high = mid - 1;
-      }
-    }
-
-    // If we exit the loop without finding an exact match, interpolate
-    if (
-      low > 0 &&
-      sortedCsvData[low - 1].timestamp < queryTimestamp &&
-      sortedCsvData[low].timestamp > queryTimestamp
-    ) {
-      const prevData = sortedCsvData[low - 1];
-      const nextData = sortedCsvData[low];
-      const gap = nextData.timestamp - prevData.timestamp;
-      const pos = (queryTimestamp - prevData.timestamp) / gap;
-      const latitude = prevData.lat * (1 - pos) + nextData.lat * pos;
-      const longitude = prevData.lng * (1 - pos) + nextData.lng * pos;
-      const altitude = prevData.alt * (1 - pos) + nextData.alt * pos;
-      return {
-        timestamp: queryTimestamp,
-        lat: latitude,
-        lng: longitude,
-        alt: altitude,
-      };
-    } else {
-      throw new Error('Extrapolation required for GPS data interpolation.');
-    }
-  };
-
   // Fast path: read only timestamp and a few lightweight fields using exifr
   async function getTimestampOnlyExif(file: File) {
     const tags = await exifr.parse(file, {
@@ -1253,9 +1371,7 @@ export function FileUploadCore({
 
       if (associateByTimestamp) {
         const timestamp = exifmeta.timestamp;
-        const exactRow = csvData.data.find(
-          (row) => row.timestamp === timestamp
-        );
+        const exactRow = csvIndex.byTimestamp.get(timestamp);
         if (exactRow && hasValidLatLng(exactRow.lat, exactRow.lng)) {
           const alt =
             typeof exactRow.alt === 'number' && Number.isFinite(exactRow.alt)
@@ -1269,62 +1385,24 @@ export function FileUploadCore({
           return normalized;
         }
 
-        if (
-          typeof timestamp === 'number' &&
-          csvData.data.some((row) => typeof row.timestamp === 'number') &&
-          timestamp >= minTimestamp &&
-          timestamp <= maxTimestamp
-        ) {
-          try {
-            const interpolationSource = csvData.data
-              .filter(
-                (
-                  row
-                ): row is {
-                  timestamp: number;
-                  lat: number;
-                  lng: number;
-                  alt: number;
-                } => typeof row.timestamp === 'number'
-              )
-              .map((row) => ({
-                timestamp: row.timestamp,
-                lat: row.lat,
-                lng: row.lng,
-                alt: row.alt,
-              }));
-
-            if (interpolationSource.length >= 2) {
-              const interpolated = interpolateGpsData(
-                interpolationSource,
-                timestamp
-              );
-              if (hasValidLatLng(interpolated.lat, interpolated.lng)) {
-                const alt =
-                  typeof interpolated.alt === 'number' &&
-                    Number.isFinite(interpolated.alt)
-                    ? interpolated.alt
-                    : undefined;
-                const normalized: NormalizedGps = {
-                  lat: interpolated.lat,
-                  lng: interpolated.lng,
-                  alt,
-                };
-                return normalized;
-              }
-            }
-          } catch {
-            return null;
-          }
+        const interpolated = interpolateAt(csvIndex, timestamp);
+        if (interpolated && hasValidLatLng(interpolated.lat, interpolated.lng)) {
+          const alt = Number.isFinite(interpolated.alt)
+            ? interpolated.alt
+            : undefined;
+          const normalized: NormalizedGps = {
+            lat: interpolated.lat,
+            lng: interpolated.lng,
+            alt,
+          };
+          return normalized;
         }
 
         return null;
       }
 
-      const csvRow = csvData.data.find(
-        (row) =>
-          row.filepath?.toLowerCase() ===
-          sourceFile.webkitRelativePath.toLowerCase()
+      const csvRow = csvIndex.byFilepath.get(
+        sourceFile.webkitRelativePath.toLowerCase()
       );
 
       if (csvRow && hasValidLatLng(csvRow.lat, csvRow.lng)) {
@@ -1342,7 +1420,7 @@ export function FileUploadCore({
 
       return null;
     },
-    [associateByTimestamp, csvData, exifData, minTimestamp, maxTimestamp]
+    [associateByTimestamp, csvData, csvIndex, exifData]
   );
 
   // Check for truly missing GPS files using fullCsvData (unfiltered).
@@ -1384,38 +1462,50 @@ export function FileUploadCore({
         if (associateByTimestamp) {
           const timestamp = exifmeta.timestamp;
           // Check for exact timestamp match in full data
-          const exactRow = fullCsvData.find((row) => row.timestamp === timestamp);
+          const exactRow = fullCsvIndex.byTimestamp.get(timestamp);
           if (exactRow && hasValidLatLng(exactRow.lat, exactRow.lng)) {
             return false; // Has valid GPS in the original full data
           }
           // Check if interpolation would be possible using full data
-          const timestampedRows = fullCsvData.filter(
-            (row): row is { timestamp: number; lat: number; lng: number; alt: number } =>
-              typeof row.timestamp === 'number'
-          );
-          if (timestampedRows.length >= 2) {
-            const minTs = Math.min(...timestampedRows.map((r) => r.timestamp));
-            const maxTs = Math.max(...timestampedRows.map((r) => r.timestamp));
-            if (timestamp >= minTs && timestamp <= maxTs) {
-              return false; // Can interpolate GPS from full data
-            }
+          if (
+            fullCsvIndex.sorted.length >= 2 &&
+            timestamp >= fullCsvIndex.minTimestamp &&
+            timestamp <= fullCsvIndex.maxTimestamp
+          ) {
+            return false; // Can interpolate GPS from full data
           }
           return true; // Truly cannot get GPS
         } else {
           // Associate by filepath - check against full data
-          const csvRow = fullCsvData.find(
-            (row) =>
-              row.filepath?.toLowerCase() === file.webkitRelativePath.toLowerCase()
+          const csvRow = fullCsvIndex.byFilepath.get(
+            file.webkitRelativePath.toLowerCase()
           );
           return !csvRow || !hasValidLatLng(csvRow.lat, csvRow.lng);
         }
       })
       .map((file) => file.webkitRelativePath);
-  }, [filteredImageFiles, exifData, fullCsvData, associateByTimestamp, failedFiles]);
+  }, [filteredImageFiles, exifData, fullCsvData, fullCsvIndex, associateByTimestamp, failedFiles]);
 
   const hasValidGpsForAllImages =
     filteredImageFiles.length > 0 &&
     (invalidGpsFiles.length === 0 || skipImagesWithoutGps);
+
+  useEffect(() => {
+    if (setImagesReady) {
+      setImagesReady(
+        imageFiles.length > 0 &&
+          !scanningEXIF &&
+          !loadingExistingImages &&
+          Object.keys(exifData).length > 0
+      );
+    }
+  }, [
+    setImagesReady,
+    imageFiles,
+    scanningEXIF,
+    loadingExistingImages,
+    exifData,
+  ]);
 
   useEffect(() => {
     if (setGpsDataReady) {
@@ -1645,62 +1735,27 @@ export function FileUploadCore({
         }
 
         if (exifMeta.gpsData) {
-          const csvRow = csvData.data.find(
-            (row) => row.timestamp === exifMeta.timestamp
-          );
-          return csvRow !== undefined;
+          return csvIndex.byTimestamp.has(exifMeta.timestamp);
         } else {
           if (associateByTimestamp) {
-            const csvRow = csvData.data.find(
-              (row) => row.timestamp === exifMeta.timestamp
-            );
-            if (csvRow) {
-              return true;
-            } else {
-              const sortedCsvData = csvData.data.sort(
-                (a, b) => a.timestamp! - b.timestamp!
-              );
-              if (
-                exifMeta.timestamp < sortedCsvData[0].timestamp! ||
-                exifMeta.timestamp >
-                sortedCsvData[sortedCsvData.length - 1].timestamp!
-              ) {
-                return false;
-              }
-              let lower = null,
-                upper = null;
-              for (let i = 0; i < sortedCsvData.length - 1; i++) {
-                if (
-                  sortedCsvData[i].timestamp! <= exifMeta.timestamp &&
-                  sortedCsvData[i + 1].timestamp! >= exifMeta.timestamp
-                ) {
-                  lower = sortedCsvData[i].timestamp!;
-                  upper = sortedCsvData[i + 1].timestamp!;
-                  break;
-                }
-              }
-              if (lower === null || upper === null) {
-                return false;
-              }
-              const intervalGap = upper - lower;
-              const avgInterval =
-                (sortedCsvData[sortedCsvData.length - 1].timestamp! -
-                  sortedCsvData[0].timestamp!) /
-                (sortedCsvData.length - 1);
-              // Treat much larger gaps as dropped GPS data.
-              const thresholdFactor = 2;
-              if (intervalGap > avgInterval * thresholdFactor) {
-                return false;
-              }
+            if (csvIndex.byTimestamp.has(exifMeta.timestamp)) {
               return true;
             }
+            const bracket = bracketTimestamp(csvIndex, exifMeta.timestamp);
+            if (!bracket) {
+              return false;
+            }
+            const intervalGap =
+              (bracket.next.timestamp as number) -
+              (bracket.prev.timestamp as number);
+            // Treat much larger gaps than the mean sampling interval as
+            // dropped GPS data.
+            const thresholdFactor = 2;
+            return !(intervalGap > csvIndex.avgInterval * thresholdFactor);
           } else {
-            const csvRow = csvData.data.find(
-              (row) =>
-                row.filepath?.toLowerCase() ===
-                file.webkitRelativePath.toLowerCase()
+            return csvIndex.byFilepath.has(
+              file.webkitRelativePath.toLowerCase()
             );
-            return csvRow !== undefined;
           }
         }
       });
@@ -1711,6 +1766,7 @@ export function FileUploadCore({
         timestamp: number;
         cameraSerial: string;
         originalPath: string;
+        sourceOrientationGroup: ImageOrientationGroup;
         latitude: number;
         longitude: number;
         altitude_egm96?: number;
@@ -1730,8 +1786,15 @@ export function FileUploadCore({
           continue;
         }
 
-        const width = exifmeta.width;
-        const height = exifmeta.height;
+        const sourceOrientationGroup = orientationGroupForDimensions(
+          exifmeta.width,
+          exifmeta.height
+        );
+        const rotation =
+          orientationRotationByPath.get(file.webkitRelativePath) ?? 0;
+        const swapsDimensions = rotation % 180 !== 0;
+        const width = swapsDimensions ? exifmeta.height : exifmeta.width;
+        const height = swapsDimensions ? exifmeta.width : exifmeta.height;
         if (
           !Number.isFinite(width) ||
           !Number.isFinite(height) ||
@@ -1752,6 +1815,7 @@ export function FileUploadCore({
           timestamp: Math.floor(exifmeta.timestamp / 1000),
           cameraSerial: exifmeta.cameraSerial,
           originalPath: file.webkitRelativePath,
+          sourceOrientationGroup,
           latitude: gpsData.lat,
           longitude: gpsData.lng,
           altitude_egm96:
@@ -1774,10 +1838,23 @@ export function FileUploadCore({
         ...images,
       ];
       await fileStore.setItem(projectId, merged);
+      const activeRotations = Object.fromEntries(
+        Object.entries(cameraRotations)
+          .map(([cameraName, groups]) => [
+            cameraName,
+            Object.fromEntries(
+              Object.entries(groups).filter(([, deg]) =>
+                deg === undefined ? false : deg % 360 !== 0
+              )
+            ),
+          ])
+          .filter(([, groups]) => Object.keys(groups).length > 0)
+      ) as CameraOrientationRotations;
       await metadataStore.setItem(projectId, {
         model: model.value,
         masks: masks,
         folderCameraMapping: useFolderCameraMapping ? folderCameraMapping : {},
+        rotations: activeRotations,
       });
 
       // Save the handle so reload resume can avoid another folder picker.
@@ -1799,6 +1876,8 @@ export function FileUploadCore({
       getGpsForFile,
       altitudeType,
       csvData,
+      csvIndex,
+      associateByTimestamp,
       invalidGpsFiles,
       skipImagesWithoutGps,
       cameraSpecs,
@@ -1809,6 +1888,8 @@ export function FileUploadCore({
       name,
       model,
       masks,
+      cameraRotations,
+      orientationRotationByPath,
       directoryHandle,
       useFolderCameraMapping,
       folderCameraMapping,
@@ -1898,6 +1979,7 @@ export function FileUploadCore({
         }
 
         // Georeference each image by EXIF timestamp
+        const gpxIndex = buildGpsIndex(rawPoints);
         const imagePoints = filteredImageFiles
           .map((imgFile) => {
             const meta = exifData[imgFile.webkitRelativePath];
@@ -1908,17 +1990,13 @@ export function FileUploadCore({
               return null;
             }
             const ts = meta.timestamp;
-            if (
-              ts < rawPoints[0].timestamp ||
-              ts > rawPoints[rawPoints.length - 1].timestamp
-            ) {
+            const gps = interpolateAt(gpxIndex, ts);
+            if (!gps) {
               console.warn(
                 `Timestamp outside of GPX data range for image ${imgFile.webkitRelativePath}`
               );
               return null;
             }
-            const exact = rawPoints.find((p) => p.timestamp === ts);
-            const gps = exact ?? interpolateGpsData(rawPoints, ts);
             return {
               timestamp: ts,
               filepath: imgFile.webkitRelativePath,
@@ -1932,9 +2010,9 @@ export function FileUploadCore({
         // Update CSV data and bounds for images
         setCsvData({ data: imagePoints });
         setFullCsvData(imagePoints);
-        const imgTimestamps = imagePoints.map((pt) => pt.timestamp!);
-        setMinTimestamp(Math.min(...imgTimestamps));
-        setMaxTimestamp(Math.max(...imgTimestamps));
+        const imgRange = minMaxOf(imagePoints.map((pt) => pt.timestamp!));
+        setMinTimestamp(imgRange?.min ?? 0);
+        setMaxTimestamp(imgRange?.max ?? 0);
 
         // Initialize time ranges based on image timestamps
         const initialRanges: { [day: number]: { start: string; end: string } } =
@@ -1951,12 +2029,10 @@ export function FileUploadCore({
 
         Object.keys(dayGroups).forEach((dayStr) => {
           const day = parseInt(dayStr);
-          const times = dayGroups[day];
-          const minTime = Math.min(...times);
-          const maxTime = Math.max(...times);
+          const range = minMaxOf(dayGroups[day]);
           initialRanges[day] = {
-            start: minutesToTime(minTime),
-            end: minutesToTime(maxTime),
+            start: minutesToTime(range?.min ?? 0),
+            end: minutesToTime(range?.max ?? 1439),
           };
         });
         setTimeRanges(initialRanges);
@@ -2046,6 +2122,7 @@ export function FileUploadCore({
                   .filepath!.toLowerCase()
                   .localeCompare(b.filepath!.toLowerCase())
             );
+          const rawIndex = buildGpsIndex(rawData);
           if (hasTimestamp && !hasFilepath) {
             // Georeference each image by EXIF timestamp
             const imagePoints = filteredImageFiles
@@ -2058,28 +2135,13 @@ export function FileUploadCore({
                   return null;
                 }
                 const ts = meta.timestamp;
-                if (
-                  rawData.length === 0 ||
-                  ts < rawData[0].timestamp! ||
-                  ts > rawData[rawData.length - 1].timestamp!
-                ) {
+                const gps = interpolateAt(rawIndex, ts);
+                if (!gps) {
                   console.warn(
                     `Timestamp outside of CSV data range for image ${imgFile.webkitRelativePath}`
                   );
                   return null;
                 }
-                const exact = rawData.find((p) => p.timestamp === ts);
-                const gps =
-                  exact ??
-                  interpolateGpsData(
-                    rawData.map((p) => ({
-                      timestamp: p.timestamp!,
-                      lat: p.lat,
-                      lng: p.lng,
-                      alt: p.alt,
-                    })),
-                    ts
-                  );
                 return {
                   timestamp: ts,
                   filepath: imgFile.webkitRelativePath,
@@ -2092,9 +2154,9 @@ export function FileUploadCore({
             setCsvData({ data: imagePoints });
             setFullCsvData(imagePoints);
             // Update bounds based on image points
-            const imgTimestamps = imagePoints.map((pt) => pt.timestamp!);
-            setMinTimestamp(Math.min(...imgTimestamps));
-            setMaxTimestamp(Math.max(...imgTimestamps));
+            const imgRange = minMaxOf(imagePoints.map((pt) => pt.timestamp!));
+            setMinTimestamp(imgRange?.min ?? 0);
+            setMaxTimestamp(imgRange?.max ?? 0);
 
             // Initialize time ranges based on image timestamps
             const initialRanges: {
@@ -2112,12 +2174,10 @@ export function FileUploadCore({
 
             Object.keys(dayGroups).forEach((dayStr) => {
               const day = parseInt(dayStr);
-              const times = dayGroups[day];
-              const minTime = Math.min(...times);
-              const maxTime = Math.max(...times);
+              const range = minMaxOf(dayGroups[day]);
               initialRanges[day] = {
-                start: minutesToTime(minTime),
-                end: minutesToTime(maxTime),
+                start: minutesToTime(range?.min ?? 0),
+                end: minutesToTime(range?.max ?? 1439),
               };
             });
             setTimeRanges(initialRanges);
@@ -2125,10 +2185,8 @@ export function FileUploadCore({
             // Georeference each image by matching CSV filepaths
             const imagePoints = filteredImageFiles
               .map((imgFile) => {
-                const match = rawData.find(
-                  (row) =>
-                    row.filepath?.toLowerCase() ===
-                    imgFile.webkitRelativePath.toLowerCase()
+                const match = rawIndex.byFilepath.get(
+                  imgFile.webkitRelativePath.toLowerCase()
                 );
                 if (!match) return null;
                 return {
@@ -2147,9 +2205,9 @@ export function FileUploadCore({
             setCsvData({ data: rawData });
             setFullCsvData(rawData);
             if (hasTimestamp) {
-              const timestamps = rawData.map((r) => r.timestamp!);
-              setMinTimestamp(Math.min(...timestamps));
-              setMaxTimestamp(Math.max(...timestamps));
+              const tsRange = minMaxOf(rawData.map((r) => r.timestamp!));
+              setMinTimestamp(tsRange?.min ?? 0);
+              setMaxTimestamp(tsRange?.max ?? 0);
 
               // Initialize time ranges based on CSV timestamps
               const initialRanges: {
@@ -2168,12 +2226,10 @@ export function FileUploadCore({
 
               Object.keys(dayGroups).forEach((dayStr) => {
                 const day = parseInt(dayStr);
-                const times = dayGroups[day];
-                const minTime = Math.min(...times);
-                const maxTime = Math.max(...times);
+                const range = minMaxOf(dayGroups[day]);
                 initialRanges[day] = {
-                  start: minutesToTime(minTime),
-                  end: minutesToTime(maxTime),
+                  start: minutesToTime(range?.min ?? 0),
+                  end: minutesToTime(range?.max ?? 1439),
                 };
               });
               setTimeRanges(initialRanges);
@@ -2211,26 +2267,27 @@ export function FileUploadCore({
       .padStart(2, '0')}`;
   };
 
-  // Helper: gets the actual time range for a specific day from the data
-  const getDayTimeRange = (day: number, data: CsvFile) => {
-    const dayData = data.filter((row) => {
-      if (row.timestamp === undefined) return false;
-      const date = new Date(row.timestamp!);
-      return date.getUTCDate() === day;
-    });
-
-    if (dayData.length === 0) return { min: 0, max: 1439 }; // fallback to full day
-
-    const times = dayData.map((row) => {
-      const date = new Date(row.timestamp!);
-      return date.getUTCHours() * 60 + date.getUTCMinutes();
-    });
-
-    return {
-      min: Math.min(...times),
-      max: Math.max(...times),
-    };
-  };
+  // Per-day minute bounds for the time-range filter, built in one pass.
+  // Rendering used to rescan every row (with a Date alloc each) per day per
+  // render, which is minutes of jank on 100k-image surveys.
+  const dayTimeBounds = useMemo(() => {
+    const bounds = new Map<number, { min: number; max: number }>();
+    const source = fullCsvData || csvData?.data || [];
+    for (const row of source) {
+      if (row.timestamp === undefined) continue;
+      const date = new Date(row.timestamp);
+      const day = date.getUTCDate();
+      const minutes = date.getUTCHours() * 60 + date.getUTCMinutes();
+      const b = bounds.get(day);
+      if (!b) {
+        bounds.set(day, { min: minutes, max: minutes });
+      } else {
+        if (minutes < b.min) b.min = minutes;
+        if (minutes > b.max) b.max = minutes;
+      }
+    }
+    return bounds;
+  }, [fullCsvData, csvData]);
 
   // Filter csvData rows by each day's selected time range.
   const applyTimeFilter = () => {
@@ -2259,9 +2316,8 @@ export function FileUploadCore({
     }
   }, [timeRanges, fullCsvData, associateByTimestamp]);
 
-  // Common UI elements shared between modal and form versions
-  return (
-    <>
+  // The model selector lives on the review step in wizard mode.
+  const modelSelector = (
       <Form.Group>
         <Form.Label className='mb-0'>Model</Form.Label>
         <Form.Text
@@ -2298,6 +2354,14 @@ export function FileUploadCore({
           placeholder='Select a model'
         />
       </Form.Group>
+  );
+
+  // Common UI elements shared between modal and form versions, grouped into
+  // wizard sections. Hidden sections stay mounted so their state survives
+  // step navigation.
+  return (
+    <>
+      <div className={sectionClass('images')}>
       <Form.Group>
         <Form.Label className='mb-0'>Files to Upload</Form.Label>
         <p className='text-muted mb-1' style={{ fontSize: 12 }}>
@@ -2431,6 +2495,8 @@ export function FileUploadCore({
           </div>
         </Alert>
       )}
+      </div>
+      <div className={sectionClass('georeference')}>
       {!scanningEXIF && Object.keys(exifData).length > 0 && imageFiles.length > 0 ? (
         <Form.Group className='mt-3 d-flex flex-column gap-2'>
           <div>
@@ -2679,15 +2745,17 @@ export function FileUploadCore({
       )}
       {csvData && (
         <>
-          <GPSSubset
-            gpsData={csvData.data}
-            imageFiles={imageFiles}
-            onFilter={(filteredData) => {
-              setCsvData((prevData) => ({ ...prevData, data: filteredData }));
-            }}
-            onShapefileParsed={onShapefileParsed}
-            existingImages={existingImagePoints}
-          />
+          {stepVisited('georeference') && (
+            <GPSSubset
+              gpsData={csvData.data}
+              imageFiles={imageFiles}
+              onFilter={(filteredData) => {
+                setCsvData((prevData) => ({ ...prevData, data: filteredData }));
+              }}
+              onShapefileParsed={onShapefileParsed}
+              existingImages={existingImagePoints}
+            />
+          )}
           <div className='mt-2 mb-2'>
             <strong>Images to upload:</strong>{' '}
             {
@@ -2719,17 +2787,14 @@ export function FileUploadCore({
                   All times shown in UTC.
                 </Form.Text>
                 <div className='d-flex flex-column gap-2'>
-                  {Array.from(
-                    new Set(
-                      (fullCsvData || csvData.data).map((row) =>
-                        new Date(row.timestamp!).getUTCDate()
-                      )
-                    )
-                  )
+                  {Array.from(dayTimeBounds.keys())
                     .sort((a: number, b: number) => a - b)
                     .map((day: number) => {
                       const data = fullCsvData || csvData.data;
-                      const dayRange = getDayTimeRange(day, data);
+                      const dayRange = dayTimeBounds.get(day) ?? {
+                        min: 0,
+                        max: 1439,
+                      };
                       const startMinutes = timeToMinutes(
                         timeRanges[day]?.start || minutesToTime(dayRange.min)
                       );
@@ -2848,16 +2913,12 @@ export function FileUploadCore({
                 fullCsvData &&
                 fullCsvData.some((row) => row.timestamp);
               if (associateByTimestamp || hasTimestampData) {
-                const csvTimestamps = csvData.data.map(
-                  (row) => row.timestamp || 0
+                const csvRange = minMaxOf(
+                  csvData.data.map((row) => row.timestamp || 0)
                 );
-                const csvMin = csvTimestamps.length
-                  ? Math.min(...csvTimestamps)
-                  : 0;
-                const csvMax = csvTimestamps.length
-                  ? Math.max(...csvTimestamps)
-                  : 0;
-                if (csvTimestamps.length) {
+                const csvMin = csvRange?.min ?? 0;
+                const csvMax = csvRange?.max ?? 0;
+                if (csvRange) {
                   const formatTimestamp = (timestamp: number) =>
                     new Date(timestamp).toLocaleString(undefined, {
                       timeZone: 'UTC',
@@ -2880,11 +2941,8 @@ export function FileUploadCore({
                 const total = filteredImageFiles.length;
                 if (total > 0) {
                   const matched = filteredImageFiles.filter((file) =>
-                    csvData.data.some(
-                      (row) =>
-                        row.filepath &&
-                        row.filepath.toLowerCase() ===
-                        file.webkitRelativePath.toLowerCase()
+                    csvIndex.byFilepath.has(
+                      file.webkitRelativePath.toLowerCase()
                     )
                   ).length;
                   const percent = Math.round((matched / total) * 100);
@@ -2905,6 +2963,12 @@ export function FileUploadCore({
               );
             })()}
           </div>
+        </>
+      )}
+      </div>
+      <div className={sectionClass('cameras')}>
+      {csvData && (
+        <>
           <Form.Group className='mt-3'>
             <Form.Label className='mb-0'>Camera Definition</Form.Label>
             <span
@@ -3060,8 +3124,119 @@ export function FileUploadCore({
         </>
       )}
       {filteredImageFiles.length > 0 && csvData && (
+        <OrientationReview
+          cameraGroups={orientationCameraGroups}
+          rotations={cameraRotations}
+          setRotations={setCameraRotations}
+        />
+      )}
+      </div>
+      <div className={sectionClass('review')}>
+      {modelSelector}
+      {filteredImageFiles.length > 0 && csvData && stepVisited('review') && (
         <ImageMaskEditor setMasks={setMasks} />
       )}
+      {csvData && (
+        <div className='border border-dark p-2 mt-2'>
+          <strong>Summary</strong>
+          <ul className='mb-0 mt-1' style={{ fontSize: 14 }}>
+            {(summaryDetails ?? []).map(({ label, value }) => (
+              <li key={label}>
+                <strong>{label}:</strong> {value}
+              </li>
+            ))}
+            {name && (
+              <li>
+                <strong>Source folder:</strong> {name}
+              </li>
+            )}
+            <li>
+              <strong>Images to upload:</strong> {toUploadFiles.length} (
+              {formatFileSize(toUploadSize)})
+            </li>
+            <li>
+              <strong>Model:</strong> {model.label}
+            </li>
+            <li>
+              <strong>Location data:</strong>{' '}
+              {file
+                ? `${file.name} (${associateByTimestamp ? 'matched by timestamp' : 'matched by file path'})`
+                : associateByTimestamp
+                  ? 'Image EXIF metadata'
+                  : 'No external location file'}
+            </li>
+            {file && mappingConfirmed && headerFields && (
+              <li>
+                <strong>Coordinate fields:</strong>{' '}
+                {useUtm
+                  ? `UTM (${utmColumn})`
+                  : `${columnMapping.lat}, ${columnMapping.lng}`}
+                {columnMapping.alt
+                  ? `; altitude ${columnMapping.alt} (${altitudeInMeters ? 'm' : 'ft'}, ${altitudeType.label})`
+                  : ''}
+              </li>
+            )}
+            <li>
+              <strong>Camera setup:</strong>{' '}
+              {multipleCameras ? 'Multiple cameras' : 'Single camera'}
+            </li>
+            <li>
+              <strong>Cameras:</strong>{' '}
+              {orientationCameraGroups.length > 0
+                ? Array.from(
+                    new Set(
+                      orientationCameraGroups.map((group) => group.cameraName)
+                    )
+                  ).join(', ')
+                : 'None detected'}
+            </li>
+            <li>
+              <strong>Camera orientations:</strong>{' '}
+              {orientationCameraGroups.length > 0
+                ? orientationCameraGroups
+                    .map((group) => {
+                      const rotation = orientationCorrectionFor(
+                        cameraRotations,
+                        group.cameraName,
+                        group.orientationGroup
+                      );
+                      const shape =
+                        group.orientationGroup === 'portrait'
+                          ? 'portrait'
+                          : 'landscape';
+                      return `${group.cameraName} ${shape} - ${rotation === 0 ? '0\u00B0 (original)' : `${rotation}\u00B0 CCW`}`;
+                    })
+                    .join('; ')
+                : 'None detected'}
+            </li>
+            {Object.keys(cameraSpecs).length > 0 && (
+              <li>
+                <strong>Camera specifications:</strong>{' '}
+                {Object.entries(cameraSpecs)
+                  .map(
+                    ([cameraName, spec]) =>
+                      `${cameraName} - ${spec.focalLengthMm} mm focal length, ${spec.sensorWidthMm} mm sensor, ${spec.tiltDegrees}\u00B0 tilt`
+                  )
+                  .join('; ')}
+              </li>
+            )}
+            {overlaps.length > 0 && (
+              <li>
+                <strong>Camera overlaps:</strong>{' '}
+                {overlaps
+                  .map(({ cameraA, cameraB }) => `${cameraA} / ${cameraB}`)
+                  .join('; ')}
+              </li>
+            )}
+            {masks.length > 0 && (
+              <li>
+                <strong>Masks:</strong> {masks.length}
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+      </div>
     </>
   );
 }
@@ -3084,6 +3259,20 @@ export const formatFileSize = (bytes: number): string => {
   return `${size.toFixed(2)} ${units[unitIndex]}`;
 };
 
+// Wizard steps for the add-files / resume modal (no survey-details step).
+const MODAL_WIZARD_STEPS = [
+  'Images',
+  'Location Data',
+  'Cameras',
+  'Review & Submit',
+];
+const MODAL_CORE_STEPS: UploadWizardStep[] = [
+  'images',
+  'georeference',
+  'cameras',
+  'review',
+];
+
 // Original modal version
 export default function FilesUploadComponent({
   show,
@@ -3098,6 +3287,21 @@ export default function FilesUploadComponent({
   const [readyToSubmit, setReadyToSubmit] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [stepIndex, setStepIndex] = useState(0);
+  const [furthestIndex, setFurthestIndex] = useState(0);
+  const [imagesReady, setImagesReady] = useState(false);
+  const [gpsReady, setGpsReady] = useState(false);
+
+  const stepReadyToAdvance = (index: number): boolean => {
+    switch (index) {
+      case 0:
+        return imagesReady;
+      case 1:
+        return gpsReady;
+      default:
+        return true;
+    }
+  };
 
   // Modal version needs to handle its own submit
   const handleModalSubmit = async () => {
@@ -3144,6 +3348,12 @@ export default function FilesUploadComponent({
       </Modal.Header>
       <Modal.Body>
         <Form>
+          <StepIndicator
+            steps={MODAL_WIZARD_STEPS}
+            currentIndex={stepIndex}
+            furthestIndex={furthestIndex}
+            onSelect={setStepIndex}
+          />
           {fromStaleUpload && (
             <p className='mb-2 text-warning'>
               This survey&apos;s upload is stale.
@@ -3156,18 +3366,44 @@ export default function FilesUploadComponent({
             project={project}
             setOnSubmit={setUploadSubmitFn}
             setReadyToSubmit={setReadyToSubmit}
+            setGpsDataReady={setGpsReady}
+            setImagesReady={setImagesReady}
+            currentStep={MODAL_CORE_STEPS[stepIndex]}
             newProject={false}
           />
         </Form>
       </Modal.Body>
       <Modal.Footer>
-        <Button
-          variant='primary'
-          disabled={!readyToSubmit || isSubmitting || isClosing}
-          onClick={handleModalSubmit}
-        >
-          Submit
-        </Button>
+        {stepIndex > 0 && (
+          <Button
+            variant='secondary'
+            disabled={isSubmitting || isClosing}
+            onClick={() => setStepIndex(stepIndex - 1)}
+          >
+            Back
+          </Button>
+        )}
+        {stepIndex < MODAL_WIZARD_STEPS.length - 1 ? (
+          <Button
+            variant='primary'
+            disabled={!stepReadyToAdvance(stepIndex)}
+            onClick={() => {
+              const next = stepIndex + 1;
+              setStepIndex(next);
+              setFurthestIndex((prev) => Math.max(prev, next));
+            }}
+          >
+            Next
+          </Button>
+        ) : (
+          <Button
+            variant='primary'
+            disabled={!readyToSubmit || isSubmitting || isClosing}
+            onClick={handleModalSubmit}
+          >
+            Submit
+          </Button>
+        )}
         <Button
           variant='dark'
           disabled={isSubmitting || isClosing}

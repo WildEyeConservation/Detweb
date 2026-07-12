@@ -2,6 +2,7 @@ import type { UploadClient } from './types';
 
 // Resolves image camera IDs from folder paths and optional folder mappings.
 export interface CameraResolver {
+  resolveCameraName(originalPath: string): string | undefined;
   resolveCameraId(originalPath: string): string | undefined;
 }
 
@@ -32,11 +33,17 @@ export async function buildCameraResolver(
     return null;
   };
 
+  const resolveCameraName = (originalPath: string): string | undefined => {
+    const cameraName = singleCamera
+      ? 'Survey Camera'
+      : extractCameraNameFromPath(originalPath);
+    return cameraName ?? undefined;
+  };
+
   return {
+    resolveCameraName,
     resolveCameraId(originalPath: string): string | undefined {
-      const cameraName = singleCamera
-        ? 'Survey Camera'
-        : extractCameraNameFromPath(originalPath);
+      const cameraName = resolveCameraName(originalPath);
       return cameraName ? cameraNameToId[cameraName] : undefined;
     },
   };

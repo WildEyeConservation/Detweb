@@ -1,8 +1,8 @@
-import { isCancelError, uploadData } from 'aws-amplify/storage';
+import { getProperties, isCancelError, uploadData } from 'aws-amplify/storage';
 import type { ImageData } from '../../types/ImageData';
 import { PhashIndex } from '../phashDedup';
 import { PhashService } from '../phashService';
-import { runPool } from './pool';
+import { runPool, sleep } from './pool';
 import type { RecordWriter } from './RecordWriter';
 import { classifyError, errorMessage } from './retry';
 import type { UploadStateStore } from './persistence';
@@ -11,6 +11,8 @@ import type { DuplicateRecord, ItemFailure } from './types';
 const SEED_CONCURRENCY = 5;
 const UPLOAD_CONCURRENCY = 6;
 const BYTES_REPORT_INTERVAL_MS = 300;
+const ORIENTATION_POLL_INTERVAL_MS = 1000;
+const ORIENTATION_TIMEOUT_MS = 13 * 60 * 1000;
 
 export type { ItemFailure };
 
@@ -27,6 +29,8 @@ export interface TransferInput {
   phashIndex: PhashIndex<{ originalPath: string }>;
   /** Paths whose phash was seeded from existing DB records. */
   dbSeededPaths: Set<string>;
+  /** Physical CCW correction to apply to the stored image at this path. */
+  rotationForPath: (originalPath: string) => number;
 }
 
 export interface TransferCallbacks {
@@ -132,6 +136,43 @@ export class TransferEngine {
     this.callbacks.onBytesUploaded(total);
   }
 
+  /** Wait for the S3 upload trigger to replace the object with rotated pixels. */
+  private async waitForStoredOrientation(
+    originalPath: string,
+    input: TransferInput
+  ): Promise<void> {
+    const rotation = input.rotationForPath(originalPath);
+    if (rotation === 0) return;
+
+    const path = `images/${input.makeKey(originalPath)}`;
+    const deadline = Date.now() + ORIENTATION_TIMEOUT_MS;
+    let lastError: unknown;
+
+    while (Date.now() < deadline) {
+      if (this.signal.aborted) return;
+      try {
+        const properties = await getProperties({
+          path,
+          options: { bucket: 'inputs' },
+        });
+        if (properties.metadata?.['orientation-normalized'] === 'true') {
+          return;
+        }
+      } catch (err) {
+        if (this.signal.aborted || isCancelError(err)) return;
+        // S3 event processing and object replacement are eventually
+        // consistent; retain the latest error for a useful timeout message.
+        lastError = err;
+      }
+      await sleep(ORIENTATION_POLL_INTERVAL_MS, this.signal);
+    }
+
+    const detail = lastError ? ` Last check: ${errorMessage(lastError)}.` : '';
+    throw new Error(
+      `Timed out while normalizing the stored orientation for ${originalPath}.${detail}`
+    );
+  }
+
   private handleItemError(originalPath: string, err: unknown): void {
     if (isCancelError(err) || this.signal.aborted) return;
     console.error(`Error processing image ${originalPath}:`, err);
@@ -151,6 +192,7 @@ export class TransferEngine {
       const imageData = input.imageByPath.get(originalPath);
       if (!imageData) return;
 
+      await this.waitForStoredOrientation(originalPath, input);
       // Claim this path before any async work so no other worker creates it.
       if (input.knownDbPaths.has(originalPath)) return;
       input.knownDbPaths.add(originalPath);
@@ -216,12 +258,21 @@ export class TransferEngine {
       }
 
       const s3Key = input.makeKey(image.originalPath);
+      const rotation = input.rotationForPath(image.originalPath);
       const task = uploadData({
         path: 'images/' + s3Key,
         data: file,
         options: {
           bucket: 'inputs',
           contentType: file.type,
+          ...(rotation !== 0
+            ? {
+                metadata: {
+                  'orientation-correction-ccw': String(rotation),
+                  'orientation-normalized': 'false',
+                },
+              }
+            : {}),
           onProgress: ({ transferredBytes }) => {
             this.inFlightBytes.set(image.originalPath, transferredBytes);
             this.reportBytes();
@@ -243,6 +294,7 @@ export class TransferEngine {
         this.inFlightBytes.delete(image.originalPath);
         this.reportBytes(true);
       }
+      await this.waitForStoredOrientation(image.originalPath, input);
       this.store.markUploaded(image.originalPath);
 
       // Claim this path before any async work so no other worker creates it.
