@@ -1,27 +1,112 @@
 import { useMemo, useContext, useEffect, useState } from 'react';
-import BaseImage from './BaseImage';
-import { withAckOnTimeout } from './useAckOnTimeout';
-import { MapLegend, SideLegend } from './Legend';
-import Location from './Location';
-import { withCreateObservation } from './useCreateObservation';
-import CreateAnnotationOnClick from './CreateAnnotationOnClick';
+import useAckOnTimeout, { WaitingOverlay } from './useAckOnTimeout';
+import { SideLegend } from './Legend';
+import useCreateObservation from './useCreateObservation';
 import {
   GlobalContext,
   ProjectContext,
   UserContext,
   ImageContext,
 } from './Context';
-import { ShowMarkers } from './ShowMarkers';
 import { useOptimisticUpdates } from './useOptimisticUpdates';
 import { ImageContextFromHook } from './ImageContext';
-import CreateAnnotationOnHotKey from './CreateAnnotationOnHotKey';
 import { Schema } from './amplify/client-schema';
 import useImageStats from './useImageStats';
 import { Badge, Button } from 'react-bootstrap';
 import { Share2, SearchCheck, RotateCcw, LogOut } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const Image = withCreateObservation(withAckOnTimeout(BaseImage as any) as any);
+import MapLibreAnnotator from './annotator/MapLibreAnnotator';
+import type { CategoryType } from './schemaTypes';
+
+interface TaskImageProps {
+  location: any;
+  visible: boolean;
+  /** Acks the task (e.g. deletes the SQS message). Absent in read-only viewer contexts. */
+  ack?: (submittedAt?: number) => void;
+  next?: () => void;
+  prev?: () => void;
+  stats?: Record<string, number>;
+  zoom?: number;
+  viewBoundsScale?: number;
+  hideNavButtons?: boolean;
+  isTest?: boolean;
+  testPresetId?: string;
+  testSetId?: string;
+  queueId?: string;
+  observationSource?: string;
+  allowOutside?: boolean;
+  categories: CategoryType[];
+  hideFnAnnotations?: boolean;
+  showMapLegend?: boolean;
+}
+
+/*
+Wires the task-lifecycle hooks around BaseImage: recording an Observation on
+ack (useCreateObservation) and delaying the SQS ack until the user has paged
+past without returning (useAckOnTimeout). Must render inside
+ImageContextFromHook, which supplies the timing/annotation-count context the
+observation hook reads.
+*/
+function TaskImage(props: TaskImageProps) {
+  const {
+    ack,
+    next,
+    prev,
+    visible,
+    location,
+    isTest,
+    testPresetId,
+    testSetId,
+    queueId,
+    observationSource,
+    allowOutside,
+    categories,
+    hideFnAnnotations,
+    showMapLegend,
+    stats,
+    zoom,
+    viewBoundsScale,
+    hideNavButtons,
+  } = props;
+  const observationAck = useCreateObservation({
+    location,
+    ack: ack ?? (() => {}),
+    isTest,
+    testPresetId,
+    testSetId,
+    queueId,
+    observationSource,
+  });
+  const { onNext, waiting, waitingMessage } = useAckOnTimeout({
+    next,
+    visible,
+    ack: observationAck,
+  });
+
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <MapLibreAnnotator
+        image={location.image}
+        location={location}
+        visible={visible}
+        zoom={zoom}
+        viewBoundsScale={viewBoundsScale}
+        next={onNext}
+        prev={prev}
+        hideNavButtons={hideNavButtons}
+        stats={stats}
+        isTest={isTest}
+        allowOutside={allowOutside}
+        setId={testSetId!}
+        source={observationSource!}
+        categories={categories}
+        hideFnAnnotations={hideFnAnnotations}
+        showMapLegend={showMapLegend}
+      />
+      {waiting && <WaitingOverlay message={waitingMessage} />}
+    </div>
+  );
+}
 
 export default function AnnotationImage(props: any) {
   const {
@@ -29,14 +114,12 @@ export default function AnnotationImage(props: any) {
     next,
     prev,
     visible,
-    id,
     ack,
     allowOutside,
     zoom,
     hideNavButtons,
     testPresetId,
     isTest,
-    config,
     hideZoomSetting = false,
     queueId,
   } = props;
@@ -190,65 +273,13 @@ export default function AnnotationImage(props: any) {
       : baseSource;
   }, [props.taskTag, isFalseNegativesJob]);
 
-  const memoizedChildren = useMemo(() => {
-    return [
-      <CreateAnnotationOnClick
-        key='caok'
-        allowOutside={allowOutside}
-        location={location}
-        source={source}
-        setId={testSetId}
-      />,
-      <ShowMarkers
-        key='showMarkers'
-        annotationSetId={testSetId}
-        realAnnotationSetId={annotationSetId}
-        categoriesOverride={legendCategories ?? undefined}
-        hideFnAnnotations={!isFalseNegativesJob}
-        locationBounds={
-          !allowOutside && location?.width && location?.height
-            ? { x: location.x, y: location.y, width: location.width, height: location.height }
-            : undefined
-        }
-      />,
-      <Location key='location' {...location} />,
-      <MapLegend
-        key='legend'
-        position='bottomright'
-        annotationSetId={annotationSetId}
-        categoriesOverride={legendCategories ?? undefined}
-        forceVisible={legendCollapsed}
-      />,
-    ].concat(
-      (legendCategories ?? projectCategories)
-        ?.filter((c) => c.annotationSetId == annotationSetId)
-        ?.map((category) => (
-          <CreateAnnotationOnHotKey
-            key={category.id}
-            hotkey={category.shortcutKey}
-            setId={testSetId}
-            category={category}
-            imageId={location.image.id}
-            source={source}
-            isTest={isTest}
-            location={location}
-            allowOutside={allowOutside}
-          />
-        ))
-    );
-  }, [
-    source,
-    location.image.id,
-    annotationSetId,
-    legendCategories,
-    projectCategories,
-    legendCollapsed,
-    allowOutside,
-    location,
-    testSetId,
-    isTest,
-    isFalseNegativesJob,
-  ]);
+  const filteredCategories = useMemo(
+    () =>
+      (legendCategories ?? projectCategories)?.filter(
+        (c) => c.annotationSetId == annotationSetId
+      ) ?? [],
+    [legendCategories, projectCategories, annotationSetId]
+  );
 
   async function handleShare() {
     const windowUrl = new URL(window.location.href);
@@ -299,6 +330,7 @@ export default function AnnotationImage(props: any) {
             style={{ position: 'relative', height: '26px' }}
           >
             <div
+              className='d-flex flex-row gap-2'
               style={{
                 position: 'absolute',
                 top: 0,
@@ -334,29 +366,26 @@ export default function AnnotationImage(props: any) {
               </>
             )}
           </div>
-          <Image
+          <TaskImage
             stats={stats}
             visible={visible}
             location={location}
-            image={location.image}
-            taskTag={props.taskTag}
             zoom={defaultZoom ?? undefined}
             viewBoundsScale={props.viewBoundsScale}
-            id={id}
             prev={prev}
             next={next}
             ack={ack}
-            annotationSet={annotationSetId}
             hideNavButtons={hideNavButtons}
             testPresetId={testPresetId}
             isTest={isTest}
             testSetId={testSetId}
-            config={config}
             queueId={queueId}
             observationSource={source}
-          >
-            {visible && memoizedChildren}
-          </Image>
+            allowOutside={allowOutside}
+            categories={filteredCategories}
+            hideFnAnnotations={!isFalseNegativesJob}
+            showMapLegend={legendCollapsed}
+          />
         </div>
         <div className='d-flex flex-column align-items-center gap-3'>
           <SideLegend

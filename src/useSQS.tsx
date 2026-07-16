@@ -1,119 +1,261 @@
-import { useEffect, useState, useContext, useCallback } from 'react';
-import { UserContext, ProjectContext } from './Context';
+import { useEffect, useState, useContext, useCallback, useRef } from 'react';
+import { UserContext, ProjectContext, GlobalContext } from './Context';
 import {
   ReceiveMessageCommand,
   DeleteMessageCommand,
 } from '@aws-sdk/client-sqs';
+import { Schema } from './amplify/client-schema';
+import useTesting from './useTesting';
+import type { Identifiable } from './Preloader';
 
-interface SQSMessage {
-  message_id: string;
-  ack: () => Promise<void>;
-  id?: string;
-}
-
-export default function useSQS() {
+export default function useSQS(
+  filterPredicate: (message: any) => Promise<boolean> = async () => {
+    return true;
+  },
+  allowTesting: boolean = false
+) {
   const { currentPM } = useContext(ProjectContext)!;
-  const { getSqsClient } = useContext(UserContext)!;
-  const [buffer, setBuffer] = useState<SQSMessage[]>([]);
+  const { getSqsClient, myOrganizationHook } = useContext(UserContext)!;
+  const { client } = useContext(GlobalContext)!;
   const [url, setUrl] = useState<string | undefined>(undefined);
-  const [retryCount] = useState(0);
-  const [index, setIndex] = useState(0);
-  const next = useCallback(() => setIndex((index) => index + 1), []);
-  const prev = useCallback(() => setIndex((index) => index - 1), []);
+  const [backupUrl, setBackupUrl] = useState<string | undefined>(undefined);
+  const [zoom, setZoom] = useState<number | undefined>(undefined);
+  const [backupZoom, setBackupZoom] = useState<number | undefined>(undefined);
+  // Use ref instead of state to prevent fetcher reference churn on every new location
+  const processedLocationsRef = useRef<Set<string>>(new Set());
 
-  const margin = 3;
-  console.log('sqs!!!!');
+  // user testing state
+  const [config, setConfig] = useState<
+    Schema['ProjectTestConfig']['type'] | undefined
+  >(undefined);
+  const [testUser, setTestUser] = useState(false);
+  // Use ref for pushTest to prevent race conditions when multiple fetcher calls happen concurrently
+  const pushTestRef = useRef(false);
+  const { fetcher: testFetcher } = useTesting();
+  const [maxJobsCompleted, setMaxJobsCompleted] = useState(0);
+  const {
+    jobsCompleted,
+    currentAnnoCount,
+    setCurrentAnnoCount,
+    unannotatedJobs,
+    setUnannotatedJobs,
+  } = useContext(UserContext)!;
+
+  // Track unannotated jobs
+  useEffect(() => {
+    const userAnnotations = Object.entries(currentAnnoCount).filter(
+      ([_, annotations]) => annotations.length > 0
+    );
+
+    if (jobsCompleted > maxJobsCompleted) {
+      setMaxJobsCompleted(jobsCompleted);
+
+      if (
+        userAnnotations.reduce(
+          (acc, annotations) => acc + annotations[1].length,
+          0
+        ) > 0
+      ) {
+        setUnannotatedJobs(0);
+        setCurrentAnnoCount({});
+      } else if (
+        !testFetcher ||
+        !config ||
+        !testUser ||
+        config.testType === 'none' ||
+        (config.testType === 'interval' &&
+          unannotatedJobs < config.interval!) ||
+        (config.testType === 'random' &&
+          Math.random() >= config.random! / 100) ||
+        (config.testType === 'random' && jobsCompleted <= config.deadzone!)
+      ) {
+        setUnannotatedJobs((j) => j + 1);
+        setCurrentAnnoCount({});
+      } else {
+        pushTestRef.current = true;
+        setUnannotatedJobs(0);
+      }
+    }
+  }, [jobsCompleted]);
 
   useEffect(() => {
     if (currentPM.queueId) {
-      currentPM.queue().then((res: any) => {
-        setUrl(res?.data?.url ?? undefined);
-      });
+      client.models.Queue.get({ id: currentPM.queueId }).then(
+        ({ data }) => {
+          if (!data) return;
+          setUrl(data.url ?? undefined);
+          setZoom(data.zoom ?? undefined);
+        }
+      );
+      if (currentPM.backupQueueId) {
+        client.models.Queue.get({ id: currentPM.backupQueueId }).then(
+          ({ data }) => {
+            if (!data) return;
+            setBackupUrl(data.url ?? undefined);
+            setBackupZoom(data.zoom ?? undefined);
+          }
+        );
+      }
+    }
+
+    async function setupTesting() {
+      const { data: config } = await client.models.ProjectTestConfig.get(
+        {
+          projectId: currentPM.projectId,
+        },
+        {
+          selectionSet: [
+            'projectId',
+            'project.organizationId',
+            'postTestConfirmation',
+            'testType',
+            'random',
+            'deadzone',
+            'interval',
+            'accuracy',
+          ],
+        }
+      );
+
+      if (config?.projectId) {
+        setConfig(config);
+
+        const shouldTest =
+          myOrganizationHook.data?.find(
+            (membership) =>
+              membership.organizationId === config.project.organizationId
+          )?.isTested ?? false;
+        setTestUser(shouldTest);
+      }
+    }
+
+    if (allowTesting) {
+      setupTesting();
     }
   }, [currentPM]);
 
-  function getMessages() {
-    //Then try to get new Jobs.
+  const fetcher = useCallback(async (): Promise<Identifiable> => {
+    while (true) {
+      // Check and immediately clear the flag to prevent race conditions
+      // when multiple concurrent fetcher calls happen
+      if (testFetcher && pushTestRef.current) {
+        pushTestRef.current = false;
+        const testLocation = await testFetcher();
+        if (testLocation) {
+          return {
+            ...testLocation,
+            config: config,
+          } as unknown as Identifiable;
+        }
+      }
 
-    getSqsClient().then((sqsClient) =>
-      sqsClient
-        .send(
+      if (!url) {
+        console.log('No queue URL set');
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        continue;
+      }
+
+      const sqsClient = await getSqsClient();
+
+      const getResponse = async (url: string) => {
+        const response = await sqsClient.send(
           new ReceiveMessageCommand({
             QueueUrl: url,
-            MaxNumberOfMessages: 10,
+            MaxNumberOfMessages: 1,
             MessageAttributeNames: ['All'],
             VisibilityTimeout: 600,
           })
-        )
-        .then((messages) => {
-          if ('Messages' in messages) {
-            const bodies = messages.Messages!.map(
-              (entity: any) => {
-                // const timer = setInterval(() => {
-                //   refreshVisibility({
-                //     // ChangeMessageVisibilityRequest
-                //     QueueUrl: currentQueue, // required
-                //     ReceiptHandle: entity.ReceiptHandle, // required
-                //     VisibilityTimeout: 60, // required
-                //   });
-                // }, 30000);
-                const body = JSON.parse(entity.Body);
-                body.message_id = crypto.randomUUID();
-                // The messages we recieve typically HAVE ids. These correspond to location ids. But there is no guarantee that we won't receive the same ID twice,
-                // the admin may have launched the same task on the same queue twice, or one of our earlier messages may have passed its visibility timeout and
-                // been refetched. So we have to assign our own id upon receipt to guarantee uniqueness.
-                body.ack = async () => {
-                  try {
-                    const sqsClient = await getSqsClient();
-                    await sqsClient.send(
-                      new DeleteMessageCommand({
-                        QueueUrl: url,
-                        ReceiptHandle: entity.ReceiptHandle,
-                      })
-                    );
-                    //clearInterval(timer);
-                    console.log(
-                      `Ack Succeeded for location ${body.message_id} with receipthandle ${entity.ReceiptHandle}`
-                    );
-                  } catch {
-                    console.log(
-                      `Ack Failed for location ${body.id} with receipthandle ${entity.ReceiptHandle}`
-                    );
-                  }
-                };
-                return body;
-              }
+        );
+
+        return response;
+      };
+
+      let usingBackup = false;
+      let response = await getResponse(url);
+
+      if (!response.Messages && backupUrl) {
+        console.log('No message from main queue, checking backup queue');
+        response = await getResponse(backupUrl);
+
+        if (response.Messages) {
+          usingBackup = true;
+        }
+      }
+
+      // Messages from either queue
+      if (response.Messages) {
+        const entity = response.Messages[0];
+        const body = JSON.parse(entity.Body!);
+        body.message_id = crypto.randomUUID();
+        body.zoom = usingBackup ? backupZoom : zoom;
+
+        // Check if we've already processed this location
+        if (body.location?.id && processedLocationsRef.current.has(body.location.id)) {
+          console.log(`Skipping duplicate location ${body.location.id}`);
+          body.ack = async () => {
+            try {
+              const sqsClient = await getSqsClient();
+              await sqsClient.send(
+                new DeleteMessageCommand({
+                  QueueUrl: usingBackup ? backupUrl : url,
+                  ReceiptHandle: entity.ReceiptHandle,
+                })
+              );
+            } catch {
+              console.log(
+                `Ack Failed for location ${body.location.id} with receipthandle ${entity.ReceiptHandle}`
+              );
+            }
+          };
+          body.ack();
+          // Add delay after duplicate detection to prevent tight looping
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          continue;
+        }
+
+        // Add the location ID to processed locations if it exists
+        if (body.location?.id) {
+          processedLocationsRef.current.add(body.location.id);
+        }
+
+        body.ack = async () => {
+          try {
+            const sqsClient = await getSqsClient();
+            await sqsClient.send(
+              new DeleteMessageCommand({
+                QueueUrl: usingBackup ? backupUrl : url,
+                ReceiptHandle: entity.ReceiptHandle,
+              })
             );
-            setBuffer((buffer_) => buffer_.concat(bodies));
-          } else {
-            //If no messages were available, try again in 5s
-            setTimeout(getMessages, 5000);
+          } catch {
+            console.log(
+              `Ack Failed for location ${body.location.id} with receipthandle ${entity.ReceiptHandle}`
+            );
           }
-        })
-    );
-  }
-
-  //If the index gets too close to the end of the buffer we need to load mode messages.
-  useEffect(() => {
-    console.log('here we go');
-    //If we CAN access SQS and we NEED additional jobs
-    if (buffer.length - index <= margin && url) {
-      getMessages();
+        };
+        // Attach revalidate function for last-resort filtering when shown to user
+        body.revalidate = () => filterPredicate(body);
+        if (await filterPredicate(body)) {
+          console.log(`Returning location ${body.location?.id} to user`);
+          return body;
+        } else {
+          console.log(`Filter rejected location ${body.location?.id}`);
+          body.ack();
+          // Add delay after filter rejection to prevent tight looping
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          continue;
+        }
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
     }
-  }, [index, retryCount, buffer, url]);
+  }, [
+    url,
+    backupUrl,
+    getSqsClient,
+    filterPredicate,
+    testFetcher,
+  ]);
 
-  const inject = (message: SQSMessage) => {
-    setBuffer((buffer_) => [
-      ...buffer_.slice(0, index + 3),
-      message,
-      ...buffer_.slice(index + 3),
-    ]);
-  };
-  return {
-    buffer,
-    index,
-    next,
-    prev,
-    inject,
-  };
+  return { fetcher: url ? fetcher : undefined };
 }

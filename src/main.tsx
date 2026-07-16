@@ -9,9 +9,7 @@ import ScratchPad from './ScratchPad';
 import UserStats from './UserStats';
 import { LocationLoader } from './LocationLoader';
 import { ImageLoader } from './ImageLoader';
-import QuickTest from './QuickTest';
 import { Review } from './Review';
-import { PairLoader } from './PairLoader';
 import RegisterOrganization from './RegisterOrganization';
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import ErrorPage from './error-page';
@@ -20,7 +18,6 @@ import Jobs from './user/Jobs.tsx';
 import Surveys from './survey/Surveys.tsx';
 import Permissions from './Permissions.tsx';
 import Testing from './Testing/Testing';
-import { Registration } from './Registration';
 import { IndividualIdPairTaskPage, IndividualIdTaskPage } from './individual-id';
 import {
   ChainReviewTaskPage,
@@ -72,7 +69,6 @@ persistQueryClient({
 
 // Define global for browser environment
 window.global = window;
-let Annotate = ScratchPad();
 
 const router = createBrowserRouter([
   {
@@ -133,15 +129,11 @@ const router = createBrowserRouter([
         children: [
           {
             path: 'annotate',
-            element: <Annotate />,
+            element: <ScratchPad />,
           },
           {
             path: 'review',
             element: <Review />,
-          },
-          {
-            path: 'registration',
-            element: <Registration />,
           },
           {
             // Transect/category are claimed on the Jobs page and passed via
@@ -169,20 +161,12 @@ const router = createBrowserRouter([
             element: <HomographyEditPage />,
           },
           {
-            path: 'quickTest',
-            element: <QuickTest />,
-          },
-          {
             path: 'location/:locationId/:annotationSetId',
             element: <LocationLoader />,
           },
           {
             path: 'image/:imageId/:annotationSetId',
             element: <ImageLoader />,
-          },
-          {
-            path: 'register/:image1Id/:image2Id/:selectedSet',
-            element: <PairLoader />,
           },
           {
             path: 'qc-review/:queueId',
@@ -197,10 +181,6 @@ const router = createBrowserRouter([
           {
             path: 'review',
             element: <Review showAnnotationSetDropdown={false} />,
-          },
-          {
-            path: 'registration',
-            element: <Registration showAnnotationSetDropdown={false} />,
           },
           {
             path: 'chain-viewer',

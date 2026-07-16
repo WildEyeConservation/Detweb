@@ -1,0 +1,6 @@
+# Keep source and patch context stable across Windows and Unix environments.
+* text=auto eol=lf
+
+# Native Windows command scripts conventionally require CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf

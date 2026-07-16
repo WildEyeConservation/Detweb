@@ -1,4 +1,4 @@
-import { useContext, useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { GlobalContext, UserContext } from './Context';
 import {
@@ -7,7 +7,7 @@ import {
   GetQueueAttributesCommand,
 } from '@aws-sdk/client-sqs';
 import { Badge } from 'react-bootstrap';
-import { PreloaderFactory } from './Preloader';
+import { Preloader } from './Preloader';
 import QCAnnotationReview from './QCAnnotationReview';
 import { fetchAllPaginatedResults } from './utils';
 
@@ -169,8 +169,6 @@ export default function QCReviewTask() {
     return () => clearInterval(interval);
   }, [queueUrl, getSqsClient]);
 
-  const Preloader = useMemo(() => PreloaderFactory(QCAnnotationReview), []);
-
   return (
     <div
       className='d-flex flex-column align-items-center gap-3 w-100 h-100'
@@ -185,22 +183,30 @@ export default function QCReviewTask() {
             visible={true}
             preloadN={3}
             historyN={2}
-            categories={categories}
-            setCategories={setCategories}
-            projectId={projectId}
-            annotationSetId={annotationSetId}
-            group={group}
-            queueId={queueId}
-            queueZoom={queueZoom}
-            setQueueZoom={setQueueZoom}
-            adminMemberships={myMembershipHook.data
-              ?.filter((membership: any) => membership.isAdmin)
-              .map((membership: any) => ({
-                projectId: membership.projectId,
-                queueId: membership.queueId!,
-              }))}
-            legendCollapsed={legendCollapsed}
-            setLegendCollapsed={setLegendCollapsed}
+            renderTask={(task) => (
+              <QCAnnotationReview
+                {...task}
+                annotation={task.annotation}
+                message_id={task.message_id}
+                ack={task.ack}
+                categories={categories}
+                setCategories={setCategories}
+                projectId={projectId}
+                annotationSetId={annotationSetId!}
+                group={group}
+                queueId={queueId!}
+                queueZoom={queueZoom}
+                setQueueZoom={setQueueZoom}
+                adminMemberships={myMembershipHook.data
+                  ?.filter((membership: any) => membership.isAdmin)
+                  .map((membership: any) => ({
+                    projectId: membership.projectId,
+                    queueId: membership.queueId!,
+                  }))}
+                legendCollapsed={legendCollapsed}
+                setLegendCollapsed={setLegendCollapsed}
+              />
+            )}
           />
         ) : (
           <div className='d-flex justify-content-center align-items-center h-100'>

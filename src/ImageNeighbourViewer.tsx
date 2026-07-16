@@ -10,22 +10,15 @@ import {
   Spinner,
   Table,
 } from 'react-bootstrap';
-import L, {
-  LatLngBoundsExpression,
-  LatLngExpression,
-  LatLngLiteral,
-  Map as LeafletMap,
-} from 'leaflet';
-import {
-  LayersControl,
-  LayerGroup,
-  MapContainer,
-  Polygon,
-  Tooltip,
-  useMap,
-} from 'react-leaflet';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { GlobalContext } from './Context';
-import { StorageLayer } from './StorageLayer';
+import {
+  makeProjection,
+  createImageMap,
+  addImageTiles,
+  fitPxBounds,
+} from './annotator/imageTiles';
 import { array2Matrix, makeTransform } from './utils';
 import { inv } from 'mathjs';
 import type { ImageNeighbourType, ImageType } from './schemaTypes';
@@ -34,10 +27,7 @@ type ImageDisplayData = {
   image: ImageType;
   cameraName: string | null;
   sourceKey: string | null;
-  bounds: LatLngBoundsExpression;
-  xyToLatLng: (coords: [number, number]) => LatLngLiteral;
   pixelPolygon: [number, number][];
-  latLngPolygon: LatLngExpression[];
 };
 
 type ComparisonResult = {
@@ -87,27 +77,12 @@ function buildImageDisplayData(
     throw new Error(`Image ${image.id} is missing valid dimensions.`);
   }
 
-  const safeLongestSide = Math.max(width, height, 1);
-  const exponent = Math.max(0, Math.ceil(Math.log2(safeLongestSide)) - 8);
-  const scale = Math.pow(2, exponent);
-
-  const xyToLatLng = ([x, y]: [number, number]): LatLngLiteral => ({
-    lat: -y / scale,
-    lng: x / scale,
-  });
-
   const pixelPolygon: [number, number][] = [
     [0, 0],
     [width, 0],
     [width, height],
     [0, height],
   ];
-
-  const latLngPolygon = pixelPolygon.map((point) => xyToLatLng(point));
-  const bounds = L.latLngBounds(
-    xyToLatLng([0, height]),
-    xyToLatLng([width, 0])
-  );
 
   const cameraName = (() => {
     const cameraData = image.camera;
@@ -136,18 +111,14 @@ function buildImageDisplayData(
     image,
     cameraName,
     sourceKey,
-    bounds,
-    xyToLatLng,
     pixelPolygon,
-    latLngPolygon,
   };
 }
 
 function projectPolygon(
   sourcePolygon: [number, number][],
-  transform: ((coords: [number, number]) => [number, number]) | undefined,
-  xyToLatLng: (coords: [number, number]) => LatLngLiteral
-): LatLngExpression[] | null {
+  transform: ((coords: [number, number]) => [number, number]) | undefined
+): [number, number][] | null {
   if (!transform) {
     return null;
   }
@@ -157,7 +128,7 @@ function projectPolygon(
       if (!Number.isFinite(x) || !Number.isFinite(y)) {
         throw new Error('Transform produced invalid coordinates.');
       }
-      return xyToLatLng([x, y]);
+      return [x, y] as [number, number];
     });
     return projected;
   } catch (error) {
@@ -355,8 +326,7 @@ export default function ImageNeighbourViewer() {
     if (!comparison?.imageA || !comparison?.imageB) return null;
     return projectPolygon(
       comparison.imageB.pixelPolygon,
-      transformSummary.toA,
-      comparison.imageA.xyToLatLng
+      transformSummary.toA
     );
   }, [comparison, transformSummary.toA]);
 
@@ -364,8 +334,7 @@ export default function ImageNeighbourViewer() {
     if (!comparison?.imageA || !comparison?.imageB) return null;
     return projectPolygon(
       comparison.imageA.pixelPolygon,
-      transformSummary.toB,
-      comparison.imageB.xyToLatLng
+      transformSummary.toB
     );
   }, [comparison, transformSummary.toB]);
 
@@ -491,14 +460,6 @@ export default function ImageNeighbourViewer() {
   );
 }
 
-function MapReadyHandler({ onReady }: { onReady: (map: LeafletMap) => void }) {
-  const map = useMap();
-  useEffect(() => {
-    onReady(map);
-  }, [map, onReady]);
-  return null;
-}
-
 function ImagePanel({
   title,
   data,
@@ -508,12 +469,12 @@ function ImagePanel({
 }: {
   title: string;
   data: ImageDisplayData;
-  overlay?: LatLngExpression[] | null;
+  overlay?: [number, number][] | null;
   overlayColor: string;
   overlayDescription?: string;
 }) {
   const [rotation, setRotation] = useState(0);
-  const mapRef = useRef<LeafletMap | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
   const pointerStateRef = useRef<{
     dragging: boolean;
     pointerId: number | null;
@@ -538,14 +499,14 @@ function ImagePanel({
     const pointerState = pointerStateRef.current;
 
     if (rotation === 0) {
-      map.dragging.enable();
+      map.dragPan.enable();
       pointerState.dragging = false;
       pointerState.pointerId = null;
       pointerState.last = null;
       return;
     }
 
-    map.dragging.disable();
+    map.dragPan.disable();
 
     const handlePointerDown = (event: PointerEvent) => {
       if (event.pointerType === 'mouse' && event.button !== 0) {
@@ -579,7 +540,7 @@ function ImagePanel({
       const adjX = dx * cos - dy * sin;
       const adjY = dx * sin + dy * cos;
 
-      map.panBy(L.point(-adjX, -adjY), { animate: false });
+      map.panBy([-adjX, -adjY], { duration: 0 });
     };
 
     const endDrag = (event: PointerEvent) => {
@@ -616,7 +577,7 @@ function ImagePanel({
       container.removeEventListener('pointerup', endDrag);
       container.removeEventListener('pointerleave', endDrag);
       container.removeEventListener('pointercancel', endDrag);
-      map.dragging.enable();
+      map.dragPan.enable();
     };
   }, [rotation]);
   const width = Number(data.image.width ?? 0);
@@ -646,65 +607,16 @@ function ImagePanel({
               transformOrigin: 'center center',
             }}
           >
-            <MapContainer
+            <NeighbourMap
               key={data.image.id}
-              bounds={data.bounds}
-              crs={L.CRS.Simple}
-              zoomSnap={0.5}
-              zoomDelta={0.5}
-              style={{ width: '100%', height: '100%' }}
-            >
-              <MapReadyHandler
-                onReady={(instance) => {
-                  mapRef.current = instance;
-                }}
-              />
-              <LayersControl position='topright'>
-                {data.sourceKey && (
-                  <LayersControl.BaseLayer name='Image' checked>
-                    <StorageLayer
-                      source={data.sourceKey}
-                      bounds={data.bounds as any}
-                      maxNativeZoom={5}
-                      noWrap={true}
-                    />
-                  </LayersControl.BaseLayer>
-                )}
-                <LayersControl.Overlay name='Image bounds' checked>
-                  <LayerGroup>
-                    <Polygon
-                      positions={data.latLngPolygon}
-                      pathOptions={{
-                        color: '#198754',
-                        weight: 1,
-                        dashArray: '6 4',
-                        fillOpacity: 0.05,
-                      }}
-                    />
-                  </LayerGroup>
-                </LayersControl.Overlay>
-                {overlay && (
-                  <LayersControl.Overlay name='Projected overlap' checked>
-                    <LayerGroup>
-                      <Polygon
-                        positions={overlay}
-                        pathOptions={{
-                          color: overlayColor,
-                          weight: 2,
-                          fillOpacity: 0.15,
-                        }}
-                      >
-                        {overlayDescription && (
-                          <Tooltip direction='center' sticky>
-                            {overlayDescription}
-                          </Tooltip>
-                        )}
-                      </Polygon>
-                    </LayerGroup>
-                  </LayersControl.Overlay>
-                )}
-              </LayersControl>
-            </MapContainer>
+              data={data}
+              overlay={overlay ?? null}
+              overlayColor={overlayColor}
+              overlayDescription={overlayDescription}
+              onMapReady={(instance) => {
+                mapRef.current = instance;
+              }}
+            />
           </div>
         </div>
       </Card.Body>
@@ -850,3 +762,108 @@ function NeighbourTable({
   );
 }
 
+
+function NeighbourMap({
+  data,
+  overlay,
+  overlayColor,
+  overlayDescription,
+  onMapReady,
+}: {
+  data: ImageDisplayData;
+  overlay: [number, number][] | null;
+  overlayColor: string;
+  overlayDescription?: string;
+  onMapReady: (map: maplibregl.Map | null) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const width = Number(data.image.width ?? 0);
+  const height = Number(data.image.height ?? 0);
+
+  useEffect(() => {
+    if (!containerRef.current || !data.sourceKey || !width || !height) return;
+    const projection = makeProjection(width, height);
+    const map = createImageMap(containerRef.current, projection);
+
+    const toRing = (polygon: [number, number][]) =>
+      [...polygon, polygon[0]].map(([x, y]) => projection.px2lngLat(x, y));
+
+    map.on('load', () => {
+      addImageTiles(map, data.sourceKey!, { width, height }, projection);
+
+      map.addSource('image-bounds', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          geometry: { type: 'Polygon', coordinates: [toRing(data.pixelPolygon)] },
+          properties: {},
+        },
+      });
+      map.addLayer({
+        id: 'image-bounds-line',
+        type: 'line',
+        source: 'image-bounds',
+        paint: {
+          'line-color': '#198754',
+          'line-width': 1,
+          'line-dasharray': [6, 4],
+        },
+      });
+
+      if (overlay) {
+        map.addSource('projected-overlap', {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            geometry: { type: 'Polygon', coordinates: [toRing(overlay)] },
+            properties: {},
+          },
+        });
+        map.addLayer({
+          id: 'projected-overlap-fill',
+          type: 'fill',
+          source: 'projected-overlap',
+          paint: { 'fill-color': overlayColor, 'fill-opacity': 0.15 },
+        });
+        map.addLayer({
+          id: 'projected-overlap-line',
+          type: 'line',
+          source: 'projected-overlap',
+          paint: { 'line-color': overlayColor, 'line-width': 2 },
+        });
+
+        if (overlayDescription) {
+          const popup = new maplibregl.Popup({
+            closeButton: false,
+            closeOnClick: false,
+          });
+          map.on('mousemove', 'projected-overlap-fill', (e) => {
+            popup
+              .setLngLat(e.lngLat)
+              .setText(overlayDescription)
+              .addTo(map);
+          });
+          map.on('mouseleave', 'projected-overlap-fill', () => popup.remove());
+        }
+      }
+
+      fitPxBounds(map, projection, 0, 0, width, height);
+      onMapReady(map);
+    });
+
+    return () => {
+      onMapReady(null);
+      map.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.sourceKey, data.image.id, overlay, overlayColor, overlayDescription]);
+
+  if (!data.sourceKey) {
+    return (
+      <div className='w-100 h-100 d-flex align-items-center justify-content-center text-muted'>
+        No image file available
+      </div>
+    );
+  }
+  return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
+}

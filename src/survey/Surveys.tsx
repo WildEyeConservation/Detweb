@@ -38,7 +38,6 @@ const PROJECT_SELECTION_SET = [
   'tiledLocationSetId',
   'annotationSets.id',
   'annotationSets.name',
-  'annotationSets.register',
   'queues.id',
   'queues.url',
   'queues.name',
@@ -363,26 +362,6 @@ export default function Surveys() {
     );
 
     try {
-      // cancel registration job if it exists
-      const annotationSet = selectedProject?.annotationSets.find(
-        (set: { register?: boolean | null }) => set.register
-      );
-
-      if (annotationSet) {
-        await client.models.AnnotationSet.update({
-          id: annotationSet.id,
-          register: false,
-        });
-        await logAdminAction(
-          client,
-          user.userId,
-          `Cancelled registration job for annotation set "${annotationSet.name}" in project "${selectedProject!.name}"`,
-          selectedProject!.id,
-          selectedProject!.organizationId
-        );
-        return;
-      }
-
       // cancel an Individual ID job if one is in flight
       try {
         const { data: iidJobs } = await (
@@ -472,8 +451,8 @@ export default function Surveys() {
       return b.name.localeCompare(a.name);
     }
     if (sortBy === 'activeJobs') {
-      const hasJobA = a.queues.length > 0 || a.annotationSets.some((set: { register?: boolean | null }) => set.register) || projectsWithIndividualIdJob.has(a.id);
-      const hasJobB = b.queues.length > 0 || b.annotationSets.some((set: { register?: boolean | null }) => set.register) || projectsWithIndividualIdJob.has(b.id);
+      const hasJobA = a.queues.length > 0 || projectsWithIndividualIdJob.has(a.id);
+      const hasJobB = b.queues.length > 0 || projectsWithIndividualIdJob.has(b.id);
       if (hasJobA !== hasJobB) return hasJobA ? -1 : 1;
       return new Date(b.createdAt ?? '').getTime() - new Date(a.createdAt ?? '').getTime();
     }
@@ -722,9 +701,7 @@ export default function Surveys() {
       project.status === 'deleting';
 
     const hasQueueOrRegisterJob =
-      project.status !== 'launching' &&
-      (project.queues.length > 0 ||
-        project.annotationSets.some((set: { register?: boolean | null }) => set.register));
+      project.status !== 'launching' && project.queues.length > 0;
     const hasIndividualIdJob = projectsWithIndividualIdJob.has(project.id);
     // Combined signal used to lock the survey row down (disable Edit/Add/
     // Delete, hide per-set actions) exactly like any other active job.
@@ -817,7 +794,7 @@ export default function Surveys() {
                 <Button
                   size={compactMode ? 'sm' : undefined}
                   className='flex align-items-center justify-content-center'
-                  disabled={!project.annotationSets.some((set: { register?: boolean | null }) => set.register) && (disabled || scanningProjects.has(project.id))}
+                  disabled={disabled || scanningProjects.has(project.id)}
                   variant='primary'
                   onClick={() => navigate(`/jobs`)}
                 >
@@ -826,7 +803,7 @@ export default function Surveys() {
                 <Button
                   size={compactMode ? 'sm' : undefined}
                   className='flex align-items-center justify-content-center'
-                  disabled={!project.annotationSets.some((set: { register?: boolean | null }) => set.register) && (disabled || scanningProjects.has(project.id))}
+                  disabled={disabled || scanningProjects.has(project.id)}
                   variant='danger'
                   onClick={() => {
                     setSelectedProject(project);
@@ -883,9 +860,7 @@ export default function Surveys() {
       project.status === 'deleting';
 
     const hasQueueOrRegisterJob =
-      project.status !== 'launching' &&
-      (project.queues.length > 0 ||
-        project.annotationSets.some((set: { register?: boolean | null }) => set.register));
+      project.status !== 'launching' && project.queues.length > 0;
     const hasIndividualIdJob = projectsWithIndividualIdJob.has(project.id);
     // Combined signal used to lock the survey row down (disable Edit/Add/
     // Delete, hide per-set actions) exactly like any other active job.
@@ -970,7 +945,7 @@ export default function Surveys() {
                   <Button
                     size='sm'
                     className='flex align-items-center justify-content-center'
-                    disabled={!project.annotationSets.some((set: { register?: boolean | null }) => set.register) && (disabled || scanningProjects.has(project.id))}
+                    disabled={disabled || scanningProjects.has(project.id)}
                     variant='primary'
                     onClick={() => navigate(`/jobs`)}
                   >
@@ -979,7 +954,7 @@ export default function Surveys() {
                   <Button
                     size='sm'
                     className='flex align-items-center justify-content-center'
-                    disabled={!project.annotationSets.some((set: { register?: boolean | null }) => set.register) && (disabled || scanningProjects.has(project.id))}
+                    disabled={disabled || scanningProjects.has(project.id)}
                     variant='danger'
                     onClick={() => {
                       setSelectedProject(project);

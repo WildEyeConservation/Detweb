@@ -1,11 +1,10 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
-import BaseImage from '../BaseImage';
-import { ImageContextFromHook } from '../ImageContext';
-import { GlobalContext } from '../Context';
+import { GlobalContext, ProjectContext } from '../Context';
 import { useOptimisticUpdates } from '../useOptimisticUpdates';
-// no local marker types needed here
-import { ShowMarkers } from '../ShowMarkers';
-import Location from '../Location';
+import MapLibreLightViewer, {
+  LightAnnotation,
+  LightRect,
+} from '../annotator/MapLibreLightViewer';
 
 type MinimalLocationRef = { id: string; annotationSetId: string };
 
@@ -39,8 +38,11 @@ export default function LightLocationView({
   };
 }) {
   const { client } = useContext(GlobalContext)!;
-  // no-op: legend uses ProjectContext internally
+  const {
+    categoriesHook: { data: categories },
+  } = useContext(ProjectContext)!;
   const [loaded, setLoaded] = useState<LoadedLocation | null>(null);
+  const [sourceKey, setSourceKey] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,19 +57,17 @@ export default function LightLocationView({
       // @ts-ignore selectionSet typing is complex in client
       const { data: image } = await client.models.Image.get({
         id: loc.imageId,
-        selectionSet: [
-          'id',
-          'width',
-          'height',
-          'latitude',
-          'longitude',
-          'altitude_wgs84',
-          'altitude_egm96',
-          'altitude_agl',
-        ] as const,
+        selectionSet: ['id', 'width', 'height'] as const,
       } as any);
       if (!image) return;
+      const filesResp = await (client as any).models.ImageFile.imagesByimageId({
+        imageId: image.id,
+        selectionSet: ['id', 'type', 'key'] as const,
+      });
+      const files = filesResp.data as Array<{ type: string; key: string }>;
+      const jpeg = files.find((f) => f.type === 'image/jpeg') || files[0];
       if (!cancelled) {
+        setSourceKey(jpeg?.key || null);
         setLoaded({
           id: loc.id,
           x: loc.x,
@@ -115,6 +115,46 @@ export default function LightLocationView({
     subscriptionFilter
   ) as any;
 
+  const annotations = useMemo<LightAnnotation[]>(
+    () =>
+      ((annotationsHook.data as any[]) ?? [])
+        .filter((a) => a.setId === loaded?.annotationSetId)
+        .map((a) => {
+          const category = categories?.find((c) => c.id === a.categoryId);
+          return {
+            id: a.id,
+            x: a.x,
+            y: a.y,
+            color: category?.color ?? 'red',
+            popupLines: [`Label: ${category?.name ?? 'Unknown'}`],
+          };
+        }),
+    [annotationsHook.data, categories, loaded?.annotationSetId]
+  );
+
+  const rects = useMemo<LightRect[]>(() => {
+    if (!loaded) return [];
+    const result: LightRect[] = [
+      {
+        x: loaded.x,
+        y: loaded.y,
+        width: loaded.width,
+        height: loaded.height,
+        color: 'blue',
+      },
+    ];
+    if (overlay?.enabled) {
+      result.push({
+        x: loaded.x + (overlay.offsetX ?? 0),
+        y: loaded.y + (overlay.offsetY ?? 0),
+        width: overlay.width ?? loaded.width,
+        height: overlay.height ?? loaded.height,
+        color: 'red',
+      });
+    }
+    return result;
+  }, [loaded, overlay]);
+
   return (
     <div className='d-flex flex-md-row flex-column justify-content-center w-100 h-100 gap-3 overflow-auto'>
       {/* Center image */}
@@ -122,43 +162,19 @@ export default function LightLocationView({
         className='d-flex flex-column align-items-center w-100 h-100 gap-3'
         style={{ maxWidth: '1024px' }}
       >
-        {loaded && (
-          <ImageContextFromHook
-            hook={annotationsHook as any}
-            locationId={loaded.id}
-            image={loaded.image as any}
-            taskTag={'add-locations'}
-          >
-            {/* @ts-ignore - BaseImageProps typing requires image, but component uses location.image */}
-            <BaseImage
-              visible={visible}
-              location={loaded as any}
-              image={loaded.image as any}
-              next={next}
-              prev={prev}
-              annotationSet={loaded.annotationSetId as any}
-              hideNavButtons={false}
-              isTest={true}
-            >
-              <Location {...(loaded as any)} />
-              {overlay?.enabled && (
-                <Location
-                  {...({
-                    x: (loaded as any).x + (overlay?.offsetX ?? 0),
-                    y: (loaded as any).y + (overlay?.offsetY ?? 0),
-                    width: overlay?.width ?? (loaded as any).width,
-                    height: overlay?.height ?? (loaded as any).height,
-                    strokeColor: 'red',
-                  } as any)}
-                />
-              )}
-              <ShowMarkers annotationSetId={loaded.annotationSetId} />
-            </BaseImage>
-          </ImageContextFromHook>
+        {loaded && sourceKey && (
+          <MapLibreLightViewer
+            image={loaded.image}
+            sourceKey={sourceKey}
+            annotations={annotations}
+            rects={rects}
+            fitRect={loaded}
+            visible={visible}
+            next={next}
+            prev={prev}
+          />
         )}
       </div>
     </div>
   );
 }
-
-// no local filters; filters are applied to candidate list in parent modal

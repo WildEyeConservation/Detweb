@@ -27,7 +27,6 @@ type Project = {
   };
   annotationSets: {
     id: string;
-    register: boolean;
   }[];
   createdAt: string;
   queues: Schema['Queue']['type'][];
@@ -46,13 +45,6 @@ export default function Jobs() {
   const [jobsRemaining, setJobsRemaining] = useState<Record<string, string>>(
     {}
   );
-  const [registrationJobs, setRegistrationJobs] = useState<
-    {
-      id: string;
-      projectId: string;
-      register: boolean;
-    }[]
-  >([]);
   const [individualIdJobs, setIndividualIdJobs] = useState<
     {
       jobId: string;
@@ -171,7 +163,6 @@ export default function Jobs() {
               'organization.id',
               'organization.name',
               'annotationSets.id',
-              'annotationSets.register',
               'createdAt',
               'queues.*',
             ],
@@ -290,19 +281,6 @@ export default function Jobs() {
         if (cancelled) return;
 
         setJobsRemaining(jobsRemaining);
-
-        // check if registration jobs are available
-        const registrationJobs = validProjects.flatMap((project) =>
-          project.annotationSets.map((set) => {
-            return {
-              id: set.id,
-              projectId: project.id,
-              register: set.register || false,
-            };
-          })
-        );
-
-        setRegistrationJobs(registrationJobs.filter((job) => job.register));
 
         getIndividualIdJobs();
 
@@ -544,79 +522,6 @@ export default function Jobs() {
         })
         .filter((item) => item !== null)
     ),
-    ...registrationJobs
-      .filter((job) => {
-        const project = displayProjects.find((p) => p.id === job.projectId);
-        if (!project) return false;
-
-        const searchLower = search.toLowerCase();
-        const matchesOrganization =
-          !organizationFilter || project.organization.id === organizationFilter;
-        const matchesSearch =
-          searchLower === '' ||
-          project.name.toLowerCase().includes(searchLower) ||
-          project.organization.name.toLowerCase().includes(searchLower) ||
-          'registration'.includes(searchLower);
-
-        return matchesOrganization && matchesSearch;
-      })
-      .map((job) => {
-        const project = displayProjects.find(
-          (project) => project.id === job.projectId
-        );
-
-        if (!project) {
-          return null;
-        }
-
-        const paddingClass = compactMode ? 'p-1' : 'p-2';
-        const rowGapClass = compactMode ? 'gap-1' : 'gap-3';
-        const typeFontSize = compactMode ? '12px' : '14px';
-
-        return {
-          id: job.id,
-          rowData: [
-            <div
-              className={`d-flex justify-content-between align-items-center ${paddingClass}`}
-              key={job.id}
-            >
-              <div className={`d-flex flex-row ${rowGapClass} align-items-center`}>
-                <div>
-                  {compactMode ? (
-                    <h6 className='mb-0'>{project.name}</h6>
-                  ) : (
-                    <h5 className='mb-0'>{project.name}</h5>
-                  )}
-                  {!compactMode && (
-                    <i style={{ fontSize: '14px', display: 'block' }}>
-                      {project.organization.name}
-                    </i>
-                  )}
-                  <p
-                    style={{
-                      fontSize: typeFontSize,
-                      display: 'block',
-                      marginBottom: '0px',
-                    }}
-                  >
-                    Type: Registration
-                  </p>
-                </div>
-              </div>
-              <Button
-                size={compactMode ? 'sm' : undefined}
-                className='ms-1'
-                variant='primary'
-                onClick={() =>
-                  navigate(`/surveys/${project.id}/set/${job.id}/registration`)
-                }
-              >
-                Take Job
-              </Button>
-            </div>,
-          ],
-        };
-      }).filter((item): item is NonNullable<typeof item> => item !== null),
     ...individualIdJobs
       .filter((job) => {
         const searchLower = search.toLowerCase();

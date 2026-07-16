@@ -60,8 +60,6 @@ export interface UserContextType {
   setCurrentAnnoCount: React.Dispatch<
     React.SetStateAction<{ [key: string]: { x: number; y: number }[] }>
   >;
-  isRegistering: boolean;
-  setIsRegistering: React.Dispatch<React.SetStateAction<boolean>>;
   sessionTestsResults: {
     id: string;
     locationId: string;
@@ -125,12 +123,6 @@ type NeighbourTransform = {
 } | undefined;
 
 interface ImageContextType {
-  latLng2xy: (
-    input: L.LatLng | [number, number] | Array<L.LatLng | [number, number]>
-  ) => L.Point | L.Point[];
-  xy2latLng: (
-    input: L.Point | [number, number] | Array<L.Point | [number, number]>
-  ) => L.LatLng | L.LatLng[];
   annotationsHook: AnnotationsHook;
   annoCount: number;
   startLoadingTimestamp: number;

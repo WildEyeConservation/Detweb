@@ -1,8 +1,8 @@
-import { useContext, useState, useMemo } from 'react';
+import { useContext, useState } from 'react';
 import { GlobalContext } from './Context';
-import { fetchAllPaginatedResults } from './utils';
-import useSQS from './SqsSource';
-import { PreloaderFactory } from './Preloader';
+import { fetchAllPaginatedResults, isWithinLocationBounds } from './utils';
+import useSQS from './useSQS';
+import { Preloader } from './Preloader';
 import { TaskSelector } from './TaskSelector';
 
 interface Message {
@@ -62,20 +62,10 @@ export default function SqsPreloader({
         !a.source || !String(a.source).includes('false-negative')
     );
 
-    const boundsxy: [number, number][] = [
-      [location.x - (location.width ?? 0) / 2, location.y - (location.height ?? 0) / 2],
-      [location.x + (location.width ?? 0) / 2, location.y + (location.height ?? 0) / 2],
-    ];
-
     // Using the x, y, width, height, check if any of the annotations fall within the location
-    const annotationsWithin = annotations.filter((annotation) => {
-      return (
-        annotation.x >= boundsxy[0][0] &&
-        annotation.y >= boundsxy[0][1] &&
-        annotation.x <= boundsxy[1][0] &&
-        annotation.y <= boundsxy[1][1]
-      );
-    });
+    const annotationsWithin = annotations.filter((annotation) =>
+      isWithinLocationBounds(annotation, location)
+    );
 
     const isWithin = annotationsWithin.length > 0;
 
@@ -83,7 +73,7 @@ export default function SqsPreloader({
       console.log(
         `Filter: Rejecting location ${message.location.id} - found ${annotationsWithin.length} annotation(s) within bounds`,
         {
-          locationBounds: boundsxy,
+          location,
           imageId: location.imageId,
           annotationSetId: message.location.annotationSetId,
           totalAnnotationsOnImage: annotations.length,
@@ -102,8 +92,6 @@ export default function SqsPreloader({
 
   const { fetcher } = useSQS(filter, true);
 
-  const Preloader = useMemo(() => PreloaderFactory(TaskSelector), []);
-
   return (
     <>
       {fetcher && (
@@ -114,6 +102,7 @@ export default function SqsPreloader({
           visible={visible}
           preloadN={3}
           historyN={2}
+          renderTask={(task) => <TaskSelector {...task} />}
         />
       )}
     </>

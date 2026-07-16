@@ -1,6 +1,6 @@
 import { Button, Form } from 'react-bootstrap';
 import { Modal, Body, Header, Footer, Title } from '../Modal';
-import { useState, useContext, useEffect } from 'react';
+import { useState, useContext } from 'react';
 import { Tabs, Tab } from '../Tabs';
 import { Schema } from '../amplify/client-schema';
 import { GlobalContext } from '../Context';
@@ -10,7 +10,7 @@ import QCReview from './QCReview';
 import HomographyLaunch from './HomographyLaunch';
 import IndividualId from './IndividualId';
 
-type TaskType = 'species-labelling' | 'registration' | 'false-negatives' | 'homographies' | 'qc-review' | 'individual-id';
+type TaskType = 'species-labelling' | 'false-negatives' | 'homographies' | 'qc-review' | 'individual-id';
 
 type LaunchHandlerType = {
   execute: (
@@ -43,8 +43,7 @@ export default function LaunchAnnotationSetModal({
   const [homographyLaunchHandler, setHomographyLaunchHandler] = useState<LaunchHandlerType>(null);
   const [individualIdLaunchHandler, setIndividualIdLaunchHandler] = useState<LaunchHandlerType>(null);
 
-  // set up queue creation helper
-  const { client, showModal } = useContext(GlobalContext)! as any;
+  const { showModal } = useContext(GlobalContext)! as any;
 
   // Task type for each tab, in render order.
   const tabTaskTypes: TaskType[] = [
@@ -55,29 +54,10 @@ export default function LaunchAnnotationSetModal({
     'individual-id',
   ];
 
-  useEffect(() => {
-    if (taskType === 'registration') {
-      setLaunchDisabled(false);
-    }
-    // Other tabs manage their own disabled state via setLaunchDisabled
-  }, [taskType]);
-
   function onClose() {
     setTaskType('species-labelling');
     setProgressMessage('');
     showModal(null);
-  }
-
-  async function createRegistrationTask() {
-    // Display registration job
-    // Cast to any to avoid overly complex union from generated types
-    await (client.models.AnnotationSet.update as any)({
-      id: annotationSet.id,
-      register: true,
-    });
-    await client.mutations.updateProjectMemberships({
-      projectId: project.id,
-    });
   }
 
   async function handleSubmit() {
@@ -86,9 +66,7 @@ export default function LaunchAnnotationSetModal({
 
     // Set optimistic status immediately so the project is blocked for the
     // user even before the modal closes, preventing rapid re-launches.
-    if (taskType !== 'registration') {
-      onOptimisticStatus?.(project.id, 'launching');
-    }
+    onOptimisticStatus?.(project.id, 'launching');
 
     try {
       switch (taskType) {
@@ -121,9 +99,6 @@ export default function LaunchAnnotationSetModal({
             setProgressMessage('Initializing launch...');
             await individualIdLaunchHandler.execute(setProgressMessage, () => {});
           }
-          break;
-        case 'registration':
-          await createRegistrationTask();
           break;
       }
     } catch (error) {

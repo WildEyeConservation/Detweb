@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BaseImageProps } from './BaseImage';
 
 export interface UseAckOnTimeoutProps {
   next?: () => void;
   visible: boolean;
-  ack: () => void;
+  /** Called to ack the task. Receives the timestamp at which the user submitted (paged past), since the call itself is deliberately delayed. */
+  ack: (submittedAt?: number) => void;
 }
 
 export interface UseAckOnTimeoutResult {
@@ -87,7 +87,10 @@ export default function useAckOnTimeout({
   const onNext = useCallback(() => {
     console.log(`timer set for ${id}`);
     setWasHidden(false);
-    setTimer(window.setTimeout(ack, 2000));
+    // Capture the submit time now — the ack fires 2s later (grace period for
+    // paging back), and observation timing must not include that delay.
+    const submittedAt = Date.now();
+    setTimer(window.setTimeout(() => ack(submittedAt), 2000));
     if (next) {
       next();
     } else {
@@ -188,20 +191,8 @@ export default function useAckOnTimeout({
   };
 }
 
-// interface WithAckOnTimeoutProps extends UseAckOnTimeoutProps {
-//   [key: string]: any; // To allow any other props to be passed
-// }
-
-// Combined props for the HOC - using intersection with index signature for flexibility
-// The location object at runtime includes an ack function from SQS source
-interface CombinedProps extends BaseImageProps {
-  next?: () => void;
-  visible: boolean;
-  location?: BaseImageProps['location'] & { ack?: () => void };
-}
-
 // Subtle loading overlay component for when waiting for new work
-function WaitingOverlay({ message }: { message: string }) {
+export function WaitingOverlay({ message }: { message: string }) {
   return (
     <div
       style={{
@@ -249,26 +240,4 @@ function WaitingOverlay({ message }: { message: string }) {
       </div>
     </div>
   );
-}
-
-export function withAckOnTimeout<T extends CombinedProps>(
-  WrappedComponent: React.ComponentType<T>
-) {
-  const WithAckOnTimeout: React.FC<T> = (props) => {
-    const { next, visible, location } = props;
-    const ack = location?.ack ?? (() => {});
-    const { onNext, waiting, waitingMessage } = useAckOnTimeout({
-      next,
-      visible,
-      ack,
-    });
-
-    return (
-      <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-        <WrappedComponent {...props} next={onNext} />
-        {waiting && <WaitingOverlay message={waitingMessage} />}
-      </div>
-    );
-  };
-  return WithAckOnTimeout;
 }

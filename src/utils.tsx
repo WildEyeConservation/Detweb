@@ -85,3 +85,45 @@ export const array2Matrix = (hc: number[] | null): number[][] | null => {
 };
 
 // ReturnTypeOfFirstElementWithX is inferred as number
+
+/**
+ * Whether a point falls within a location's bounds. Locations store a centre
+ * point plus width/height, so the test is against half-extents. The boundary
+ * itself counts as inside.
+ */
+export function isWithinLocationBounds(
+  point: { x: number; y: number },
+  location: {
+    x: number;
+    y: number;
+    width?: number | null;
+    height?: number | null;
+  }
+): boolean {
+  return (
+    Math.abs(point.x - location.x) <= (location.width ?? 0) / 2 &&
+    Math.abs(point.y - location.y) <= (location.height ?? 0) / 2
+  );
+}
+
+/**
+ * Map the user's currently selected category onto the annotation set actually
+ * being written to. If the selected category belongs to another set, fall back
+ * to the same-named category in the target set, then to that set's 'Unknown'.
+ */
+export function resolveCategoryIdForSet(
+  currentCategory: { id: string; name: string } & Record<string, any>,
+  categories: Array<{ id: string; name: string } & Record<string, any>>,
+  targetSetId: string
+): string {
+  if (currentCategory.annotationSetId === targetSetId) return currentCategory.id;
+  const sameName = categories.find(
+    (c) => c.annotationSetId === targetSetId && c.name === currentCategory.name
+  );
+  if (sameName) return sameName.id;
+  const unknown = categories.find(
+    (c) =>
+      c.annotationSetId === targetSetId && c.name.toLowerCase() === 'unknown'
+  );
+  return unknown?.id ?? currentCategory.id;
+}

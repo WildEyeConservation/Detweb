@@ -22,7 +22,6 @@ export default function ProjectProgress({ projectId, onScanningChange }: Project
     emptyQueueTimestamp: string | null;
   } | null>(null);
   const [jobsRemaining, setJobsRemaining] = useState<number>(0);
-  const [registering, setRegistering] = useState<boolean>(false);
 
   const prevScanningRef = useRef<boolean>(false);
 
@@ -44,17 +43,10 @@ export default function ProjectProgress({ projectId, onScanningChange }: Project
               'queues.observedCount',
               'queues.requeuesCompleted',
               'queues.emptyQueueTimestamp',
-              'annotationSets.register',
             ],
           }
         )
       ).data;
-
-      const register = projectData?.annotationSets.some((set: { register?: boolean | null }) => set.register) ?? false;
-      setRegistering(register);
-      if (register) {
-        return;
-      }
 
       if (cancelled || !projectData?.queues?.length) {
         setIsLoading(false);
@@ -114,10 +106,6 @@ export default function ProjectProgress({ projectId, onScanningChange }: Project
       onScanningChange?.(shouldDisable);
     }
   }, [shouldDisable, onScanningChange]);
-
-  if (registering) {
-    return <p className='mb-0 w-100'>Registering</p>;
-  }
 
   if (isLoading || !queueInfo) {
     return <Spinner />;

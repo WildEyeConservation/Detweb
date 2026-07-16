@@ -4,13 +4,12 @@ import {
   useContext,
   useRef,
   useCallback,
-  useMemo,
 } from 'react';
 import { Button, Form, Spinner } from 'react-bootstrap';
 import { Modal, Header, Title, Body, Footer } from '../Modal';
 import { GlobalContext, UserContext, TestingContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
-import { FetcherType, PreloaderFactory } from '../Preloader';
+import { FetcherType, Preloader } from '../Preloader';
 import LightLocationView from './LightLocationView';
 import ProjectContext from './ProjectContext';
 
@@ -50,7 +49,6 @@ export default function EditLocationsModal({ show, preset, surveyId }: Props) {
     annotationSetId: string;
   } | null>(null);
 
-  const Preloader = useMemo(() => PreloaderFactory(LightLocationView), []);
   const fetcher: FetcherType = useCallback(async () => {
     const loc = locationsRef.current[locationIndexRef.current];
     locationIndexRef.current = locationIndexRef.current + 1;
@@ -356,6 +354,9 @@ export default function EditLocationsModal({ show, preset, surveyId }: Props) {
                       fetcher={fetcher}
                       preloadN={5}
                       historyN={5}
+                      renderTask={(task) => (
+                        <LightLocationView {...task} location={task.location} />
+                      )}
                     />
                   </Form.Group>
                   <div className='d-flex flex-column w-100 gap-2 pt-3'>

@@ -10,7 +10,7 @@ import { Button, Form, Spinner } from 'react-bootstrap';
 import { Modal, Header, Title, Body, Footer } from '../Modal';
 import { GlobalContext, TestingContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
-import { FetcherType, PreloaderFactory } from '../Preloader';
+import { FetcherType, Preloader } from '../Preloader';
 import LightLocationView from './LightLocationView';
 import ProjectContext from './ProjectContext';
 
@@ -60,8 +60,6 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
     annotationSetId: string;
     locationId: string;
   } | null>(null);
-
-  const Preloader = useMemo(() => PreloaderFactory(LightLocationView), []);
 
   const fetcher: FetcherType = useCallback(async () => {
     const cand = candidatesRef.current[candidateIndexRef.current];
@@ -663,17 +661,23 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
                       fetcher={fetcher}
                       preloadN={5}
                       historyN={5}
-                      overlay={{
-                        enabled: overlayEnabled,
-                        width: changeSize
-                          ? customWidth || undefined
-                          : undefined,
-                        height: changeSize
-                          ? customHeight || undefined
-                          : undefined,
-                        offsetX,
-                        offsetY,
-                      }}
+                      renderTask={(task) => (
+                        <LightLocationView
+                          {...task}
+                          location={task.location}
+                          overlay={{
+                            enabled: overlayEnabled,
+                            width: changeSize
+                              ? customWidth || undefined
+                              : undefined,
+                            height: changeSize
+                              ? customHeight || undefined
+                              : undefined,
+                            offsetX,
+                            offsetY,
+                          }}
+                        />
+                      )}
                     />
                   </Form.Group>
                   <div className='d-flex flex-column w-100 gap-2 pt-3'>

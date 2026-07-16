@@ -105,7 +105,6 @@ export function User({
   const [jobsCompleted, setJobsCompleted] = useState<number>(0);
   const [unannotatedJobs, setUnannotatedJobs] = useState<number>(0);
   const [currentTaskTag, setCurrentTaskTag] = useState<string>('');
-  const [isRegistering, setIsRegistering] = useState<boolean>(false);
   const [currentAnnoCount, setCurrentAnnoCount] = useState<{
     [key: string]: { x: number; y: number }[];
   }>({});
@@ -233,8 +232,6 @@ export function User({
         setCurrentTaskTag,
         currentAnnoCount,
         setCurrentAnnoCount,
-        isRegistering,
-        setIsRegistering,
         myMembershipHook: myMembershipHook as unknown as UserContextType['myMembershipHook'],
         myOrganizationHook: myOrganizationHook as unknown as UserContextType['myOrganizationHook'],
         isOrganizationAdmin,

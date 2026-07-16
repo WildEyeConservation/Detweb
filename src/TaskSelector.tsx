@@ -1,14 +1,12 @@
 import { useContext, useState, useEffect, useRef } from 'react';
 import AnnotationImage from './AnnotationImage';
-import { RegisterPair } from './RegisterPair';
 import { GlobalContext } from './Context';
-import { array2Matrix, makeTransform } from './utils';
-import { inv } from 'mathjs';
 
-/* 
-  In the current implementation, we can push both registration and annotation tasks to the same queue.
-  The task of the TaskSelector component is to identify based on the props that were passed whether we
-  are dealing with an annotation or registration task and instantiate the correct component to display the task
+/*
+  Resolves a queue message into an annotation task: fetches the referenced
+  Location (when the message carries one) and renders the AnnotationImage for
+  it. (Registration tasks used to arrive on the same queues; that workflow has
+  been superseded by individual-id/ChainLinker.)
 */
 
 interface TaskSelectorProps {
@@ -18,8 +16,9 @@ interface TaskSelectorProps {
 
 export function TaskSelector(props: TaskSelectorProps) {
   const { client } = useContext(GlobalContext)!;
-  const [element, setElement] = useState<JSX.Element | null>(null);
+  const [locationData, setLocationData] = useState<any>(null);
   const hasRevalidated = useRef(false);
+  const locationId = props.location?.id;
 
   // Last-resort revalidation when this item becomes visible
   // This catches cases where annotations were added after the initial filter passed
@@ -37,93 +36,47 @@ export function TaskSelector(props: TaskSelectorProps) {
   }, [props.visible, props.revalidate, props.ack, props.next]);
 
   useEffect(() => {
-    if (props.location) {
-      if (props.location.id) {
-        client.models.Location.get(
-          { id: props.location.id },
-          {
-            selectionSet: [
-              'id',
-              'x',
-              'y',
-              'width',
-              'height',
-              'confidence',
-              'image.id',
-              'image.width',
-              'image.height',
-              'image.latitude',
-              'image.longitude',
-              'image.altitude_wgs84',
-              'image.altitude_egm96',
-              'image.altitude_agl',
-            ],
-          }
-        ).then(({ data }) => {
-          setElement(
-            <AnnotationImage
-              {...props}
-              location={{
-                ...data,
-                annotationSetId: props.location.annotationSetId,
-              }}
-            />
-          );
-        });
-      } else {
-        setElement(<AnnotationImage {...props} />);
+    if (!locationId) return;
+    let cancelled = false;
+    client.models.Location.get(
+      { id: locationId },
+      {
+        selectionSet: [
+          'id',
+          'x',
+          'y',
+          'width',
+          'height',
+          'confidence',
+          'image.id',
+          'image.width',
+          'image.height',
+          'image.latitude',
+          'image.longitude',
+          'image.altitude_wgs84',
+          'image.altitude_egm96',
+          'image.altitude_agl',
+        ],
       }
-    } else {
-      client.models.ImageNeighbour.get(
-        { image1Id: props.images[0], image2Id: props.images[1] },
-        { selectionSet: ['homography', 'image1.*', 'image2.*'] }
-      ).then(({ data }) => {
-        const homography = data?.homography;
-        const image1 = data?.image1;
-        const image2 = data?.image2;
-        const H = array2Matrix(homography as any);
-        const transforms = H
-          ? [makeTransform(H as any), makeTransform(inv(H as any))]
-          : undefined;
-        setElement(
-          <RegisterPair
-            {...(props as any)}
-            transforms={transforms}
-            images={[image1, image2]}
-          />
-        );
-      });
-    }
-  }, [props]);
+    ).then(({ data }) => {
+      if (!cancelled) setLocationData(data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, locationId]);
 
-  // const { location, ...restProps } = props;
-  // const annotationProps = {
-  //   ...restProps,
-  //   height: 100,
-  //   x: 0,
-  //   y: 0,
-  //   image: { key: 'default.png', width: 100, height: 100 },
-  //   width: width || 100,
-  //   next: () => {},
-  //   prev: () => {},
-  //   fullImage: true,
-  //   visible: true,
-  //   id: 'defaultId',
-  //   ack: () => {},
-  //   setId: 'defaultSetId',
-  //   locationId: '',
-  //   annotationSetId: '',
-  // };
-
-  // const registerPairProps = {
-  //   ...restProps,
-  //   images: [],
-  //   selectedSet: '',
-  //   next: () => {},
-  //   prev: () => {},
-  //   visible: true,
-  //   ack: () => {},
-  // };
-
-  return element;
+  if (!props.location) return null;
+  if (!props.location.id) {
+    return <AnnotationImage {...props} />;
+  }
+  return locationData ? (
+    <AnnotationImage
+      {...props}
+      location={{
+        ...locationData,
+        annotationSetId: props.location.annotationSetId,
+      }}
+    />
+  ) : null;
 }
