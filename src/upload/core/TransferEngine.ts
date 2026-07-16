@@ -27,6 +27,8 @@ export interface TransferInput {
   phashIndex: PhashIndex<{ originalPath: string }>;
   /** Paths whose phash was seeded from existing DB records. */
   dbSeededPaths: Set<string>;
+  /** Physical CCW correction to apply to the stored image at this path. */
+  rotationForPath: (originalPath: string) => number;
 }
 
 export interface TransferCallbacks {
@@ -216,12 +218,21 @@ export class TransferEngine {
       }
 
       const s3Key = input.makeKey(image.originalPath);
+      const rotation = input.rotationForPath(image.originalPath);
       const task = uploadData({
         path: 'images/' + s3Key,
         data: file,
         options: {
           bucket: 'inputs',
           contentType: file.type,
+          ...(rotation !== 0
+            ? {
+                metadata: {
+                  'orientation-correction-ccw': String(rotation),
+                  'orientation-normalized': 'false',
+                },
+              }
+            : {}),
           onProgress: ({ transferredBytes }) => {
             this.inFlightBytes.set(image.originalPath, transferredBytes);
             this.reportBytes();

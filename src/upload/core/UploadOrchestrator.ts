@@ -1,9 +1,13 @@
 import type { ImageData } from '../../types/ImageData';
+import {
+  orientationCorrectionFor,
+  orientationGroupForDimensions,
+} from '../../types/Orientation';
 import { fetchAllPaginatedResults } from '../../utils';
 import { logAdminAction } from '../../utils/adminActionLogger';
 import { PhashIndex } from '../phashDedup';
 import { PhashService } from '../phashService';
-import { buildCameraResolver } from './cameras';
+import { buildCameraResolver, type CameraResolver } from './cameras';
 import { ElevationService } from './elevation';
 import { Finalizer } from './Finalizer';
 import { UploadStateStore } from './persistence';
@@ -72,6 +76,7 @@ interface PreparedPlan {
   keyInfo: ProjectKeyInfo;
   imageSetId: string;
   input: TransferInput;
+  cameras: CameraResolver;
 }
 
 type Listener = (snapshot: SessionSnapshot | null) => void;
@@ -264,11 +269,7 @@ export class UploadOrchestrator {
             imageSetId: plan.imageSetId,
             makeKey: plan.keyInfo.makeKey,
             elevation: session.elevation,
-            cameras: await buildCameraResolver(
-              session.client,
-              session.projectId,
-              (await session.store.getMetadata())?.folderCameraMapping ?? {}
-            ),
+            cameras: plan.cameras,
             signal: session.controller.signal,
           }),
           phashService,
@@ -394,6 +395,31 @@ export class UploadOrchestrator {
     }
 
     const storedImages = await store.getImages();
+    const uploadMetadata = await store.getMetadata();
+    const cameras = await buildCameraResolver(
+      client,
+      projectId,
+      uploadMetadata?.folderCameraMapping ?? {}
+    );
+    const storedImageByPath = new Map(
+      storedImages.map((image) => [image.originalPath, image])
+    );
+    const rotationForPath = (originalPath: string): number => {
+      const cameraName = cameras.resolveCameraName(originalPath);
+      const image = storedImageByPath.get(originalPath);
+      if (!cameraName || !image) return 0;
+
+      // New manifests preserve the pre-correction shape explicitly. The
+      // dimension fallback keeps older interrupted uploads resumable.
+      const orientationGroup =
+        image.sourceOrientationGroup ??
+        orientationGroupForDimensions(image.width, image.height);
+      return orientationCorrectionFor(
+        uploadMetadata?.rotations,
+        cameraName,
+        orientationGroup
+      );
+    };
 
     // Drop manifest entries without valid GPS (they can't produce usable
     // Image records) and persist the pruned manifest.
@@ -465,11 +491,18 @@ export class UploadOrchestrator {
       }))
     );
 
-    // DB-seed tasks: files on S3 without DB records. Upload tasks: files
-    // not yet on S3.
-    const seedPaths = uploadedFiles.filter((path) => !knownDbPaths.has(path));
+    // DB-seed tasks normally reuse files already on S3. If a correction is
+    // requested, re-upload the local source instead: a stale upload may have
+    // put the original bytes on S3 before the normalization metadata existed,
+    // so no upload-trigger event would otherwise arrive to rotate it.
+    const seedPaths = uploadedFiles.filter(
+      (path) => !knownDbPaths.has(path) && rotationForPath(path) === 0
+    );
     const uploadImages = validImages.filter(
-      (image) => !s3Files.has(image.originalPath)
+      (image) =>
+        !s3Files.has(image.originalPath) ||
+        (!knownDbPaths.has(image.originalPath) &&
+          rotationForPath(image.originalPath) !== 0)
     );
 
     session.total = seedPaths.length + uploadImages.length;
@@ -526,7 +559,9 @@ export class UploadOrchestrator {
         makeKey: keyInfo.makeKey,
         phashIndex,
         dbSeededPaths,
+        rotationForPath,
       },
+      cameras,
     };
   }
 

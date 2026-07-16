@@ -180,14 +180,12 @@ export default function Jobs() {
       );
 
       const projectResults = await Promise.all(projectPromises);
+      
       const validProjects = projectResults
         .map((result) => (result as { data: Project | null }).data)
         .filter(
           (project): project is Project =>
-            project !== null &&
-            project.status !== 'launching' &&
-            (project.queues.length > 0 ||
-              project.annotationSets.some((set) => set.register))
+            project !== null && project.status !== 'launching'
         )
         .map((project) => ({
           ...project,
@@ -308,12 +306,7 @@ export default function Jobs() {
 
         getIndividualIdJobs();
 
-        const filteredProjects = validProjects.filter(
-          (project) =>
-            project.queues.length > 0 ||
-            project.annotationSets.some((set) => set.register)
-        );
-        setDisplayProjects(filteredProjects);
+        setDisplayProjects(validProjects);
       }
 
       // Kick off the first polling call immediately

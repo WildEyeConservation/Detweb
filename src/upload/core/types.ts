@@ -1,4 +1,5 @@
 import type { DataClient } from '../../../amplify/shared/data-schema.generated';
+import type { PersistedCameraOrientationRotations } from '../../types/Orientation';
 
 // Session lifecycle. Transitions are owned exclusively by UploadOrchestrator:
 //   idle -> preparing -> uploading -> finalizing -> completed
@@ -62,6 +63,11 @@ export interface UploadMetadata {
   model?: string;
   masks?: number[][][];
   folderCameraMapping?: Record<string, string>;
+  /**
+   * Per-camera, per-source-shape CCW corrections (90/180/270). The upload
+   * trigger physically rotates the stored JPEG before processing begins.
+   */
+  rotations?: PersistedCameraOrientationRotations;
 }
 
 export interface UploadBackend {

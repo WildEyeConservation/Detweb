@@ -8,10 +8,28 @@ import LabeledToggleSwitch from '../LabeledToggleSwitch';
 import MyTable from '../Table';
 import { useUsers } from '../apiInterface';
 import { fetchAllPaginatedResults } from '../utils';
-import { FilesUploadForm } from '../FilesUploadComponent';
+import { FilesUploadForm, UploadWizardStep } from '../FilesUploadComponent';
 import { saveShapefileForProject } from '../utils/shapefileUtils';
-import { X, Check } from 'lucide-react';
 import { logAdminAction } from '../utils/adminActionLogger';
+import StepIndicator from './new-survey/StepIndicator';
+
+const WIZARD_STEPS = [
+  'Survey Details',
+  'Images',
+  'Location Data',
+  'Cameras',
+  'Review & Create',
+];
+
+// Which upload-form section each wizard step shows ('none' while the modal's
+// own details step is visible).
+const CORE_STEPS: UploadWizardStep[] = [
+  'none',
+  'images',
+  'georeference',
+  'cameras',
+  'review',
+];
 
 export default function NewSurveyModal({
   show,
@@ -62,10 +80,36 @@ export default function NewSurveyModal({
     ((projectId: string) => Promise<void>) | null
   >(null);
   const [gpsReady, setGpsReady] = useState(false);
+  const [imagesReady, setImagesReady] = useState(false);
   const [shapefileLatLngs, setShapefileLatLngs] =
     useState<[number, number][]>();
+  const [stepIndex, setStepIndex] = useState(0);
+  const [furthestIndex, setFurthestIndex] = useState(0);
 
   const canSubmit = !loading && filesReady && name && organization && gpsReady;
+
+  const stepReady = (index: number): boolean => {
+    switch (index) {
+      case 0:
+        return Boolean(name.trim() && organization);
+      case 1:
+        return imagesReady;
+      case 2:
+        return gpsReady;
+      default:
+        return true;
+    }
+  };
+
+  const goNext = () => {
+    if (stepIndex === 0 && projects.includes(name.toLowerCase())) {
+      alert('A project with this name already exists');
+      return;
+    }
+    const next = Math.min(stepIndex + 1, WIZARD_STEPS.length - 1);
+    setStepIndex(next);
+    setFurthestIndex((prev) => Math.max(prev, next));
+  };
 
   async function handleSave() {
     if (!organization) return;
@@ -135,7 +179,7 @@ export default function NewSurveyModal({
     );
 
     // users already exclude current user and admins
-    const other = users[organization.value].filter(
+    const other = (users[organization.value] ?? []).filter(
       (u) => !exceptions.some((e) => e.user.id === u.id)
     );
 
@@ -284,6 +328,9 @@ export default function NewSurveyModal({
       setAddPermissionExceptions(false);
       setPermissionExceptions([]);
       setUploadSubmitFn(null);
+      setStepIndex(0);
+      setFurthestIndex(0);
+      setImagesReady(false);
     }
   }, [show]);
 
@@ -294,6 +341,18 @@ export default function NewSurveyModal({
       </Header>
       <Body>
         <Form className='d-flex flex-column gap-2 p-3'>
+          <StepIndicator
+            steps={WIZARD_STEPS}
+            currentIndex={stepIndex}
+            furthestIndex={furthestIndex}
+            onSelect={setStepIndex}
+          />
+          {/* d-none (not inline display) because d-flex is !important */}
+          <div
+            className={
+              stepIndex === 0 ? 'd-flex flex-column gap-2' : 'd-none'
+            }
+          >
           <Form.Group>
             <Form.Label>Name</Form.Label>
             <Form.Control
@@ -469,32 +528,60 @@ export default function NewSurveyModal({
               </>
             )}
           </Form.Group>
+          </div>
           <FilesUploadForm
             setOnSubmit={setUploadSubmitFn}
             setReadyToSubmit={setFilesReady}
             setGpsDataReady={setGpsReady}
+            setImagesReady={setImagesReady}
+            currentStep={CORE_STEPS[stepIndex]}
             onShapefileParsed={(latLngs) => setShapefileLatLngs(latLngs)}
+            summaryDetails={[
+              { label: 'Survey name', value: name.trim() || 'Not entered' },
+              {
+                label: 'Organisation',
+                value: organization?.label || 'Not selected',
+              },
+              { label: 'GPS', value: gpsReady ? 'Exists' : 'Missing' },
+              {
+                label: 'Default annotation access',
+                value: globalAnnotationAccess?.label || 'No',
+              },
+              {
+                label: 'Permission exceptions',
+                value: String(
+                  permissionExceptions.filter((exception) => !exception.temp)
+                    .length
+                ),
+              },
+            ]}
           />
         </Form>
-        <div className='pb-2 pt-2 text-end border-top border-dark mx-3'>
-          <ul className='list-unstyled mb-2'>
-            <li style={{ color: name ? 'lime' : 'red' }}>
-              Name: {name ? <Check /> : <X />}
-            </li>
-            <li style={{ color: filesReady ? 'lime' : 'red' }}>
-              Files: {filesReady ? <Check /> : <X />}
-            </li>
-            <li style={{ color: gpsReady ? 'lime' : 'red' }}>
-              GPS Data: {gpsReady ? <Check /> : <X />}
-            </li>
-          </ul>
-        </div>
       </Body>
 
       <Footer>
-        <Button variant='primary' onClick={handleSave} disabled={!canSubmit}>
-          {loading ? 'Creating...' : 'Create'}
-        </Button>
+        {stepIndex > 0 && (
+          <Button
+            variant='secondary'
+            disabled={loading}
+            onClick={() => setStepIndex(stepIndex - 1)}
+          >
+            Back
+          </Button>
+        )}
+        {stepIndex < WIZARD_STEPS.length - 1 ? (
+          <Button
+            variant='primary'
+            disabled={!stepReady(stepIndex)}
+            onClick={goNext}
+          >
+            Next
+          </Button>
+        ) : (
+          <Button variant='primary' onClick={handleSave} disabled={!canSubmit}>
+            {loading ? 'Creating...' : 'Create'}
+          </Button>
+        )}
         <Button variant='dark' onClick={() => showModal(null)}>
           Cancel
         </Button>
