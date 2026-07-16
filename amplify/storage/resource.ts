@@ -118,7 +118,9 @@ export const inputBucket = defineStorage({
   access: allow => ({
     'images/*': [
       allow.resource(generateTile).to(['get']),
-      allow.resource(handleS3Upload).to(['get']),
+      // The upload handler replaces images carrying an orientation correction
+      // with physically rotated pixels before downstream processing starts.
+      allow.resource(handleS3Upload).to(['get', 'write']),
       allow.resource(pretileImage).to(['get']),
       allow.authenticated.to(['read', 'write', 'delete']),
       allow.groups(['sysadmin']).to(['read', 'write', 'delete'])

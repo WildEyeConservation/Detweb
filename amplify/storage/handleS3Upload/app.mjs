@@ -10,6 +10,10 @@ import { STSClient, AssumeRoleCommand } from '@aws-sdk/client-sts';
 //import {doAppsyncQueryWithPagination, doAppsyncQuery} from './appsync.js'
 //import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
 import sharp from 'sharp';
+import {
+  normalizeCorrection,
+  normalizeImageOrientation,
+} from './orientation.mjs';
 
 //const dynamoDb = new DynamoDBClient();
 //import { Amplify } from "aws-amplify";
@@ -201,11 +205,56 @@ export async function handler(event) {
       const getObjectResponse = await s3.send(
         new GetObjectCommand({ Bucket, Key }),
       );
+      const objectMetadata = getObjectResponse.Metadata ?? {};
+      const correctionCCW = normalizeCorrection(
+        objectMetadata['orientation-correction-ccw'],
+      );
+      const alreadyNormalized =
+        objectMetadata['orientation-normalized'] === 'true';
+
+      // Replacing the source object below emits another ObjectCreated event.
+      // The first invocation does any eager tiling with the normalized buffer;
+      // this follow-up invocation must not process the same image again.
+      if (
+        alreadyNormalized &&
+        objectMetadata['orientation-normalized-by'] === 'upload-handler-v1'
+      ) {
+        console.log(
+          `Stored orientation already normalized for ${Bucket}/${Key}; skipping follow-up event.`,
+        );
+        continue;
+      }
       const chunks = [];
       for await (const chunk of getObjectResponse.Body) {
         chunks.push(chunk);
       }
-      const buffer = Buffer.concat(chunks);
+      let buffer = Buffer.concat(chunks);
+
+      if (correctionCCW !== 0 && !alreadyNormalized) {
+        console.log(
+          `Physically rotating ${Bucket}/${Key} ${correctionCCW} degrees counter-clockwise.`,
+        );
+        buffer = await normalizeImageOrientation(buffer, correctionCCW);
+        await s3.send(
+          new PutObjectCommand({
+            Bucket,
+            Key,
+            Body: buffer,
+            ContentType: getObjectResponse.ContentType ?? 'image/jpeg',
+            CacheControl: getObjectResponse.CacheControl,
+            ContentDisposition: getObjectResponse.ContentDisposition,
+            ContentEncoding: getObjectResponse.ContentEncoding,
+            ContentLanguage: getObjectResponse.ContentLanguage,
+            Metadata: {
+              ...objectMetadata,
+              'orientation-correction-ccw': String(correctionCCW),
+              'orientation-normalized': 'true',
+              'orientation-normalized-by': 'upload-handler-v1',
+            },
+          }),
+        );
+        console.log(`Stored normalized image at ${Bucket}/${Key}.`);
+      }
       const localTmpPath = "/tmp/tiles";
       // Ensure a clean temp directory per image to avoid cross-image contamination
       try {
