@@ -547,8 +547,6 @@ if (enableEcs) {
         visibilityTimeout: Duration.minutes(
           Number(process.env.OWL_D_VISIBILITY_MINUTES ?? '60')
         ),
-        spotPrice: process.env.OWL_D_SPOT_PRICE ?? '2.00',
-        capacityRebalance: true,
       }
     );
 
