@@ -206,7 +206,7 @@ export default function AdminSurveys() {
       >
         <Form.Control
           type='text'
-          placeholder='Search by organisation or surveyâ€¦'
+          placeholder='Search by organisation or survey…'
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ maxWidth: 320, flex: '0 1 auto' }}
@@ -277,7 +277,7 @@ export default function AdminSurveys() {
         >
           <Spinner animation='border' size='sm' />
           <span style={{ fontSize: 13, color: 'var(--ss-text-dim)' }}>
-            Loading surveysâ€¦
+            Loading surveys…
           </span>
         </div>
       ) : filteredGroups.length === 0 ? (
@@ -355,7 +355,7 @@ export default function AdminSurveys() {
                               <td style={{ whiteSpace: 'nowrap' }}>
                                 {formatDate(survey.updatedAt)}
                               </td>
-                              <td>{survey.status || 'â€”'}</td>
+                              <td>{survey.status || 'N/A'}</td>
                               <td style={{ textAlign: 'right' }}>
                                 <Button
                                   size='sm'
@@ -393,7 +393,7 @@ export default function AdminSurveys() {
 }
 
 function formatDate(value?: string | null): string {
-  if (!value) return 'â€”';
+  if (!value) return 'N/A';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();
