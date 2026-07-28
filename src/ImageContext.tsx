@@ -1,6 +1,13 @@
-import { useCallback, useState, useContext, useEffect, useMemo, useRef } from 'react';
+import {
+  useCallback,
+  useState,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react';
 import { ImageContext, UserContext, GlobalContext } from './Context';
-import type { ImageType } from './schemaTypes';
+import type { AnnotationImage } from './annotationTypes';
 import type { AnnotationsHook } from './Context';
 import { inv, type Matrix } from 'mathjs';
 import type { Schema } from './amplify/client-schema';
@@ -14,10 +21,10 @@ export function ImageContextFromHook({
   taskTag,
 }: {
   hook: AnnotationsHook;
-  locationId: string;
-  image: ImageType;
+  locationId?: string;
+  image: AnnotationImage;
   children: React.ReactNode;
-  taskTag: string;
+  taskTag?: string;
 }) {
   const [annoCount, setAnnoCount] = useState(0);
   const lastAnnotationTimeRef = useRef<number>(0);
@@ -136,7 +143,7 @@ export function ImageContextFromHook({
     nextNeighboursQuery.isSuccess;
 
   useEffect(() => {
-    setCurrentTaskTag(taskTag);
+    setCurrentTaskTag(taskTag ?? '');
   }, []);
 
   const create = useCallback(
@@ -148,7 +155,8 @@ export function ImageContextFromHook({
       if (now - lastAnnotationTimeRef.current < 300) return;
       lastAnnotationTimeRef.current = now;
       // Reject if an annotation already exists at the exact same position
-      if (hook.data.some((a) => a.x === annotation.x && a.y === annotation.y)) return;
+      if (hook.data.some((a) => a.x === annotation.x && a.y === annotation.y))
+        return;
       //Check if this annotation maps to the interior of any of the previous images
       const insidePreviousImage = prevImages.reduce((acc, im) => {
         if (!im?.transform?.fwd) return acc;
@@ -270,7 +278,12 @@ export function ImageContextFromHook({
   return (
     <ImageContext.Provider
       value={{
-        annotationsHook: { ...hook, create: create as AnnotationsHook['create'], update: update as AnnotationsHook['update'], delete: _delete as AnnotationsHook['delete'] },
+        annotationsHook: {
+          ...hook,
+          create: create as AnnotationsHook['create'],
+          update: update as AnnotationsHook['update'],
+          delete: _delete as AnnotationsHook['delete'],
+        },
         annoCount,
         startLoadingTimestamp,
         visibleTimestamp,

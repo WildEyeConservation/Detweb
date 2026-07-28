@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { useContext, useEffect, useState } from 'react';
 import { GlobalContext } from './Context';
-import AnnotationImage from './AnnotationImage';
+import AnnotationWorkspace from './AnnotationWorkspace';
 import type { ImageType } from './schemaTypes';
 
 export function ImageLoader() {
@@ -39,11 +39,11 @@ export function ImageLoader() {
       style={{ paddingTop: '12px', paddingBottom: '12px' }}
     >
       {image && (
-        <AnnotationImage
+        <AnnotationWorkspace
           visible={true}
           location={{
             image,
-            annotationSetId,
+            annotationSetId: annotationSetId!,
             x: image.width / 2,
             y: image.height / 2,
             width: image.width,

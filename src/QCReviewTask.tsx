@@ -7,16 +7,15 @@ import {
   GetQueueAttributesCommand,
 } from '@aws-sdk/client-sqs';
 import { Badge } from 'react-bootstrap';
-import { Preloader } from './Preloader';
+import { TaskBuffer } from './TaskBuffer';
 import QCAnnotationReview from './QCAnnotationReview';
 import { fetchAllPaginatedResults } from './utils';
 
 /**
- * QC Review Task — SQS-driven preloader for annotation QC review.
+ * QC Review Task — SQS-driven task buffer for annotation QC review.
  *
- * Similar to SqsPreloader, but tailored for QC review messages whose body
- * shape is `{ annotation: {...}, queueId: string }` rather than a
- * location reference.
+ * Tailored for QC review messages whose body shape is
+ * `{ annotation: {...}, queueId: string }`.
  */
 export default function QCReviewTask() {
   const { queueId } = useParams<{ queueId: string }>();
@@ -176,7 +175,7 @@ export default function QCReviewTask() {
     >
       <div className='w-100 h-100'>
         {queueUrl && categories.length > 0 ? (
-          <Preloader
+          <TaskBuffer
             index={index}
             setIndex={setIndex}
             fetcher={fetcher}

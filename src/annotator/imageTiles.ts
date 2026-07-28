@@ -72,14 +72,24 @@ export function createImageMap(
   projection: ImageProjection
 ): maplibregl.Map {
   ensureTileProtocol();
+  const minZoom = -2;
+  const maxZoom = projection.maxNativeZoom + 4;
   const map = new maplibregl.Map({
     container,
     style: { version: 8, sources: {}, layers: [] },
-    minZoom: -2,
-    maxZoom: projection.maxNativeZoom + 4,
+    minZoom,
+    maxZoom,
     attributionControl: false,
     renderWorldCopies: false,
     dragRotate: false,
+    // The default Mercator constraint recenters the whole power-of-two tile
+    // square whenever it is smaller than the viewport. Since the source image
+    // may occupy only part of that square, it can appear pinned to one side.
+    // Preserve the requested center so the image remains draggable at low zoom.
+    transformConstrain: (center, zoom) => ({
+      center,
+      zoom: Math.max(minZoom, Math.min(maxZoom, zoom)),
+    }),
   });
   map.touchZoomRotate.disableRotation();
   map.keyboard.disable();

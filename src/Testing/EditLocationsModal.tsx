@@ -1,15 +1,9 @@
-import {
-  useState,
-  useEffect,
-  useContext,
-  useRef,
-  useCallback,
-} from 'react';
+import { useState, useEffect, useContext, useRef, useCallback } from 'react';
 import { Button, Form, Spinner } from 'react-bootstrap';
 import { Modal, Header, Title, Body, Footer } from '../Modal';
 import { GlobalContext, UserContext, TestingContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
-import { FetcherType, Preloader } from '../Preloader';
+import { type FetcherType, type TaskPayload, TaskBuffer } from '../TaskBuffer';
 import LightLocationView from './LightLocationView';
 import ProjectContext from './ProjectContext';
 
@@ -17,6 +11,12 @@ type Props = {
   show: boolean;
   preset: { id: string; name: string };
   surveyId: string;
+};
+
+type LocationReferenceTask = TaskPayload & {
+  id: string;
+  message_id: string;
+  location: { id: string; annotationSetId: string };
 };
 
 export default function EditLocationsModal({ show, preset, surveyId }: Props) {
@@ -49,7 +49,7 @@ export default function EditLocationsModal({ show, preset, surveyId }: Props) {
     annotationSetId: string;
   } | null>(null);
 
-  const fetcher: FetcherType = useCallback(async () => {
+  const fetcher: FetcherType<LocationReferenceTask> = useCallback(async () => {
     const loc = locationsRef.current[locationIndexRef.current];
     locationIndexRef.current = locationIndexRef.current + 1;
     const id = crypto.randomUUID();
@@ -348,7 +348,7 @@ export default function EditLocationsModal({ show, preset, surveyId }: Props) {
                 {/* Right image column */}
                 <div className='d-flex flex-column flex-grow-1 h-100 w-100'>
                   <Form.Group className='mt-3 h-100 w-100'>
-                    <Preloader
+                    <TaskBuffer
                       index={index}
                       setIndex={setIndex}
                       fetcher={fetcher}

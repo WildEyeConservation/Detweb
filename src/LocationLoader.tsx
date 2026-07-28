@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { useContext, useEffect, useState } from 'react';
 import { GlobalContext } from './Context';
-import AnnotationImage from './AnnotationImage';
+import AnnotationWorkspace from './AnnotationWorkspace';
 
 export function LocationLoader() {
   const { locationId, annotationSetId } = useParams();
@@ -44,7 +44,7 @@ export function LocationLoader() {
       style={{ paddingTop: '12px', paddingBottom: '12px' }}
     >
       {location && (
-        <AnnotationImage
+        <AnnotationWorkspace
           visible={true}
           location={{ ...location, annotationSetId }}
           hideNavButtons

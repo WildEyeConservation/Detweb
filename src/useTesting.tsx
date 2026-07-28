@@ -1,7 +1,7 @@
 import { useContext, useCallback, useState, useEffect, useRef } from 'react';
 import { ProjectContext, GlobalContext } from './Context';
 import { fetchAllPaginatedResults } from './utils';
-import type { Identifiable } from './Preloader';
+import type { Identifiable } from './TaskBuffer';
 
 export default function useTesting() {
   const { currentPM, project, categoriesHook } = useContext(ProjectContext)!;

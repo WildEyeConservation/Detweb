@@ -1,12 +1,12 @@
-import { useMemo, useContext, useEffect, useState } from 'react';
-import useAckOnTimeout, { WaitingOverlay } from './useAckOnTimeout';
+import { useMemo, useContext, useEffect, useRef, useState } from 'react';
+import useTaskCompletion, { WaitingOverlay } from './useTaskCompletion';
 import { SideLegend } from './Legend';
-import useCreateObservation from './useCreateObservation';
 import {
   GlobalContext,
   ProjectContext,
   UserContext,
   ImageContext,
+  type AnnotationsHook,
 } from './Context';
 import { useOptimisticUpdates } from './useOptimisticUpdates';
 import { ImageContextFromHook } from './ImageContext';
@@ -17,12 +17,17 @@ import { Share2, SearchCheck, RotateCcw, LogOut } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import MapLibreAnnotator from './annotator/MapLibreAnnotator';
 import type { CategoryType } from './schemaTypes';
+import type {
+  AnnotationLocation,
+  AnnotationWorkspaceProps,
+  TaskAcknowledgement,
+} from './annotationTypes';
 
-interface TaskImageProps {
-  location: any;
+interface AnnotationSessionProps {
+  location: AnnotationLocation;
   visible: boolean;
   /** Acks the task (e.g. deletes the SQS message). Absent in read-only viewer contexts. */
-  ack?: (submittedAt?: number) => void;
+  ack?: TaskAcknowledgement;
   next?: () => void;
   prev?: () => void;
   stats?: Record<string, number>;
@@ -41,13 +46,12 @@ interface TaskImageProps {
 }
 
 /*
-Wires the task-lifecycle hooks around BaseImage: recording an Observation on
-ack (useCreateObservation) and delaying the SQS ack until the user has paged
-past without returning (useAckOnTimeout). Must render inside
-ImageContextFromHook, which supplies the timing/annotation-count context the
-observation hook reads.
+Wires task-lifecycle hooks around the annotator: recording an Observation on
+ack and delaying the SQS acknowledgement until the user has paged past without
+returning. It must render inside ImageContextFromHook, which supplies the
+timing and annotation-count state.
 */
-function TaskImage(props: TaskImageProps) {
+function AnnotationSession(props: AnnotationSessionProps) {
   const {
     ack,
     next,
@@ -68,19 +72,16 @@ function TaskImage(props: TaskImageProps) {
     viewBoundsScale,
     hideNavButtons,
   } = props;
-  const observationAck = useCreateObservation({
+  const { onNext, waiting, waitingMessage } = useTaskCompletion({
     location,
-    ack: ack ?? (() => {}),
+    ack,
+    next,
+    visible,
     isTest,
     testPresetId,
     testSetId,
     queueId,
     observationSource,
-  });
-  const { onNext, waiting, waitingMessage } = useAckOnTimeout({
-    next,
-    visible,
-    ack: observationAck,
   });
 
   return (
@@ -108,7 +109,7 @@ function TaskImage(props: TaskImageProps) {
   );
 }
 
-export default function AnnotationImage(props: any) {
+export default function AnnotationWorkspace(props: AnnotationWorkspaceProps) {
   const {
     location,
     next,
@@ -122,16 +123,33 @@ export default function AnnotationImage(props: any) {
     isTest,
     hideZoomSetting = false,
     queueId,
+    revalidate,
+    taskTag,
+    viewBoundsScale,
   } = props;
 
   const { annotationSetId } = location;
   const { client } = useContext(GlobalContext)!;
-  //testing
+  const hasRevalidated = useRef(false);
+
+  // Queue tasks are filtered when fetched and checked once more when they
+  // become visible, in case another user annotated the location meanwhile.
+  useEffect(() => {
+    if (!visible || !revalidate || hasRevalidated.current) return;
+    hasRevalidated.current = true;
+    revalidate().then((isValid: boolean) => {
+      if (!isValid) {
+        ack?.();
+        next?.();
+      }
+    });
+  }, [visible, revalidate, ack, next]);
+
   const { currentTaskTag, isAnnotatePath, myMembershipHook } =
     useContext(UserContext)!;
   const navigate = useNavigate();
   const { surveyId } = useParams();
-  // Read localStorage synchronously during initialization to avoid loading tiles at wrong zoom
+  // Read localStorage synchronously so tiles are never loaded at the wrong zoom.
   const [defaultZoom, setDefaultZoom] = useState<number | null>(() => {
     if (surveyId) {
       const storedZoom = localStorage.getItem(`defaultZoom-${surveyId}`);
@@ -139,7 +157,7 @@ export default function AnnotationImage(props: any) {
         return Number(storedZoom);
       }
     }
-    return zoom;
+    return zoom ?? null;
   });
   const [isFalseNegativesJob, setIsFalseNegativesJob] =
     useState<boolean>(false);
@@ -148,7 +166,7 @@ export default function AnnotationImage(props: any) {
     async function checkQueue() {
       try {
         const membership = myMembershipHook.data?.find(
-          (m: any) => m.projectId === (surveyId as string)
+          (membership) => membership.projectId === surveyId
         );
         const queueId = membership?.queueId;
         if (!queueId) {
@@ -173,57 +191,51 @@ export default function AnnotationImage(props: any) {
     [isTest, annotationSetId]
   );
   const subscriptionFilter = useMemo(() => {
-    const conditions: any[] = [];
+    const conditions: Array<
+      { setId: { eq: string } } | { imageId: { eq: string } }
+    > = [];
+    // Tests write to an ephemeral set, so only filter by set outside test mode.
     if (!isTest) {
-      // normal mode: only subscribe to this annotation set
       conditions.push({ setId: { eq: annotationSetId } });
     }
-    // always subscribe to changes for this image
     conditions.push({ imageId: { eq: location.image.id } });
     return { filter: { and: conditions } };
   }, [annotationSetId, location.image.id, isTest]);
   const {
     categoriesHook: { data: projectCategories },
+    expandLegend,
+    setExpandLegend,
   } = useContext(ProjectContext)!;
-  const [, setExternalCategories] = useState<any[] | null>(null);
-  const [legendCategories, setLegendCategories] = useState<any[] | null>(null);
-  const [legendCollapsed, setLegendCollapsed] = useState<boolean>(() => {
-    if (surveyId) {
-      const stored = localStorage.getItem(`legendCollapsed-${surveyId}`);
-      return stored === 'true';
-    }
-    return false;
-  });
+  const [legendCategories, setLegendCategories] = useState<
+    CategoryType[] | null
+  >(null);
+  const legendCollapsed = !expandLegend;
 
   const toggleLegendCollapsed = () => {
-    setLegendCollapsed((prev) => {
-      const newValue = !prev;
+    setExpandLegend((wasExpanded) => {
+      const expanded = !wasExpanded;
       if (surveyId) {
-        localStorage.setItem(`legendCollapsed-${surveyId}`, String(newValue));
+        localStorage.setItem(`legendCollapsed-${surveyId}`, String(!expanded));
       }
-      return newValue;
+      return expanded;
     });
   };
 
-  // If the annotation set on the test belongs to a different project than the current one,
-  // fetch its categories directly by annotation set id so legend, hotkeys and icons work.
+  // A test's annotation set may belong to another project, in which case its
+  // categories must be fetched by set id for the legend, hotkeys and icons.
   useEffect(() => {
     let cancelled = false;
     async function ensureCategories() {
       try {
-        // Fetch the annotation set to discover its project id
         const { data: annSet } = await client.models.AnnotationSet.get({
           id: annotationSetId,
         });
         if (!annSet) {
-          setExternalCategories(null);
           setLegendCategories(projectCategories ?? null);
           return;
         }
-        // If the set's project matches the current survey, use project categories; else, fetch by set id
         if (annSet.projectId === (surveyId as string)) {
           if (!cancelled) {
-            setExternalCategories(null);
             setLegendCategories(projectCategories ?? null);
           }
         } else {
@@ -232,7 +244,6 @@ export default function AnnotationImage(props: any) {
               annotationSetId,
             });
           if (!cancelled) {
-            setExternalCategories(cats ?? []);
             setLegendCategories(cats ?? []);
           }
         }
@@ -243,7 +254,6 @@ export default function AnnotationImage(props: any) {
           e
         );
         if (!cancelled) {
-          setExternalCategories(null);
           setLegendCategories(projectCategories ?? null);
         }
       }
@@ -253,25 +263,25 @@ export default function AnnotationImage(props: any) {
       cancelled = true;
     };
   }, [client, annotationSetId, surveyId, projectCategories]);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const annotationsHook = (useOptimisticUpdates as any)(
+  const annotationsHook = useOptimisticUpdates<
+    Schema['Annotation']['type'],
+    'Annotation'
+  >(
     'Annotation',
     async (nextToken: string | null | undefined) =>
       client.models.Annotation.annotationsByImageIdAndSetId(
         { imageId: location.image.id, setId: { eq: location.annotationSetId } },
         { limit: 10000, nextToken }
-      ) as any,
+      ),
     subscriptionFilter
-  ) as ReturnType<typeof useOptimisticUpdates<Schema['Annotation']['type'], never>>;
+  ) as unknown as AnnotationsHook;
   const stats = useImageStats(annotationsHook);
 
-  // Compute source tag for annotations and observations
+  // Source tag written onto both annotations and observations.
   const source = useMemo(() => {
-    const baseSource = props.taskTag ? `manual-${props.taskTag}` : 'manual';
-    return isFalseNegativesJob
-      ? `${baseSource}-false-negative`
-      : baseSource;
-  }, [props.taskTag, isFalseNegativesJob]);
+    const baseSource = taskTag ? `manual-${taskTag}` : 'manual';
+    return isFalseNegativesJob ? `${baseSource}-false-negative` : baseSource;
+  }, [taskTag, isFalseNegativesJob]);
 
   const filteredCategories = useMemo(
     () =>
@@ -300,7 +310,6 @@ export default function AnnotationImage(props: any) {
         console.error(error);
       }
     } else {
-      //write to clipboard
       try {
         await navigator.clipboard.writeText(url);
         alert('Link copied to clipboard');
@@ -315,11 +324,17 @@ export default function AnnotationImage(props: any) {
       hook={annotationsHook}
       locationId={location.id}
       image={location.image}
-      taskTag={props.taskTag}
+      taskTag={taskTag}
     >
-      <div className={`d-flex flex-md-row flex-column w-100 h-100 gap-3 overflow-auto ${legendCollapsed ? 'legend-collapsed' : 'justify-content-center'}`}>
+      <div
+        className={`d-flex flex-md-row flex-column w-100 h-100 gap-3 overflow-auto ${
+          legendCollapsed ? 'legend-collapsed' : 'justify-content-center'
+        }`}
+      >
         <div
-          className={`d-flex flex-column ${legendCollapsed ? 'align-items-stretch' : 'align-items-center'} w-100 h-100 gap-3`}
+          className={`d-flex flex-column ${
+            legendCollapsed ? 'align-items-stretch' : 'align-items-center'
+          } w-100 h-100 gap-3`}
           style={{
             maxWidth: legendCollapsed ? 'none' : '1024px',
             flex: legendCollapsed ? 1 : undefined,
@@ -347,14 +362,14 @@ export default function AnnotationImage(props: any) {
               <>
                 <Badge bg='secondary'>
                   Working on:{' '}
-                  {props.taskTag || currentTaskTag
-                    ? `${props.taskTag || currentTaskTag}`
+                  {taskTag || currentTaskTag
+                    ? `${taskTag || currentTaskTag}`
                     : 'Viewing image'}
                 </Badge>
                 {!hideZoomSetting && (
                   <SetDefaultZoom
                     setDefaultZoom={setDefaultZoom}
-                    originalZoom={zoom}
+                    originalZoom={zoom ?? null}
                     adminMemberships={myMembershipHook.data
                       ?.filter((membership) => membership.isAdmin)
                       .map((membership) => ({
@@ -366,12 +381,12 @@ export default function AnnotationImage(props: any) {
               </>
             )}
           </div>
-          <TaskImage
+          <AnnotationSession
             stats={stats}
             visible={visible}
             location={location}
             zoom={defaultZoom ?? undefined}
-            viewBoundsScale={props.viewBoundsScale}
+            viewBoundsScale={viewBoundsScale}
             prev={prev}
             next={next}
             ack={ack}
@@ -394,8 +409,8 @@ export default function AnnotationImage(props: any) {
             collapsed={legendCollapsed}
             onToggleCollapse={toggleLegendCollapsed}
           />
-          {isAnnotatePath && (
-            legendCollapsed ? (
+          {isAnnotatePath &&
+            (legendCollapsed ? (
               <Button
                 variant='success'
                 onClick={() => navigate('/jobs')}
@@ -415,9 +430,8 @@ export default function AnnotationImage(props: any) {
                   Save & Exit
                 </Button>
               </div>
-            )
-          )}
-          {/* Mobile Save & Exit button (always shown on mobile) */}
+            ))}
+          {/* Mobile-only Save & Exit; the pair above is hidden below md. */}
           {isAnnotatePath && (
             <Button
               variant='success'
@@ -445,7 +459,6 @@ function SetDefaultZoom({
   const { zoom, setZoom } = useContext(ImageContext)!;
   const { surveyId } = useParams();
   const { client } = useContext(GlobalContext)!;
-  // Initialize storedZoom flag synchronously to match parent's initialization
   const [storedZoom, setStoredZoom] = useState<boolean>(() => {
     if (surveyId) {
       return localStorage.getItem(`defaultZoom-${surveyId}`) !== null;
@@ -453,8 +466,8 @@ function SetDefaultZoom({
     return false;
   });
 
-  // Note: localStorage zoom is now read synchronously in parent component,
-  // so this effect is mainly for keeping storedZoom flag in sync if localStorage changes externally
+  // Resync if localStorage was changed elsewhere; the zoom value itself is
+  // read synchronously by the parent.
   useEffect(() => {
     const storedZoomValue = localStorage.getItem(`defaultZoom-${surveyId!}`);
     const hasStoredZoom = storedZoomValue !== null;

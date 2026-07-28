@@ -8,7 +8,6 @@ export type UnknownGraphQLResponse =
   | GraphQLResult<any>
   | GraphqlSubscriptionResult<any>;
 
-
 type PaginatedQueryResult<T> = {
   data: T[];
   nextToken?: string | null;
@@ -112,11 +111,20 @@ export function isWithinLocationBounds(
  * to the same-named category in the target set, then to that set's 'Unknown'.
  */
 export function resolveCategoryIdForSet(
-  currentCategory: { id: string; name: string } & Record<string, any>,
-  categories: Array<{ id: string; name: string } & Record<string, any>>,
+  currentCategory: {
+    id: string;
+    name: string;
+    annotationSetId?: string | null;
+  },
+  categories: Array<{
+    id: string;
+    name: string;
+    annotationSetId?: string | null;
+  }>,
   targetSetId: string
 ): string {
-  if (currentCategory.annotationSetId === targetSetId) return currentCategory.id;
+  if (currentCategory.annotationSetId === targetSetId)
+    return currentCategory.id;
   const sameName = categories.find(
     (c) => c.annotationSetId === targetSetId && c.name === currentCategory.name
   );

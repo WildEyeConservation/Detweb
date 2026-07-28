@@ -9,11 +9,6 @@ import {
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as jdenticon from 'jdenticon';
-import {
-  uniqueNamesGenerator,
-  adjectives,
-  names,
-} from 'unique-names-generator';
 import { useHotkeys, isHotkeyPressed } from 'react-hotkeys-hook';
 import {
   makeProjection,
@@ -22,22 +17,30 @@ import {
   leafletZoom2MapZoom,
   mapZoom2LeafletZoom,
 } from './imageTiles';
-import {
-  GlobalContext,
-  ImageContext,
-  ManagementContext,
-  ProjectContext,
-} from '../Context';
-import useImageMenuItems, { ImageMenuItem } from '../useImageMenuItems';
+import { ImageContext, ManagementContext, ProjectContext } from '../Context';
+import useImageMenuItems from '../useImageMenuItems';
 import { isWithinLocationBounds, resolveCategoryIdForSet } from '../utils';
 import { NavButtons } from '../NavButtons';
 import ChangeCategoryModal from '../ChangeCategoryModal';
-import type {
-  AnnotationType,
-  CategoryType,
-  ImageFileType,
-  ImageType,
-} from '../schemaTypes';
+import type { CategoryType, ExtendedAnnotationType } from '../schemaTypes';
+import type { AnnotationImage, AnnotationLocation } from '../annotationTypes';
+import {
+  buildAnnotationFeatureCollection,
+  buildAnnotationPopupLines,
+  isFalseNegative,
+  type AnnotationFeatureProperties,
+} from './annotationFeatures';
+import {
+  buildAnnotationMenuItems,
+  buildImageMenuItems,
+} from './annotationMenus';
+import {
+  AnnotationLegendOverlay,
+  ContextMenuOverlay,
+  ImageFileStatusOverlay,
+  type MenuState,
+} from './AnnotatorOverlays';
+import useImageFileSource from './useImageFileSource';
 
 /*
 MapLibre-based replacement for the Leaflet stack in the species-labelling
@@ -57,35 +60,17 @@ the Leaflet scale, so we convert on the way in (zoom - 1) and out (zoom + 1).
 */
 
 const SOURCE_ANNOTATIONS = 'annotations';
+const LAYER_ACTIVE = 'annotation-active-ring';
+const LAYER_OUTLINES = 'annotation-outlines';
 const LAYER_CIRCLES = 'annotation-circles';
 const LAYER_ICONS = 'annotation-icons';
+const LAYER_STATUS_ICONS = 'annotation-status-icons';
 const SOURCE_LOCATION = 'location-rect';
 const LAYER_LOCATION = 'location-rect-line';
 
-function objectName(seed: string) {
-  return uniqueNamesGenerator({
-    dictionaries: [adjectives, names],
-    seed,
-    style: 'capital',
-    separator: ' ',
-  });
-}
-
-function isFalseNegative(annotation: { source?: string | null }) {
-  return String(annotation.source || '')
-    .toLowerCase()
-    .includes('false-negative');
-}
-
-interface MenuState {
-  x: number;
-  y: number;
-  items: ImageMenuItem[];
-}
-
 export interface MapLibreAnnotatorProps {
-  image: ImageType;
-  location: any;
+  image: AnnotationImage;
+  location: AnnotationLocation;
   visible: boolean;
   /** Default zoom on the Leaflet scale (as stored in Queue.zoom / localStorage). */
   zoom?: number;
@@ -127,7 +112,6 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
     showMapLegend,
   } = props;
 
-  const { client } = useContext(GlobalContext)!;
   const {
     annotationsHook,
     setVisibleTimestamp,
@@ -151,8 +135,7 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
   const [markersHidden, setMarkersHidden] = useState(false);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [categoryModalAnnotation, setCategoryModalAnnotation] =
-    useState<AnnotationType | null>(null);
-  const [legendExpanded, setLegendExpanded] = useState(false);
+    useState<ExtendedAnnotationType | null>(null);
 
   // Refs for values read inside imperative map handlers
   const cursorPxRef = useRef({ x: 0, y: 0 });
@@ -160,11 +143,13 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
   const hoveredIdRef = useRef<string | null>(null);
   const draggingIdRef = useRef<string | null>(null);
   const dragPositionRef = useRef<{ x: number; y: number } | null>(null);
-  const annotationsRef = useRef<AnnotationType[]>([]);
+  const annotationsRef = useRef<ExtendedAnnotationType[]>([]);
 
-  const [imageFiles, setImageFiles] = useState<ImageFileType[]>([]);
-  const [imageFilesLoading, setImageFilesLoading] = useState(true);
-  const sourceKey = imageFiles.find((f) => f.type == 'image/jpeg')?.key;
+  const {
+    imageFiles,
+    loading: imageFilesLoading,
+    sourceKey,
+  } = useImageFileSource(image.id);
 
   const projection = useMemo(
     () => makeProjection(image.width, image.height),
@@ -196,10 +181,10 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
 
   const annotations = useMemo(
     () =>
-      (annotationsHook.data ?? [])
-        .filter((a: AnnotationType) => a.setId === setId)
+      ((annotationsHook.data ?? []) as ExtendedAnnotationType[])
+        .filter((annotation) => annotation.setId === setId)
         .filter(
-          (a: AnnotationType) => !(hideFnAnnotations && isFalseNegative(a))
+          (annotation) => !(hideFnAnnotations && isFalseNegative(annotation))
         ),
     [annotationsHook.data, setId, hideFnAnnotations]
   );
@@ -216,26 +201,6 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
     [categories]
   );
 
-  // ── Image files (tile source key) ──
-  useEffect(() => {
-    let isMounted = true;
-    setImageFiles([]);
-    setImageFilesLoading(true);
-    client.models.ImageFile.imagesByimageId({ imageId: image.id })
-      .then((response: any) => {
-        if (isMounted) setImageFiles(response.data);
-      })
-      .catch((error: unknown) => {
-        if (isMounted) console.error('Error fetching image files:', error);
-      })
-      .finally(() => {
-        if (isMounted) setImageFilesLoading(false);
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, [client, image.id]);
-
   // No image files: nothing will ever load, so unblock the task lifecycle
   useEffect(() => {
     if (!imageFilesLoading && imageFiles.length === 0 && !fullyLoaded) {
@@ -244,48 +209,21 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
   }, [imageFiles.length, imageFilesLoading, fullyLoaded]);
 
   const buildFeatureCollection = useCallback((): GeoJSON.FeatureCollection => {
-    return {
-      type: 'FeatureCollection',
-      features: annotationsRef.current.map((a) => {
-        const override =
-          draggingIdRef.current === a.id ? dragPositionRef.current : null;
-        const x = override?.x ?? a.x;
-        const y = override?.y ?? a.y;
-        const fn = isFalseNegative(a);
-        const isPrimary = a.id === a.objectId;
-        const readonly = locationBoundsRef.current
-          ? !isWithinLocationBounds(a, locationBoundsRef.current)
-          : false;
-        return {
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: px2lngLat(x, y) },
-          properties: {
-            id: a.id,
-            color: categoryColor(a.categoryId),
-            borderColor:
-              a.objectId === a.id
-                ? '#ffffff'
-                : a.objectId
-                  ? '#888888'
-                  : '#000000',
-            obscured: Boolean(a.obscured),
-            readonly,
-            icon: fn
-              ? 'fn-marker'
-              : isPrimary && a.objectId
-                ? `identicon-${a.objectId}`
-                : '',
-          },
-        };
-      }),
-    };
+    return buildAnnotationFeatureCollection({
+      annotations: annotationsRef.current,
+      draggedAnnotationId: draggingIdRef.current,
+      dragPosition: dragPositionRef.current,
+      locationBounds: locationBoundsRef.current,
+      px2lngLat,
+      categoryColor,
+    });
   }, [px2lngLat, categoryColor]);
 
   const refreshAnnotationSource = useCallback(() => {
     const src = mapRef.current?.getSource(SOURCE_ANNOTATIONS) as
       | maplibregl.GeoJSONSource
       | undefined;
-    src?.setData(buildFeatureCollection() as any);
+    src?.setData(buildFeatureCollection());
   }, [buildFeatureCollection]);
 
   // ── Map construction ──
@@ -297,7 +235,7 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
 
     // Generate marker icons on demand: identicons per objectId and the
     // false-negative "!" badge.
-    map.on('styleimagemissing', (e: any) => {
+    map.on('styleimagemissing', (e: maplibregl.MapStyleImageMissingEvent) => {
       const id: string = e.id;
       if (id === 'fn-marker') {
         const canvas = document.createElement('canvas');
@@ -313,12 +251,47 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
           ctx.getImageData(0, 0, 20, 20) as unknown as ImageData
         );
       } else if (id.startsWith('identicon-')) {
-        const svg = jdenticon.toSvg(id.slice('identicon-'.length), 20);
-        const img = new Image(20, 20);
-        img.onload = () => {
-          if (!map.hasImage(id)) map.addImage(id, img);
-        };
-        img.src = `data:image/svg+xml;base64,${btoa(svg)}`;
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = 14;
+        const ctx = canvas.getContext('2d')!;
+        jdenticon.drawIcon(ctx, id.slice('identicon-'.length), 14);
+        if (!map.hasImage(id)) {
+          map.addImage(id, ctx.getImageData(0, 0, 14, 14));
+        }
+      } else if (id === 'obscured-marker') {
+        const canvas = document.createElement('canvas');
+        const size = 32;
+        canvas.width = canvas.height = size;
+        const ctx = canvas.getContext('2d')!;
+
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = '#1f2933';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2 - 1, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.save();
+        ctx.translate(5, 5);
+        ctx.scale(22 / 24, 22 / 24);
+        ctx.strokeStyle = '#1f2933';
+        ctx.lineWidth = 2.75;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        [
+          'M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49',
+          'M14.084 14.158a3 3 0 0 1-4.242-4.242',
+          'M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143',
+          'm2 2 20 20',
+        ].forEach((path) => ctx.stroke(new Path2D(path)));
+        ctx.restore();
+
+        if (!map.hasImage(id)) {
+          map.addImage(id, ctx.getImageData(0, 0, size, size), {
+            pixelRatio: 2,
+          });
+        }
       }
     });
 
@@ -361,15 +334,43 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
         data: { type: 'FeatureCollection', features: [] },
       });
       map.addLayer({
+        id: LAYER_OUTLINES,
+        type: 'circle',
+        source: SOURCE_ANNOTATIONS,
+        paint: {
+          'circle-radius': ['+', 10, ['get', 'borderWidth']],
+          'circle-color': 'rgba(0, 0, 0, 0)',
+          'circle-stroke-width': 1,
+          'circle-stroke-color': 'rgba(0, 0, 0, 0.45)',
+          'circle-opacity': ['get', 'opacity'],
+          'circle-stroke-opacity': ['get', 'opacity'],
+        },
+      });
+      map.addLayer({
+        id: LAYER_ACTIVE,
+        type: 'circle',
+        source: SOURCE_ANNOTATIONS,
+        filter: ['==', ['get', 'active'], true],
+        paint: {
+          'circle-radius': ['+', 10, ['get', 'borderWidth']],
+          'circle-color': 'rgba(0, 0, 0, 0)',
+          'circle-stroke-width': 3,
+          'circle-stroke-color': '#ff8c1a',
+          'circle-opacity': ['get', 'opacity'],
+          'circle-stroke-opacity': ['get', 'opacity'],
+        },
+      });
+      map.addLayer({
         id: LAYER_CIRCLES,
         type: 'circle',
         source: SOURCE_ANNOTATIONS,
         paint: {
-          'circle-radius': 9,
+          'circle-radius': 10,
           'circle-color': ['get', 'color'],
-          'circle-stroke-width': 2,
+          'circle-stroke-width': ['get', 'borderWidth'],
           'circle-stroke-color': ['get', 'borderColor'],
-          'circle-opacity': ['case', ['get', 'obscured'], 0.5, 1],
+          'circle-opacity': ['get', 'opacity'],
+          'circle-stroke-opacity': ['get', 'opacity'],
         },
       });
       map.addLayer({
@@ -381,6 +382,25 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
           'icon-image': ['get', 'icon'],
           'icon-allow-overlap': true,
           'icon-ignore-placement': true,
+        },
+        paint: {
+          'icon-opacity': ['get', 'opacity'],
+        },
+      });
+      map.addLayer({
+        id: LAYER_STATUS_ICONS,
+        type: 'symbol',
+        source: SOURCE_ANNOTATIONS,
+        filter: ['!=', ['get', 'statusIcon'], ''],
+        layout: {
+          'icon-image': ['get', 'statusIcon'],
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+        },
+        paint: {
+          'icon-translate': [7, -7],
+          'icon-translate-anchor': 'viewport',
+          'icon-opacity': ['get', 'opacity'],
         },
       });
 
@@ -432,10 +452,9 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
       const bottom = hasBounds
         ? Math.min(image.height, location.y + location.height * scale)
         : image.height;
-      map.fitBounds(
-        [px2lngLat(left, bottom), px2lngLat(right, top)],
-        { duration: 0 }
-      );
+      map.fitBounds([px2lngLat(left, bottom), px2lngLat(right, top)], {
+        duration: 0,
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapReady]);
@@ -456,6 +475,10 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
     };
     const annotationById = (id: string) =>
       annotationsRef.current.find((a) => a.id === id);
+    const featureProperties = (
+      feature?: maplibregl.MapGeoJSONFeature
+    ): AnnotationFeatureProperties | undefined =>
+      feature?.properties as AnnotationFeatureProperties | undefined;
 
     const onMouseMove = (e: maplibregl.MapMouseEvent) => {
       const px = lngLat2px(e.lngLat.lng, e.lngLat.lat);
@@ -469,7 +492,7 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
 
       const feature = featureAt(e.point);
       map.getCanvas().style.cursor = feature ? 'pointer' : '';
-      const id = (feature?.properties as any)?.id ?? null;
+      const id = featureProperties(feature)?.id ?? null;
       if (id !== hoveredIdRef.current) {
         hoveredIdRef.current = id;
         popupRef.current?.remove();
@@ -477,24 +500,15 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
         const annotation = id ? annotationById(id) : undefined;
         if (annotation) {
           const div = document.createElement('div');
-          const lines: string[] = [
-            `Label: ${categoryName(annotation.categoryId)}`,
-          ];
-          if (isFalseNegative(annotation)) lines.push('False Negative');
-          lines.push(
-            `Created by: ${
-              allUsers.find((u: any) => u.id == annotation.owner)?.name ??
-              'Unknown'
-            }`
+          div.style.color = '#212529';
+          div.style.fontSize = '13px';
+          div.style.lineHeight = '1.5';
+          div.style.whiteSpace = 'nowrap';
+          const lines = buildAnnotationPopupLines(
+            annotation,
+            categoryName,
+            allUsers
           );
-          if (annotation.createdAt)
-            lines.push(`Created at: ${annotation.createdAt}`);
-          if (annotation.objectId)
-            lines.push(`Name: ${objectName(annotation.objectId)}`);
-          else if ((annotation as any).proposedObjectId)
-            lines.push(
-              `Proposed Name: ${objectName((annotation as any).proposedObjectId)}`
-            );
           lines.forEach((text) => {
             const row = document.createElement('div');
             row.textContent = text;
@@ -503,9 +517,15 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
           popupRef.current = new maplibregl.Popup({
             closeButton: false,
             closeOnClick: false,
+            maxWidth: '360px',
             offset: 12,
           })
-            .setLngLat((feature!.geometry as any).coordinates)
+            .setLngLat(
+              (feature!.geometry as GeoJSON.Point).coordinates as [
+                number,
+                number
+              ]
+            )
             .setDOMContent(div)
             .addTo(map);
         }
@@ -515,9 +535,10 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
     const onMouseDown = (e: maplibregl.MapMouseEvent) => {
       if (e.originalEvent.button !== 0) return;
       const feature = featureAt(e.point);
-      if (!feature || (feature.properties as any).readonly) return;
+      const properties = featureProperties(feature);
+      if (!properties || properties.readonly) return;
       e.preventDefault(); // keep the map from panning
-      draggingIdRef.current = (feature.properties as any).id;
+      draggingIdRef.current = properties.id;
       dragPositionRef.current = lngLat2px(e.lngLat.lng, e.lngLat.lat);
       map.getCanvas().style.cursor = 'grabbing';
     };
@@ -539,7 +560,7 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
         return;
       }
       if (x !== annotation.x || y !== annotation.y) {
-        annotationsHook.update({ ...annotation, x, y } as any);
+        annotationsHook.update({ ...annotation, x, y });
       } else {
         refreshAnnotationSource();
       }
@@ -563,68 +584,39 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
         x: xy.x,
         y: xy.y,
         categoryId: resolveCategoryIdForSet(
-          currentCategory as any,
-          (projectCategories as any[]) ?? [],
-          location?.annotationSetId as string
+          currentCategory,
+          projectCategories ?? [],
+          location.annotationSetId
         ),
         source,
         obscured: false,
         group: project.organizationId,
-      } as any);
+      });
     };
 
     const onContextMenu = (e: maplibregl.MapMouseEvent) => {
       e.preventDefault();
       const feature = featureAt(e.point);
-      let items: ImageMenuItem[];
       if (feature) {
-        const annotation = annotationById((feature.properties as any).id);
+        const properties = featureProperties(feature);
+        if (!properties) return;
+        const annotation = annotationById(properties.id);
         if (!annotation) return;
-        if ((feature.properties as any).readonly) {
-          items = [{ text: 'Outside location (read-only)', disabled: true }];
-        } else {
-          items = [];
-          if (!(annotation as any).shadow) {
-            items.push({
-              text: 'Delete',
-              callback: () => annotationsHook.delete(annotation as any),
-            });
-          }
-          items.push({
-            text: annotation.obscured
-              ? 'Mark as visible'
-              : 'Mark as obscured',
-            callback: () =>
-              annotationsHook.update({
-                ...annotation,
-                obscured: !annotation.obscured,
-              } as any),
-          });
-          if (annotation.objectId) {
-            items.push({
-              text: 'Remove assigned name',
-              callback: () =>
-                annotationsHook.update({
-                  ...annotation,
-                  objectId: undefined,
-                } as any),
-            });
-          }
-          items.push({
-            text: 'Change Label',
-            callback: () => setCategoryModalAnnotation(annotation),
-          });
-        }
+        const items = buildAnnotationMenuItems({
+          annotation,
+          readonly: properties.readonly,
+          onDelete: annotationsHook.delete,
+          onUpdate: annotationsHook.update,
+          onChangeCategory: setCategoryModalAnnotation,
+        });
+        setMenu({ x: e.point.x, y: e.point.y, items });
       } else {
-        items = [...menuItemsRef.current];
-        if (location?.confidence != null) {
-          items.unshift({
-            text: `Confidence : ${location.confidence}`,
-            disabled: true,
-          });
-        }
+        const items = buildImageMenuItems(
+          menuItemsRef.current,
+          location.confidence
+        );
+        setMenu({ x: e.point.x, y: e.point.y, items });
       }
-      setMenu({ x: e.point.x, y: e.point.y, items });
     };
 
     const onMouseOver = () => {
@@ -677,7 +669,14 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
     const map = mapRef.current;
     if (!map || !mapReady) return;
     const visibility = markersHidden ? 'none' : 'visible';
-    [LAYER_CIRCLES, LAYER_ICONS, LAYER_LOCATION].forEach((layer) => {
+    [
+      LAYER_ACTIVE,
+      LAYER_OUTLINES,
+      LAYER_CIRCLES,
+      LAYER_ICONS,
+      LAYER_STATUS_ICONS,
+      LAYER_LOCATION,
+    ].forEach((layer) => {
       if (map.getLayer(layer)) {
         map.setLayoutProperty(layer, 'visibility', visibility);
       }
@@ -708,9 +707,14 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
   }, [visible, fullyLoaded]);
 
   // ── Hotkeys ──
-  useHotkeys('RightArrow', next ?? (() => {}), {
-    enabled: canAdvance && visible,
-  }, [next]);
+  useHotkeys(
+    'RightArrow',
+    next ?? (() => {}),
+    {
+      enabled: canAdvance && visible,
+    },
+    [next]
+  );
   useHotkeys('LeftArrow', prev ?? (() => {}), { enabled: visible }, [prev]);
 
   useHotkeys(
@@ -735,7 +739,7 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
       ) {
         return;
       }
-      annotationsHook.delete(annotation as any);
+      annotationsHook.delete(annotation);
     },
     { enabled: visible },
     [annotationsHook]
@@ -770,16 +774,11 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
         projectId: project.id,
         source,
         group: project.organizationId,
-      } as any);
+      });
       setCurrentCategory(category);
     },
     { keydown: true, keyup: false, enabled: visible && hotkeys.length > 0 },
     [hotkeyCategories, annotationsHook, setId, image.id, source, project]
-  );
-
-  const sortedCategories = useMemo(
-    () => [...(categories ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
-    [categories]
   );
 
   return (
@@ -793,134 +792,30 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
       >
         <div
           ref={containerRef}
-          style={{ width: '100%', height: '100%', borderRadius: 10 }}
+          style={{
+            width: '100%',
+            height: '100%',
+            borderRadius: 10,
+            overflow: 'hidden',
+            background: '#ffffff',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+          }}
         />
 
-        {imageFilesLoading ? (
-          <CenterNotice
-            title='Loading image files...'
-            titleColor='#333'
-            body='Please wait while we fetch the available layers.'
-          />
-        ) : imageFiles.length === 0 ? (
-          <CenterNotice
-            title='⚠️ No Image Files Found'
-            titleColor='red'
-            body={`Image ID: ${image.id} — this image has no associated files in the database.`}
-          />
-        ) : null}
+        <ImageFileStatusOverlay
+          loading={imageFilesLoading}
+          fileCount={imageFiles.length}
+          imageId={image.id}
+        />
 
-        {/* On-map legend (mobile, or when the side legend is collapsed) */}
-        {sortedCategories.length > 0 && (
-          <div
-            className={showMapLegend ? 'd-block' : 'd-block d-md-none'}
-            style={{ position: 'absolute', bottom: 10, right: 10, zIndex: 5 }}
-            onMouseEnter={() => setLegendExpanded(true)}
-            onMouseLeave={() => setLegendExpanded(false)}
-          >
-            <div
-              style={{
-                background: 'white',
-                color: '#333',
-                borderRadius: 6,
-                boxShadow: '0 1px 5px rgba(0,0,0,0.4)',
-                padding: legendExpanded ? 4 : '6px 10px',
-                fontSize: 14,
-              }}
-            >
-              {legendExpanded
-                ? sortedCategories.map((category) => (
-                    <div
-                      key={category.id}
-                      onClick={() => setCurrentCategory(category)}
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: 8,
-                        cursor: 'pointer',
-                        backgroundColor:
-                          currentCategory?.id === category.id
-                            ? '#bdbebf'
-                            : 'transparent',
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: 14,
-                          height: 14,
-                          borderRadius: '50%',
-                          background: category.color || '#000',
-                          flexShrink: 0,
-                        }}
-                      />
-                      <span style={{ flexGrow: 1 }}>{category.name}</span>
-                      <span>({category.shortcutKey})</span>
-                    </div>
-                  ))
-                : 'Legend'}
-            </div>
-          </div>
-        )}
+        <AnnotationLegendOverlay
+          categories={categories}
+          currentCategoryId={currentCategory?.id}
+          forceVisible={showMapLegend}
+          onSelectCategory={setCurrentCategory}
+        />
 
-        {/* Context menu */}
-        {menu && (
-          <>
-            <div
-              style={{ position: 'fixed', inset: 0, zIndex: 9 }}
-              onClick={() => setMenu(null)}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setMenu(null);
-              }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                left: menu.x,
-                top: menu.y,
-                zIndex: 10,
-                background: 'white',
-                color: '#333',
-                borderRadius: 4,
-                boxShadow: '0 1px 5px rgba(0,0,0,0.4)',
-                minWidth: 180,
-                maxWidth: 320,
-                overflow: 'hidden',
-                fontSize: 13,
-              }}
-            >
-              {menu.items.map((item, i) => (
-                <div
-                  key={i}
-                  onClick={() => {
-                    if (item.disabled) return;
-                    setMenu(null);
-                    item.callback?.();
-                  }}
-                  style={{
-                    padding: '6px 12px',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    cursor: item.disabled ? 'default' : 'pointer',
-                    color: item.disabled ? '#999' : '#333',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!item.disabled)
-                      (e.target as HTMLElement).style.background = '#f0f0f0';
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.target as HTMLElement).style.background = '';
-                  }}
-                >
-                  {item.text}
-                </div>
-              ))}
-            </div>
-          </>
-        )}
+        <ContextMenuOverlay menu={menu} onClose={() => setMenu(null)} />
 
         <ChangeCategoryModal
           show={categoryModalAnnotation !== null}
@@ -932,7 +827,7 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
               annotationsHook.update({
                 id: categoryModalAnnotation.id,
                 categoryId,
-              } as any);
+              });
             }
           }}
         />
@@ -941,39 +836,6 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
       {(next || prev) && fullyLoaded && !hideNavButtons && (
         <NavButtons prev={prev} next={canAdvance ? next : undefined} />
       )}
-    </div>
-  );
-}
-
-function CenterNotice({
-  title,
-  titleColor,
-  body,
-}: {
-  title: string;
-  titleColor: string;
-  body: string;
-}) {
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        background: 'rgba(255,255,255,0.9)',
-        padding: '20px',
-        borderRadius: '10px',
-        textAlign: 'center',
-        zIndex: 1000,
-      }}
-    >
-      <div
-        style={{ color: titleColor, fontWeight: 'bold', marginBottom: '10px' }}
-      >
-        {title}
-      </div>
-      <div style={{ fontSize: '12px', color: '#666' }}>{body}</div>
     </div>
   );
 }

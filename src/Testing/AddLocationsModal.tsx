@@ -10,7 +10,7 @@ import { Button, Form, Spinner } from 'react-bootstrap';
 import { Modal, Header, Title, Body, Footer } from '../Modal';
 import { GlobalContext, TestingContext } from '../Context';
 import { fetchAllPaginatedResults } from '../utils';
-import { FetcherType, Preloader } from '../Preloader';
+import { type FetcherType, type TaskPayload, TaskBuffer } from '../TaskBuffer';
 import LightLocationView from './LightLocationView';
 import ProjectContext from './ProjectContext';
 
@@ -18,6 +18,12 @@ type Props = {
   show: boolean;
   preset: { id: string; name: string };
   surveyId: string;
+};
+
+type LocationReferenceTask = TaskPayload & {
+  id: string;
+  message_id: string;
+  location: { id: string; annotationSetId: string };
 };
 
 export default function AddLocationsModal({ show, preset, surveyId }: Props) {
@@ -61,7 +67,7 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
     locationId: string;
   } | null>(null);
 
-  const fetcher: FetcherType = useCallback(async () => {
+  const fetcher: FetcherType<LocationReferenceTask> = useCallback(async () => {
     const cand = candidatesRef.current[candidateIndexRef.current];
     candidateIndexRef.current += 1;
     const id = crypto.randomUUID();
@@ -424,10 +430,16 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
       if (!orig) throw new Error('Original location not found');
 
       const testingSetId = await getOrCreateTestingLocationSetId();
-      const finalWidth = (advancedOpen && changeSize ? customWidth : orig.width) ?? 100;
-      const finalHeight = (advancedOpen && changeSize ? customHeight : orig.height) ?? 100;
-      const finalX = Math.round((orig.x as number) + (advancedOpen ? (offsetX || 0) : 0));
-      const finalY = Math.round((orig.y as number) + (advancedOpen ? (offsetY || 0) : 0));
+      const finalWidth =
+        (advancedOpen && changeSize ? customWidth : orig.width) ?? 100;
+      const finalHeight =
+        (advancedOpen && changeSize ? customHeight : orig.height) ?? 100;
+      const finalX = Math.round(
+        (orig.x as number) + (advancedOpen ? offsetX || 0 : 0)
+      );
+      const finalY = Math.round(
+        (orig.y as number) + (advancedOpen ? offsetY || 0 : 0)
+      );
 
       // Create a new testing location
       // @ts-ignore
@@ -655,7 +667,7 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
                 {/* Right image column */}
                 <div className='d-flex flex-column flex-grow-1 h-100 w-100'>
                   <Form.Group className='mt-3 h-100 w-100'>
-                    <Preloader
+                    <TaskBuffer
                       index={index}
                       setIndex={setIndex}
                       fetcher={fetcher}
@@ -685,8 +697,9 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
                       <a
                         className='btn btn-outline-info'
                         target='_blank'
-                        href={`/surveys/${surveyId}/location/${currentCandidate!.locationId
-                          }/${currentCandidate!.annotationSetId}`}
+                        href={`/surveys/${surveyId}/location/${
+                          currentCandidate!.locationId
+                        }/${currentCandidate!.annotationSetId}`}
                       >
                         Edit Location
                       </a>
@@ -700,19 +713,21 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
                         (changeSize &&
                           (customWidth === '' || customHeight === '')) ||
                         addedLocations[
-                        `${currentCandidate!.annotationSetId}_${currentCandidate!.locationId
-                        }`
+                          `${currentCandidate!.annotationSetId}_${
+                            currentCandidate!.locationId
+                          }`
                         ]
                       }
                     >
                       {adding
                         ? 'Adding...'
                         : addedLocations[
-                          `${currentCandidate!.annotationSetId}_${currentCandidate!.locationId
-                          }`
-                        ]
-                          ? 'Added'
-                          : 'Add to pool'}
+                            `${currentCandidate!.annotationSetId}_${
+                              currentCandidate!.locationId
+                            }`
+                          ]
+                        ? 'Added'
+                        : 'Add to pool'}
                     </Button>
                   </div>
                 </div>

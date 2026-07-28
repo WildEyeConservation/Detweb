@@ -2,7 +2,7 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import { Modal, Button } from 'react-bootstrap';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { GlobalContext } from './Context';
-import AnnotationImage from './AnnotationImage';
+import AnnotationWorkspace from './AnnotationWorkspace';
 
 export default function AnnotationViewerModal({
   show,
@@ -80,7 +80,7 @@ export default function AnnotationViewerModal({
       <Modal.Body style={{ height: '75vh' }}>
         {imageId && imageMeta ? (
           <div className='w-100 h-100' style={{ position: 'relative' }}>
-            <AnnotationImage
+            <AnnotationWorkspace
               visible={true}
               hideZoomSetting={true}
               hideNavButtons={true}

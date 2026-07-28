@@ -104,12 +104,6 @@ export function useOptimisticUpdates<
   });
 
   useEffect(() => {
-    console.log(
-      `creating subscriptions ${queryClient} ${JSON.stringify(
-        subscriptionFilter
-      )}`
-    );
-
     const subOptions = options?.authMode
       ? ({ ...(subscriptionFilter ?? {}), authMode: options.authMode } as typeof subscriptionFilter)
       : subscriptionFilter;
@@ -148,7 +142,6 @@ export function useOptimisticUpdates<
     });
 
     return () => {
-      console.log('unsubscribing');
       createSub.unsubscribe();
       updateSub.unsubscribe();
       deleteSub.unsubscribe();

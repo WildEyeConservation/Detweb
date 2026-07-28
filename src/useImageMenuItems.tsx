@@ -6,7 +6,7 @@ import {
   ProjectContext,
   UserContext,
 } from './Context';
-import { ImageType, LocationType } from './schemaTypes';
+import type { AnnotationImage, AnnotationLocation } from './annotationTypes';
 
 /** A single entry in the image-level context menu, rendered as a React
  * overlay by the MapLibre viewers. */
@@ -18,8 +18,8 @@ export interface ImageMenuItem {
 }
 
 interface UseImageMenuItemsProps {
-  image: ImageType;
-  location?: LocationType;
+  image: AnnotationImage;
+  location?: AnnotationLocation;
   sourceKey?: string;
   isTest?: boolean;
   stats?: Record<string, number>;

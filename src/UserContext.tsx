@@ -25,7 +25,10 @@ export function Project({
   currentPM: Schema['UserProjectMembership']['type'];
 }) {
   const { client } = useContext(GlobalContext)!;
-  const [expandLegend, setExpandLegend] = useState<boolean>(true);
+  const [expandLegend, setExpandLegend] = useState<boolean>(
+    () =>
+      localStorage.getItem(`legendCollapsed-${currentPM.projectId}`) !== 'true'
+  );
   const { myMembershipHook } = useContext(UserContext)!;
   const subscriptionFilter = useMemo(
     () => ({
@@ -65,6 +68,12 @@ export function Project({
   });
 
   const currentProject = projectQuery.data?.data;
+
+  useEffect(() => {
+    setExpandLegend(
+      localStorage.getItem(`legendCollapsed-${currentPM.projectId}`) !== 'true'
+    );
+  }, [currentPM.projectId]);
 
   useEffect(() => {
     if (!currentCategory) {
