@@ -14,6 +14,11 @@ import { ChevronLeft, ChevronRight, Undo2, SearchCheck, RotateCcw } from 'lucide
 import { GlobalContext, UserContext } from './Context';
 import { getTileBlob } from './StorageLayer';
 import type { Schema } from './amplify/client-schema';
+import {
+  fetchInfoTagDataForSet,
+  formatInfoTagsForDisplay,
+  infoTagNamesFor,
+} from './infoTags';
 
 // ── Constants ──
 
@@ -106,8 +111,20 @@ export default function QCAnnotationReview({
 
   // ── Other annotations on this image ──
   const [otherAnnotations, setOtherAnnotations] = useState<
-    Array<{ id: string; x: number; y: number; categoryId: string; reviewed: boolean }>
+    Array<{
+      id: string;
+      x: number;
+      y: number;
+      categoryId: string;
+      reviewed: boolean;
+      infoTags: string[];
+    }>
   >([]);
+  const [hasInfoTags, setHasInfoTags] = useState(false);
+  const hasInfoTagsRef = useRef(false);
+  useEffect(() => {
+    hasInfoTagsRef.current = hasInfoTags;
+  }, [hasInfoTags]);
 
   // ── Zoom state ──
   const baseZoomRef = useRef<number | null>(null);
@@ -184,14 +201,18 @@ export default function QCAnnotationReview({
   useEffect(() => {
     if (!annotation.imageId || !annotation.annotationSetId) return;
     let mounted = true;
-    client.models.Annotation.annotationsByImageIdAndSetId(
-      { imageId: annotation.imageId, setId: { eq: annotation.annotationSetId } },
-      {
-        limit: 10000,
-        selectionSet: ['id', 'x', 'y', 'categoryId', 'reviewedBy'],
-      }
-    ).then(({ data }) => {
+    Promise.all([
+      client.models.Annotation.annotationsByImageIdAndSetId(
+        { imageId: annotation.imageId, setId: { eq: annotation.annotationSetId } },
+        {
+          limit: 10000,
+          selectionSet: ['id', 'x', 'y', 'categoryId', 'reviewedBy'],
+        }
+      ),
+      fetchInfoTagDataForSet(client, annotation.annotationSetId),
+    ]).then(([{ data }, infoTagData]) => {
       if (!mounted || !data) return;
+      setHasInfoTags(infoTagData.nameById.size > 0);
       setOtherAnnotations(
         data
           .filter((a) => a.id !== annotation.id)
@@ -201,6 +222,7 @@ export default function QCAnnotationReview({
             y: a.y,
             categoryId: a.categoryId,
             reviewed: !!a.reviewedBy,
+            infoTags: infoTagNamesFor(infoTagData, a.id),
           }))
       );
     });
@@ -285,6 +307,7 @@ export default function QCAnnotationReview({
         properties: {
           label: categories.find((c) => c.id === a.categoryId)?.name ?? 'Unknown',
           reviewed: a.reviewed,
+          infoTags: JSON.stringify(a.infoTags),
         },
         geometry: {
           type: 'Point',
@@ -550,11 +573,25 @@ export default function QCAnnotationReview({
         const reviewed = !!feat.properties?.reviewed;
         const statusColor = reviewed ? '#00c853' : '#ff1744';
         const statusText = reviewed ? 'Reviewed' : 'Unreviewed';
+        let infoTagNames: string[] = [];
+        try {
+          infoTagNames = JSON.parse(
+            String(feat.properties?.infoTags ?? '[]')
+          );
+        } catch {
+          infoTagNames = [];
+        }
+        const tagText = formatInfoTagsForDisplay(infoTagNames) || '—';
+        const escapedTags = tagText
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
         hoverPopup
           .setLngLat(coords)
           .setHTML(
             `<div style="color:#000"><div>${escaped}</div>` +
-            `<div style="color:${statusColor};font-weight:600;font-size:11px">${statusText}</div></div>`
+            `<div style="color:${statusColor};font-weight:600;font-size:11px">${statusText}</div>` +
+            `${hasInfoTagsRef.current ? `<div style="font-size:11px">Tags: ${escapedTags}</div>` : ''}</div>`
           )
           .addTo(m);
       });

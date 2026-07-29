@@ -33,6 +33,7 @@ import { updateOrganizationMemberAdmin } from '../functions/updateOrganizationMe
 import { deleteQueue } from '../functions/deleteQueue/resource';
 import { updateActiveOrganizations } from '../functions/updateActiveOrganizations/resource';
 import { launchQCReview } from '../functions/launchQCReview/resource';
+import { launchInfoTags } from '../functions/launchInfoTags/resource';
 import { launchHomography } from '../functions/launchHomography/resource';
 import { reconcileHomographies } from '../functions/reconcileHomographies/resource';
 import { registrationBucketCleanup } from '../functions/registrationBucketCleanup/resource';
@@ -121,6 +122,46 @@ const schema = a
         index('annotationSetId').queryField('categoriesByAnnotationSetId'),
         index('projectId').queryField('categoriesByProjectId'),
       ]),
+    InfoTag: a
+      .model({
+        projectId: a.id().required(),
+        annotationSetId: a.id().required(),
+        annotationSet: a.belongsTo('AnnotationSet', 'annotationSetId'),
+        name: a.string().required(),
+        color: a.string(),
+        shortcutKey: a.string(),
+        annotations: a.hasMany('AnnotationInfoTag', 'infoTagId'),
+        group: a.string(),
+      })
+      .authorization((allow) => [
+        allow.group('sysadmin'),
+        allow.groupDefinedIn('group'),
+      ])
+      .secondaryIndexes((index) => [
+        index('annotationSetId').queryField('infoTagsByAnnotationSetId'),
+        index('projectId').queryField('infoTagsByProjectId'),
+      ]),
+    AnnotationInfoTag: a
+      .model({
+        annotationId: a.id().required(),
+        annotation: a.belongsTo('Annotation', 'annotationId'),
+        infoTagId: a.id().required(),
+        infoTag: a.belongsTo('InfoTag', 'infoTagId'),
+        annotationSetId: a.id().required(),
+        projectId: a.id().required(),
+        group: a.string(),
+      })
+      .identifier(['annotationId', 'infoTagId'])
+      .authorization((allow) => [
+        allow.group('sysadmin'),
+        allow.groupDefinedIn('group'),
+      ])
+      .secondaryIndexes((index) => [
+        index('infoTagId').queryField('annotationInfoTagsByInfoTagId'),
+        index('annotationSetId').queryField(
+          'annotationInfoTagsByAnnotationSetId'
+        ),
+      ]),
     Image: a
       .model({
         projectId: a.id().required(),
@@ -208,6 +249,7 @@ const schema = a
         ),
         testResults: a.hasMany('TestResult', 'annotationSetId'),
         categories: a.hasMany('Category', 'annotationSetId'),
+        infoTags: a.hasMany('InfoTag', 'annotationSetId'),
         register: a.boolean().default(false),
         jollyResultsMemberships: a.hasMany(
           'JollyResultsMembership',
@@ -238,6 +280,8 @@ const schema = a
         object: a.belongsTo('Object', 'objectId'),
         reviewCatId: a.string(),
         reviewedBy: a.string(),
+        infoTags: a.hasMany('AnnotationInfoTag', 'annotationId'),
+        infoTaggedBy: a.string(),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.owner(), allow.groupDefinedIn('group')])
@@ -988,6 +1032,7 @@ const schema = a
         obscured: a.boolean(),
         oov: a.boolean(),
         imageTimestamp: a.timestamp(),
+        infoTags: a.string().array(),
         group: a.string(),
       })
       .authorization((allow) => [allow.group('sysadmin'), allow.groupDefinedIn('group').to(['read'])])
@@ -1300,6 +1345,14 @@ const schema = a
       .returns(a.json())
       .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(launchQCReview)),
+    launchInfoTags: a
+      .mutation()
+      .arguments({
+        request: a.string().required(),
+      })
+      .returns(a.json())
+      .authorization((allow) => [allow.authenticated()])
+      .handler(a.handler.function(launchInfoTags)),
     launchHomography: a
       .mutation()
       .arguments({
@@ -1447,6 +1500,7 @@ const schema = a
     allow.resource(launchAnnotationSet),
     allow.resource(launchFalseNegatives),
     allow.resource(launchQCReview),
+    allow.resource(launchInfoTags),
     allow.resource(launchHomography),
     allow.resource(reconcileHomographies),
     allow.resource(registrationBucketCleanup),
@@ -1520,6 +1574,7 @@ export type GenerateSurveyResultsHandler = MutationHandler<{
 export type LaunchAnnotationSetHandler = MutationHandler<{ request: string }>;
 export type LaunchFalseNegativesHandler = MutationHandler<{ request: string }>;
 export type LaunchQCReviewHandler = MutationHandler<{ request: string }>;
+export type LaunchInfoTagsHandler = MutationHandler<{ request: string }>;
 export type LaunchHomographyHandler = MutationHandler<{ request: string }>;
 export type UpdateProjectMembershipsHandler = MutationHandler<{ projectId: string }>;
 export type RunImageRegistrationHandler = MutationHandler<{ projectId: string; metadata: string; queueUrl: string; images?: string[] | null }>;

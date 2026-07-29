@@ -10,6 +10,7 @@ import { cleanupJobs } from "../functions/cleanupJobs/resource"
 import { findAndRequeueMissingLocations } from "../functions/findAndRequeueMissingLocations/resource"
 import { reconcileFalseNegatives } from "../functions/reconcileFalseNegatives/resource"
 import { launchQCReview } from "../functions/launchQCReview/resource"
+import { launchInfoTags } from "../functions/launchInfoTags/resource"
 import { launchHomography } from "../functions/launchHomography/resource"
 import { reconcileHomographies } from "../functions/reconcileHomographies/resource"
 import { reconcilePretileLaunches } from "../functions/reconcilePretileLaunches/resource"
@@ -60,6 +61,7 @@ export const outputBucket = defineStorage({
       allow.authenticated.to(['write', 'read']),
       allow.resource(launchAnnotationSet).to(['read', 'write']),
       allow.resource(launchQCReview).to(['write']),
+      allow.resource(launchInfoTags).to(['write']),
       allow.resource(launchHomography).to(['read']),
       allow.resource(monitorTilingTasks).to(['write']),
       allow.resource(findAndRequeueMissingLocations).to(['read']),
@@ -72,6 +74,7 @@ export const outputBucket = defineStorage({
       allow.resource(launchAnnotationSet).to(['write']),
       allow.resource(launchFalseNegatives).to(['write']),
       allow.resource(launchQCReview).to(['write']),
+      allow.resource(launchInfoTags).to(['write']),
       allow.resource(launchHomography).to(['write']),
       allow.resource(launchIndividualId).to(['write']),
       allow.resource(reconcilePretileLaunches).to(['read', 'delete']),
@@ -82,6 +85,12 @@ export const outputBucket = defineStorage({
     'qc-review-manifests/*': [
       allow.authenticated.to(['read']),
       allow.resource(launchQCReview).to(['write']),
+      allow.resource(findAndRequeueMissingLocations).to(['read']),
+      allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
+    ],
+    'info-tag-manifests/*': [
+      allow.authenticated.to(['read']),
+      allow.resource(launchInfoTags).to(['write']),
       allow.resource(findAndRequeueMissingLocations).to(['read']),
       allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
     ],

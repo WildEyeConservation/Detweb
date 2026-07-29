@@ -90,6 +90,7 @@ export const annotationsByImageIdAndSetId = /* GraphQL */ `query AnnotationsByIm
       obscured
       reviewCatId
       owner
+      infoTaggedBy
       projectId
       setId
       source
