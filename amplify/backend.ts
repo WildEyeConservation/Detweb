@@ -154,8 +154,8 @@ const ecsTaskRole = new iam.Role(ecsStack, "EcsTaskRole", {
   assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
 });
 
-const vpc = new ec2.Vpc(customStack, "my-cdk-vpc");
-const ecsvpc = new ec2.Vpc(ecsStack, "my-cdk-vpc");
+const vpc = new ec2.Vpc(customStack, "my-cdk-vpc", { natGateways: 0 });
+const ecsvpc = new ec2.Vpc(ecsStack, "my-cdk-vpc", { natGateways: 0 });
 ecsTaskRole.addManagedPolicy(
   iam.ManagedPolicy.fromAwsManagedPolicyName("AWSAppSyncInvokeFullAccess"),
 );
