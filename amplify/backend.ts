@@ -154,8 +154,18 @@ const ecsTaskRole = new iam.Role(ecsStack, "EcsTaskRole", {
   assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
 });
 
-const vpc = new ec2.Vpc(customStack, "my-cdk-vpc", { natGateways: 0 });
-const ecsvpc = new ec2.Vpc(ecsStack, "my-cdk-vpc", { natGateways: 0 });
+// Keep the subnet names/CIDRs of the originally deployed VPCs so removing the
+// NAT gateways doesn't replace the subnets (new subnets would collide with the
+// existing CIDR ranges before the old ones are deleted).
+const noNatVpcProps: ec2.VpcProps = {
+  natGateways: 0,
+  subnetConfiguration: [
+    { name: 'Public', subnetType: ec2.SubnetType.PUBLIC, cidrMask: 18 },
+    { name: 'Private', subnetType: ec2.SubnetType.PRIVATE_ISOLATED, cidrMask: 18 },
+  ],
+};
+const vpc = new ec2.Vpc(customStack, "my-cdk-vpc", noNatVpcProps);
+const ecsvpc = new ec2.Vpc(ecsStack, "my-cdk-vpc", noNatVpcProps);
 ecsTaskRole.addManagedPolicy(
   iam.ManagedPolicy.fromAwsManagedPolicyName("AWSAppSyncInvokeFullAccess"),
 );
