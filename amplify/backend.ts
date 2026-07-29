@@ -36,7 +36,12 @@ const backend=defineBackend({
   updateAnnotationCounts
 });
 
-
+// The deployed API key expired and was purged by AppSync, so CloudFormation
+// 404s trying to update it. A new logical ID makes CloudFormation create a
+// fresh key instead of updating the ghost.
+backend.data.resources.cfnResources.cfnApiKey?.overrideLogicalId(
+  'amplifyDataGraphQLAPIDefaultApiKeyV2'
+);
 
 const s3Bucket = backend.outputBucket.resources.bucket;
 const cfnBucket = s3Bucket.node.defaultChild as s3.CfnBucket;
