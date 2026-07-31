@@ -529,14 +529,20 @@ export default function DensityMap({
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
+    const container = mapContainerRef.current;
     const map = new maplibregl.Map({
-      container: mapContainerRef.current,
+      container,
       style: BASE_STYLE,
       center: [0, 0],
       zoom: 1,
       attributionControl: { compact: true },
     });
     mapRef.current = map;
+
+    // MapLibre does not automatically detect every flex/grid size change.
+    // Keep its canvas in sync with the responsive container.
+    const resizeObserver = new ResizeObserver(() => map.resize());
+    resizeObserver.observe(container);
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     map.addControl(new maplibregl.FullscreenControl(), 'top-right');
@@ -746,6 +752,7 @@ export default function DensityMap({
     });
 
     return () => {
+      resizeObserver.disconnect();
       setMapLoaded(false);
       map.remove();
       mapRef.current = null;
