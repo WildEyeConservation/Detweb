@@ -598,18 +598,20 @@ export default function JollyResults() {
                 <h4 className='mb-0'>Density Map</h4>
               </Card.Title>
             </Card.Header>
-            <Card.Body>
-              <DensityMap
-                surveyId={surveyId}
-                annotationSetId={annotationSetId}
-                categoryIds={
-                  selectedCategories.length > 0
-                    ? categoryIds
-                    : categoryOptions.map((c) => c.value)
-                }
-                primaryOnly
-                dropFalseNegatives
-              />
+            <Card.Body className='p-0 overflow-hidden'>
+              <div style={{ height: 'clamp(400px, 55vh, 650px)' }}>
+                <DensityMap
+                  surveyId={surveyId}
+                  annotationSetId={annotationSetId}
+                  categoryIds={
+                    selectedCategories.length > 0
+                      ? categoryIds
+                      : categoryOptions.map((c) => c.value)
+                  }
+                  primaryOnly
+                  dropFalseNegatives
+                />
+              </div>
             </Card.Body>
           </Card>
           <Card>

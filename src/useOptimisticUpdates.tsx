@@ -102,6 +102,7 @@ export function useOptimisticUpdates<
       return allResults;
     },
   });
+  const stableData = useMemo(() => data ?? [], [data]);
 
   useEffect(() => {
     console.log(
@@ -211,7 +212,10 @@ export function useOptimisticUpdates<
   });
 
   return {
-    data: data || [],
+    // Keep the empty result referentially stable while the query is loading.
+    // Consumers commonly depend on `data` in effects; returning a new [] on
+    // every render can otherwise create an update loop.
+    data: stableData,
     meta: queryResult,
     create: (item: T) => {
       (item as any).id ||= crypto.randomUUID(); // If the item does not have an id, we generate a random UUID for it.
