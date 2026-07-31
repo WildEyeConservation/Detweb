@@ -1,0 +1,22 @@
+{
+  "name": "detweb-jolly-results-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "tsx --test src/**/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.933.0",
+    "@aws-sdk/client-s3": "^3.933.0",
+    "@aws-sdk/lib-dynamodb": "^3.933.0",
+    "jstat": "^1.9.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.4.5"
+  }
+}
