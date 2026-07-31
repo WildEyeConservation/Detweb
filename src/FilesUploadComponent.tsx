@@ -17,6 +17,10 @@ import { uploadOrchestrator } from './upload/core/UploadOrchestrator.ts';
 import { saveDirectoryHandle } from './upload/core/dirHandles.ts';
 import type { UploadBackend } from './upload/core/types.ts';
 import {
+  downloadFailedImagesCsv,
+  failedImagesCsvName,
+} from './upload/failedImagesCsv.ts';
+import {
   orientationCorrectionFor,
   orientationGroupForDimensions,
   type CameraOrientationRotations,
@@ -1862,16 +1866,32 @@ export function FileUploadCore({
         await saveDirectoryHandle(projectId, directoryHandle);
       }
 
+      // Include every manifest file: a DB record may exist before its S3 object,
+      // so resume filtering alone can omit a file that still needs uploading.
+      const mergedPaths = new Set(merged.map((img) => img.originalPath));
+      const sessionFiles = new Map<string, File>(
+        gpsFilteredImageFiles.map((f) => [f.webkitRelativePath, f])
+      );
+      for (const f of imageFiles) {
+        if (
+          mergedPaths.has(f.webkitRelativePath) &&
+          !sessionFiles.has(f.webkitRelativePath)
+        ) {
+          sessionFiles.set(f.webkitRelativePath, f);
+        }
+      }
+
       uploadOrchestrator.start({
         client,
         backend: backend as unknown as UploadBackend,
         projectId,
         userId: user.userId,
-        files: gpsFilteredImageFiles,
+        files: Array.from(sessionFiles.values()),
       });
     },
     [
       filteredImageFiles,
+      imageFiles,
       exifData,
       getGpsForFile,
       altitudeType,
@@ -2493,6 +2513,24 @@ export function FileUploadCore({
               ))}
             </ul>
           </div>
+          <Button
+            variant='outline-dark'
+            size='sm'
+            className='mt-2'
+            onClick={() => {
+              const rows = failedFiles.map((failed) => ({
+                originalPath: failed.path,
+                reason: failed.error || 'Could not be read',
+                category: 'scan-failed',
+              }));
+              downloadFailedImagesCsv(
+                failedImagesCsvName(rows, project?.id ?? 'survey'),
+                rows
+              );
+            }}
+          >
+            Download CSV
+          </Button>
         </Alert>
       )}
       </div>

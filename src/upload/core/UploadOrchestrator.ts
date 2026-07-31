@@ -11,7 +11,7 @@ import { buildCameraResolver, type CameraResolver } from './cameras';
 import { ElevationService } from './elevation';
 import { Finalizer } from './Finalizer';
 import { UploadStateStore } from './persistence';
-import { sleep } from './pool';
+import { runPool, sleep } from './pool';
 import { getProjectKeyInfo, type ProjectKeyInfo } from './projectKeys';
 import { RecordWriter } from './RecordWriter';
 import {
@@ -25,6 +25,7 @@ import { TransferEngine, type TransferInput } from './TransferEngine';
 import { removeDirectoryHandle } from './dirHandles';
 import {
   ACTIVE_PHASES,
+  type BlockedItem,
   type DuplicateRecord,
   type ItemFailure,
   type PauseReason,
@@ -36,6 +37,10 @@ import {
 
 const MAX_SESSION_ATTEMPTS = 20;
 const THROUGHPUT_WINDOW_MS = 30000;
+const SKIP_DELETE_CONCURRENCY = 5;
+const MAX_NO_PROGRESS_ATTEMPTS = 3;
+
+const RESUMABLE_PHASES: SessionPhase[] = ['paused', 'failed', 'blocked'];
 
 export interface StartInput {
   client: UploadClient;
@@ -69,6 +74,12 @@ interface InternalSession {
   controller: AbortController;
   duplicates: DuplicateRecord[];
   startLogged: boolean;
+  /** Files missing from S3 after the previous verification. */
+  lastRemainingCount: number | null;
+  /** Consecutive verify rounds that left that count unchanged. */
+  noProgressAttempts: number;
+  /** Files awaiting a retry-or-skip decision. */
+  blockedItems: BlockedItem[];
   releaseLock: () => void;
 }
 
@@ -119,12 +130,12 @@ export class UploadOrchestrator {
     return ACTIVE_PHASES.includes(this.session.phase);
   }
 
-  /** True when a paused/failed session for this project can resume in memory. */
+  /** True when a stopped session for this project can resume in memory. */
   canResumeInMemory(projectId: string): boolean {
     return (
       this.session !== null &&
       this.session.projectId === projectId &&
-      (this.session.phase === 'paused' || this.session.phase === 'failed') &&
+      RESUMABLE_PHASES.includes(this.session.phase) &&
       this.session.fileByPath.size > 0
     );
   }
@@ -175,6 +186,9 @@ export class UploadOrchestrator {
       controller: new AbortController(),
       duplicates: [],
       startLogged: false,
+      lastRemainingCount: null,
+      noProgressAttempts: 0,
+      blockedItems: [],
       releaseLock: () => {},
     };
     this.session = session;
@@ -201,23 +215,139 @@ export class UploadOrchestrator {
     session.controller.abort();
   }
 
-  /** Resumes a paused/failed in-memory session. Returns false if none. */
+  /** Resumes a paused/failed/blocked in-memory session. False if none. */
   resume(projectId: string): boolean {
     const session = this.session;
     if (
       !session ||
       session.projectId !== projectId ||
-      (session.phase !== 'paused' && session.phase !== 'failed')
+      !RESUMABLE_PHASES.includes(session.phase)
     ) {
       return false;
     }
-    session.pauseReason = undefined;
-    session.errorMessage = undefined;
-    session.attempt = 1;
-    session.retryDelayMs = 0;
-    session.controller = new AbortController();
+    this.rearmSession(session);
     void this.runLoop(session);
     return true;
+  }
+
+  /**
+   * Drops the blocked files from the survey and finishes the upload without
+   * them: the manifest entries go, along with any Image records that point at
+   * bytes which never reached storage. Returns false when nothing is blocked.
+   */
+  skipBlocked(): boolean {
+    const session = this.session;
+    if (!session || session.phase !== 'blocked') return false;
+    const skipped = session.blockedItems;
+    if (skipped.length === 0) return false;
+
+    this.rearmSession(session);
+    void this.dropAndRun(session, skipped);
+    return true;
+  }
+
+  private rearmSession(session: InternalSession): void {
+    session.pauseReason = undefined;
+    session.errorMessage = undefined;
+    session.blockedItems = [];
+    session.attempt = 1;
+    session.retryDelayMs = 0;
+    // A resume may include newly selected files.
+    session.lastRemainingCount = null;
+    session.noProgressAttempts = 0;
+    session.controller = new AbortController();
+  }
+
+  private async dropAndRun(
+    session: InternalSession,
+    skipped: BlockedItem[]
+  ): Promise<void> {
+    this.setPhase(session, 'preparing');
+    try {
+      await this.dropSkippedImages(session, skipped);
+    } catch (err) {
+      console.error('Failed to drop skipped images:', err);
+      session.errorMessage = `Could not remove the skipped files: ${errorMessage(err)}`;
+      session.blockedItems = skipped;
+      this.setPhase(session, 'blocked');
+      return;
+    }
+    await this.runLoop(session);
+  }
+
+  /**
+   * Removes skipped paths from the manifest and deletes any Image records (and
+   * their memberships/files) created for them, so downstream processing never
+   * sees an image whose original is not in storage.
+   */
+  private async dropSkippedImages(
+    session: InternalSession,
+    skipped: BlockedItem[]
+  ): Promise<void> {
+    const paths = new Set(skipped.map((item) => item.originalPath));
+
+    // Delete dependent records before their parent, then update the manifest.
+    const dbImages = (await fetchAllPaginatedResults(
+      session.client.models.Image.imagesByProjectId,
+      {
+        projectId: session.projectId,
+        selectionSet: ['id', 'originalPath', 'memberships.id', 'files.id'],
+        limit: 10000,
+      }
+    )) as {
+      id: string;
+      originalPath: string;
+      memberships: { id: string }[];
+      files: { id: string }[];
+    }[];
+
+    const orphans = dbImages.filter((img) => paths.has(img.originalPath));
+    if (orphans.length > 0) {
+      await runPool(orphans, SKIP_DELETE_CONCURRENCY, async (img) => {
+        for (const m of img.memberships ?? []) {
+          assertMutationSucceeded(
+            await session.client.models.ImageSetMembership.delete({ id: m.id }),
+            `delete image-set membership ${m.id}`
+          );
+        }
+        for (const f of img.files ?? []) {
+          assertMutationSucceeded(
+            await session.client.models.ImageFile.delete({ id: f.id }),
+            `delete image file ${f.id}`
+          );
+        }
+        assertMutationSucceeded(
+          await session.client.models.Image.delete({ id: img.id }),
+          `delete image ${img.id}`
+        );
+      });
+    }
+
+    const manifest = await session.store.getImages();
+    await session.store.setImages(
+      manifest.filter((img) => !paths.has(img.originalPath))
+    );
+
+    const keyInfo = await getProjectKeyInfo(session.client, session.projectId);
+    if (keyInfo.organizationId) {
+      const lines = skipped.map(
+        (item) => `- ${item.originalPath} (${item.reason})`
+      );
+      await logAdminAction(
+        session.client,
+        session.userId,
+        truncateForLog(
+          `Continued upload without ${skipped.length} image${
+            skipped.length === 1 ? '' : 's'
+          } that could not be uploaded:`,
+          lines
+        ),
+        session.projectId,
+        keyInfo.organizationId
+      ).catch(() => {
+        /* noop: audit logging must not block the upload */
+      });
+    }
   }
 
   /** Aborts and discards the session (delete flow). Stores are untouched. */
@@ -231,7 +361,7 @@ export class UploadOrchestrator {
     this.clearSession();
   }
 
-  /** Drops a paused/failed session (e.g. user dismisses the error pill). */
+  /** Drops a stopped session (e.g. user dismisses the error pill). */
   discard(): void {
     const session = this.session;
     if (!session || ACTIVE_PHASES.includes(session.phase)) return;
@@ -307,9 +437,41 @@ export class UploadOrchestrator {
         await this.pruneDuplicates(session);
 
         // Verify every manifest item is on S3 before finalizing.
-        const { remainingCount, uploadedPaths } =
+        const { remainingPaths, uploadedPaths } =
           await this.verify(session, plan.keyInfo);
+        const remainingCount = remainingPaths.length;
         if (remainingCount > 0 || failures.length > 0) {
+          // Missing local files cannot recover without user action. Otherwise,
+          // allow several verification rounds with no progress before blocking.
+          if (remainingCount === session.lastRemainingCount) {
+            session.noProgressAttempts += 1;
+          } else {
+            session.noProgressAttempts = 0;
+          }
+          session.lastRemainingCount = remainingCount;
+          const unwinnable = remainingPaths.every(
+            (path) => !session.fileByPath.has(path)
+          );
+          if (
+            remainingCount > 0 &&
+            (unwinnable ||
+              session.noProgressAttempts >= MAX_NO_PROGRESS_ATTEMPTS)
+          ) {
+            console.warn(
+              `Upload blocked on ${remainingCount} file(s) for project ${session.projectId}:`,
+              remainingPaths
+            );
+            session.blockedItems = buildBlockedItems(
+              session,
+              remainingPaths,
+              failures
+            );
+            session.errorMessage = `${remainingCount} image${
+              remainingCount === 1 ? '' : 's'
+            } could not be uploaded.`;
+            this.setPhase(session, 'blocked');
+            return;
+          }
           const failureNote =
             failures.length > 0
               ? `; ${failures.length} failed (first: ${failures[0].message})`
@@ -318,6 +480,7 @@ export class UploadOrchestrator {
             `${Math.max(remainingCount, failures.length)} file(s) not uploaded yet${failureNote}`
           );
         }
+        session.lastRemainingCount = null;
 
         this.setPhase(session, 'finalizing');
         const finalizer = new Finalizer({
@@ -578,7 +741,7 @@ export class UploadOrchestrator {
   private async verify(
     session: InternalSession,
     keyInfo: ProjectKeyInfo
-  ): Promise<{ remainingCount: number; uploadedPaths: Set<string> }> {
+  ): Promise<{ remainingPaths: string[]; uploadedPaths: Set<string> }> {
     const manifest = await session.store.getImages();
     const localPaths = new Set(manifest.map((img) => img.originalPath));
     const onS3 = await listUploadedOriginalPaths({
@@ -593,7 +756,9 @@ export class UploadOrchestrator {
     );
     await session.store.setUploadedPaths(Array.from(uploadedPaths));
     return {
-      remainingCount: manifest.length - uploadedPaths.size,
+      remainingPaths: manifest
+        .map((img) => img.originalPath)
+        .filter((path) => !uploadedPaths.has(path)),
       uploadedPaths,
     };
   }
@@ -641,9 +806,72 @@ function snapshotOf(session: InternalSession): SessionSnapshot {
     throughputBps: session.throughputBps,
     etaSeconds: session.etaSeconds,
     failures: session.failures,
+    blocked: session.blockedItems,
     retryDelayMs: session.retryDelayMs,
     attempt: session.attempt,
   };
+}
+
+/** Builds the user-facing reason for each path still missing from storage. */
+function buildBlockedItems(
+  session: InternalSession,
+  remainingPaths: string[],
+  failures: ItemFailure[]
+): BlockedItem[] {
+  const failureByPath = new Map(
+    failures.map((failure) => [failure.originalPath, failure.message])
+  );
+  return remainingPaths.map((originalPath) => {
+    const failure = failureByPath.get(originalPath);
+    if (failure) {
+      return {
+        originalPath,
+        kind: 'transfer-failed' as const,
+        reason: failure,
+      };
+    }
+    if (!session.fileByPath.has(originalPath)) {
+      return {
+        originalPath,
+        kind: 'missing-from-folder' as const,
+        reason: 'Not found in the selected folder',
+      };
+    }
+    return {
+      originalPath,
+      kind: 'not-in-storage' as const,
+      reason: 'Upload did not complete - file is not in storage',
+    };
+  });
+}
+
+function assertMutationSucceeded(
+  result: { errors?: readonly { message: string }[] },
+  operation: string
+): void {
+  if (!result.errors?.length) return;
+  throw new Error(
+    `Could not ${operation}: ${result.errors
+      .map((error) => error.message)
+      .join('; ')}`
+  );
+}
+
+/** Joins a header and lines while bounding the audit-log message size. */
+function truncateForLog(header: string, lines: string[]): string {
+  const MAX_MESSAGE_CHARS = 30000;
+  const full = `${header}\n${lines.join('\n')}`;
+  if (full.length <= MAX_MESSAGE_CHARS) return full;
+  const kept: string[] = [];
+  let used = header.length + 1;
+  for (const line of lines) {
+    if (used + line.length + 1 > MAX_MESSAGE_CHARS - 64) break;
+    kept.push(line);
+    used += line.length + 1;
+  }
+  return `${header}\n${kept.join('\n')}\n…and ${
+    lines.length - kept.length
+  } more (truncated)`;
 }
 
 /** Moving-window (30s) byte throughput and ETA. */

@@ -200,7 +200,14 @@ export class TransferEngine {
     let cancelled = false;
     try {
       const file = input.fileByPath.get(image.originalPath);
-      if (!file) return;
+      if (!file) {
+        // Verification cannot succeed while a manifest file is unavailable.
+        this.failures.push({
+          originalPath: image.originalPath,
+          message: 'Not found in the selected folder',
+        });
+        return;
+      }
 
       // Phash check before uploading so duplicates never spend bandwidth.
       const { phash, duplicateOf, scope } = await this.checkPhashDup(
