@@ -1,7 +1,7 @@
-import { defineFunction } from "@aws-amplify/backend";
+import { defineFunction } from '@aws-amplify/backend';
 
 export const generateSurveyResults = defineFunction({
-  name: "generateSurveyResults",
-  timeoutSeconds: 900,
+  name: 'generateSurveyResults',
+  timeoutSeconds: 30,
   runtime: 20,
 });

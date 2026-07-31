@@ -20,6 +20,8 @@
     "@aws-crypto/sha256-js": "^5.2.0",
     "@aws-sdk/client-dynamodb": "^3.648.0",
     "@aws-sdk/client-ecs": "^3.933.0",
+    "@aws-sdk/client-s3": "3.669.0",
+    "@aws-sdk/client-sfn": "3.669.0",
     "@aws-sdk/client-sqs": "^3.635.0",
     "@aws-sdk/credential-provider-node": "^3.972.6",
     "@aws-sdk/lib-dynamodb": "^3.658.0",

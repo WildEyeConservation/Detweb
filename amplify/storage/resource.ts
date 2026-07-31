@@ -17,6 +17,7 @@ import { pretileImage } from "../functions/pretileImage/resource"
 import { refreshTiles } from "../functions/refreshTiles/resource"
 import { launchIndividualId } from "../functions/launchIndividualId/resource"
 import { reconcileIndividualId } from "../functions/reconcileIndividualId/resource"
+import { generateSurveyResults } from "../functions/generateSurveyResults/resource"
 
 export const outputBucket = defineStorage({
   name: "outputs",
@@ -66,6 +67,11 @@ export const outputBucket = defineStorage({
       allow.resource(cleanupJobs).to(['delete']),
       allow.resource(reconcileHomographies).to(['read', 'delete']),
       allow.groups(['sysadmin']).to(['read', 'write', 'delete'])
+    ],
+    'jolly-status/*': [
+      allow.authenticated.to(['read']),
+      allow.resource(generateSurveyResults).to(['write']),
+      allow.groups(['sysadmin']).to(['read', 'delete'])
     ],
     // Pretile launch manifests for tiling workflow tracking
     'pretile-launch-manifests/*': [
