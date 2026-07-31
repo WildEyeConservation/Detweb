@@ -2,7 +2,7 @@ import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { addUserToGroup } from './functions/add-user-to-group/resource';
-import { RemovalPolicy, Stack } from 'aws-cdk-lib';
+import { ArnFormat, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { outputBucket, inputBucket } from './storage/resource';
 import { generateTile } from './storage/generateTile/resource';
@@ -979,6 +979,7 @@ if (enableEcs) {
       service: 'states',
       resource: 'stateMachine',
       resourceName: stateMachineName,
+      arnFormat: ArnFormat.COLON_RESOURCE_NAME,
     });
     backend.generateSurveyResults.addEnvironment(
       'JOLLY_JOB_TABLE_NAME',
