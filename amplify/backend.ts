@@ -753,11 +753,10 @@ if (enableEcs) {
     );
     taskRole.addToPrincipalPolicy(
       new iam.PolicyStatement({
-        actions: ['dynamodb:TransactWriteItems'],
-        resources: [
-          jobTable.tableArn,
-          jollyTables.JollyResult.tableArn,
-        ],
+        // TransactWriteItems authorizes each component operation separately.
+        // The ownership guard in commitResults uses a ConditionCheck.
+        actions: ['dynamodb:ConditionCheckItem'],
+        resources: [jobTable.tableArn],
       })
     );
     outputBucketResource.grantReadWrite(
