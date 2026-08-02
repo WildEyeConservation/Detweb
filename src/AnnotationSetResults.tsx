@@ -3,7 +3,7 @@ import { Modal, Body, Header, Footer, Title } from './Modal';
 import { useNavigate } from 'react-router-dom';
 import { fetchAllPaginatedResults } from './utils.tsx';
 import exportFromJSON from 'export-from-json';
-import { GlobalContext, UserContext } from './Context.tsx';
+import { GlobalContext } from './Context.tsx';
 import { useContext, useState, useEffect, useMemo } from 'react';
 import { useUsers } from './apiInterface';
 import GenerateJollyResults from './GenerateJollyResults.tsx';
@@ -22,8 +22,6 @@ export default function AnnotationSetResults({
 }) {
   const navigate = useNavigate();
   const { client, showModal } = useContext(GlobalContext)!;
-  const { cognitoGroups } = useContext(UserContext)!;
-  const isSysadmin = cognitoGroups.includes('sysadmin');
   const [loading, setLoading] = useState(false);
   const [exportStatus, setExportStatus] = useState('');
   const { users } = useUsers();
@@ -247,14 +245,12 @@ export default function AnnotationSetResults({
               <h5 className='mb-0'>Jolly II</h5>
               <span className='text-muted' style={{ fontSize: '14px' }}>
                 Generate and view the Jolly results for this annotation set.
-                {!isSysadmin &&
-                  ' Generating results is currently limited to system administrators.'}
               </span>
               <div className='d-flex flex-row gap-2'>
                 <Button
                   className='d-block mt-1'
                   variant='primary'
-                  disabled={loading || !isSysadmin}
+                  disabled={loading}
                   onClick={() => {
                     if (
                       jollyResultsExists &&
