@@ -35,6 +35,19 @@ interface TransectMetrics {
   animalCounts: Record<string, number>;
 }
 
+interface CameraStripMetrics {
+  cameraId: string;
+  distance: number;
+  widthAverage: number;
+  areaSquareKilometres: number;
+  animalCounts: Record<string, number>;
+}
+
+interface ImageStrip {
+  transectId: string;
+  cameraId: string;
+}
+
 interface SurveyAccumulatorOptions {
   surveyId: string;
   annotationSetId: string;
@@ -50,6 +63,10 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+function cameraStripKey(transectId: string, cameraId: string): string {
+  return `${transectId}\u0000${cameraId}`;
+}
+
 export class SurveyAccumulator {
   private readonly surveyId: string;
   private readonly annotationSetId: string;
@@ -61,8 +78,8 @@ export class SurveyAccumulator {
   private readonly transectMap: Map<string, TransectRecord>;
   private readonly now: () => string;
   private readonly imagesByTransect = new Map<string, ValidImage[]>();
-  private readonly imageToTransect = new Map<string, string>();
-  private readonly countsByTransect = new Map<
+  private readonly imageToStrip = new Map<string, ImageStrip>();
+  private readonly countsByCameraStrip = new Map<
     string,
     Record<string, number>
   >();
@@ -109,7 +126,7 @@ export class SurveyAccumulator {
   }
 
   get validImageCount(): number {
-    return this.imageToTransect.size;
+    return this.imageToStrip.size;
   }
 
   addImage(image: ImageRecord): void {
@@ -166,7 +183,10 @@ export class SurveyAccumulator {
     const images = this.imagesByTransect.get(image.transectId) ?? [];
     images.push(validImage);
     this.imagesByTransect.set(image.transectId, images);
-    this.imageToTransect.set(image.id, image.transectId);
+    this.imageToStrip.set(image.id, {
+      transectId: image.transectId,
+      cameraId: image.cameraId,
+    });
   }
 
   addAnnotation(annotation: AnnotationRecord): void {
@@ -176,19 +196,20 @@ export class SurveyAccumulator {
     ) {
       return;
     }
-    const transectId = this.imageToTransect.get(annotation.imageId);
-    if (!transectId) {
+    const strip = this.imageToStrip.get(annotation.imageId);
+    if (!strip) {
       this.validation.annotationsForExcludedImages += 1;
       return;
     }
-    const counts = this.countsByTransect.get(transectId) ?? {};
+    const key = cameraStripKey(strip.transectId, strip.cameraId);
+    const counts = this.countsByCameraStrip.get(key) ?? {};
     counts[annotation.categoryId] =
       (counts[annotation.categoryId] ?? 0) + 1;
-    this.countsByTransect.set(transectId, counts);
+    this.countsByCameraStrip.set(key, counts);
   }
 
   calculate(): ComputationOutput {
-    if (this.imageToTransect.size === 0) {
+    if (this.imageToStrip.size === 0) {
       throw new Error('No usable images found for survey');
     }
 
@@ -206,7 +227,7 @@ export class SurveyAccumulator {
 
     const metricsByStratum = new Map<string, TransectMetrics[]>();
     for (const [transectId, images] of this.imagesByTransect.entries()) {
-      const metrics = this.calculateTransect(transectId, images);
+      const metrics = this.calculateTransect(transectId, images, warnings);
       if (!metrics) {
         warnings.push(
           `Transect ${transectId} was excluded because it had insufficient usable track data`
@@ -336,75 +357,112 @@ export class SurveyAccumulator {
 
   private calculateTransect(
     transectId: string,
-    images: ValidImage[]
+    images: ValidImage[],
+    warnings: string[]
   ): TransectMetrics | null {
     const transect = this.transectMap.get(transectId);
     if (!transect || !this.stratumMap.has(transect.stratumId)) {
       return null;
     }
 
-    const byTimestamp = new Map<number, ValidImage[]>();
+    // A camera is a physical sub-strip of the parent flight transect. Its
+    // geometry is calculated from its own timestamp series, so cameras do not
+    // need synchronized shutters. The sub-strip areas and primary-annotation
+    // counts are combined below while the flight transect remains one Jolly
+    // sampling unit. Survey data can identify overlapping camera pairs, but it
+    // does not store the overlap extent or geometry needed by this calculation.
+    // Camera strips are therefore treated as non-overlapping and their complete
+    // areas are summed.
+    const imagesByCamera = new Map<string, ValidImage[]>();
     for (const image of images) {
-      const cohort = byTimestamp.get(image.timestamp) ?? [];
-      cohort.push(image);
-      byTimestamp.set(image.timestamp, cohort);
+      const cameraImages = imagesByCamera.get(image.cameraId) ?? [];
+      cameraImages.push(image);
+      imagesByCamera.set(image.cameraId, cameraImages);
     }
-    const cohorts = [...byTimestamp.entries()]
-      .sort(([first], [second]) => first - second)
-      .map(([timestamp, cohortImages]) => {
-        const latitude =
-          cohortImages.reduce(
-            (sum, image) => sum + image.latitude,
-            0
-          ) / cohortImages.length;
-        const longitude =
-          cohortImages.reduce(
-            (sum, image) => sum + image.longitude,
-            0
-          ) / cohortImages.length;
-        // Cameras firing at the same instant are independent strips: the swath
-        // is the sum of their widths, overlap intentionally not deducted.
-        const width = cohortImages.reduce((sum, image) => {
-          const camera = this.cameraMap.get(image.cameraId)!;
-          return (
-            sum +
-            cameraFootprintWidth(
-              image.altitude_agl,
-              camera.sensorWidthMm!,
-              camera.focalLengthMm!,
-              camera.tiltDegrees!
-            )
-          );
-        }, 0);
-        return {
-          timestamp,
-          latitude,
-          longitude,
-          width,
-        };
-      });
 
-    if (cohorts.length < 2) return null;
-    const deltas = cohorts
+    const cameraStrips: CameraStripMetrics[] = [];
+    for (const [cameraId, cameraImages] of imagesByCamera.entries()) {
+      const strip = this.calculateCameraStrip(
+        transectId,
+        cameraId,
+        cameraImages
+      );
+      if (!strip) {
+        warnings.push(
+          `Camera ${cameraId} on transect ${transectId} was excluded because it had insufficient usable track data`
+        );
+        continue;
+      }
+      cameraStrips.push(strip);
+    }
+
+    if (cameraStrips.length === 0) return null;
+
+    const distance = Math.max(
+      ...cameraStrips.map((strip) => strip.distance)
+    );
+    // The stored camera data does not contain the overlap extent or geometry
+    // needed to calculate a union area, so strips are treated as non-overlapping.
+    const areaSquareKilometres = cameraStrips.reduce(
+      (sum, strip) => sum + strip.areaSquareKilometres,
+      0
+    );
+    // Express the summed, potentially partial camera coverage as an effective
+    // swath over the parent flight distance. When every camera covers the full
+    // flight line this is exactly the sum of the per-camera average widths.
+    const widthAverage =
+      (areaSquareKilometres * 1_000_000) / distance;
+    const animalCounts = Object.fromEntries(
+      this.categoryIds.map((categoryId) => [
+        categoryId,
+        cameraStrips.reduce(
+          (sum, strip) => sum + (strip.animalCounts[categoryId] ?? 0),
+          0
+        ),
+      ])
+    );
+
+    return {
+      stratumId: transect.stratumId,
+      transectId,
+      distance,
+      widthAverage,
+      areaSquareKilometres,
+      animalCounts,
+    };
+  }
+
+  private calculateCameraStrip(
+    transectId: string,
+    cameraId: string,
+    images: ValidImage[]
+  ): CameraStripMetrics | null {
+    const camera = this.cameraMap.get(cameraId);
+    if (!camera || images.length < 2) return null;
+
+    const orderedImages = [...images].sort(
+      (first, second) => first.timestamp - second.timestamp
+    );
+    const deltas = orderedImages
       .slice(1)
       .map(
-        (cohort, index) =>
-          cohort.timestamp - cohorts[index]!.timestamp
+        (image, index) =>
+          image.timestamp - orderedImages[index]!.timestamp
       )
       .filter((delta) => delta > 0);
     const meanDelta = trimmedMean(deltas);
-    const sections: Array<typeof cohorts> = [[]];
-    for (let index = 0; index < cohorts.length; index += 1) {
+    const sections: ValidImage[][] = [[]];
+    for (let index = 0; index < orderedImages.length; index += 1) {
       if (
         index > 0 &&
         meanDelta > 0 &&
-        cohorts[index]!.timestamp -
-          cohorts[index - 1]!.timestamp >
+        orderedImages[index]!.timestamp -
+          orderedImages[index - 1]!.timestamp >
           3 * meanDelta
       ) {
         sections.push([]);
       }
-      sections[sections.length - 1]!.push(cohorts[index]!);
+      sections[sections.length - 1]!.push(orderedImages[index]!);
     }
 
     const distance = sections.reduce((total, section) => {
@@ -422,8 +480,17 @@ export class SurveyAccumulator {
       );
     }, 0);
     const widthAverage =
-      cohorts.reduce((sum, cohort) => sum + cohort.width, 0) /
-      cohorts.length;
+      orderedImages.reduce(
+        (sum, image) =>
+          sum +
+          cameraFootprintWidth(
+            image.altitude_agl,
+            camera.sensorWidthMm!,
+            camera.focalLengthMm!,
+            camera.tiltDegrees!
+          ),
+        0
+      ) / orderedImages.length;
     const areaSquareKilometres =
       (distance * widthAverage) / 1_000_000;
     if (
@@ -433,7 +500,9 @@ export class SurveyAccumulator {
       return null;
     }
 
-    const existingCounts = this.countsByTransect.get(transectId) ?? {};
+    const existingCounts =
+      this.countsByCameraStrip.get(cameraStripKey(transectId, cameraId)) ??
+      {};
     const animalCounts = Object.fromEntries(
       this.categoryIds.map((categoryId) => [
         categoryId,
@@ -441,8 +510,7 @@ export class SurveyAccumulator {
       ])
     );
     return {
-      stratumId: transect.stratumId,
-      transectId,
+      cameraId,
       distance,
       widthAverage,
       areaSquareKilometres,

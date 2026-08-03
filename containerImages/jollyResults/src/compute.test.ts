@@ -160,11 +160,9 @@ test('multi-transect strata produce a real variance and Student-t interval', () 
   assert.equal(empty.estimate, 0);
 });
 
-test('same-timestamp cameras sum their strip widths', () => {
-  // Identical images except for the second camera on the dual run: with strips
-  // treated as independent, the dual-camera transect must survey exactly
-  // singleWidth + secondCameraWidth per unit distance. Distance is identical in
-  // both runs, so the area ratio equals the width ratio.
+test('camera strips are treated as non-overlapping without synchronized timestamps', () => {
+  // The second camera is deliberately offset by a quarter-second. Each camera
+  // supplies its own track, and their areas are added under one parent transect.
   const buildSurvey = (dualCamera: boolean): number => {
     const accumulator = createAccumulator();
     for (const timestamp of [1, 2]) {
@@ -185,7 +183,7 @@ test('same-timestamp cameras sum their strip widths', () => {
           latitude: -33 - timestamp / 1_000,
           longitude: 18,
           altitude_agl: 100,
-          timestamp,
+          timestamp: timestamp + 0.25,
         });
       }
     }
@@ -215,6 +213,48 @@ test('same-timestamp cameras sum their strip widths', () => {
     Math.abs(dualArea / singleArea - expectedRatio) < 1e-9,
     `expected area ratio ${expectedRatio}, got ${dualArea / singleArea}`
   );
+});
+
+test('multiple camera strips remain one Jolly sample and count only primaries', () => {
+  const accumulator = createAccumulator();
+  for (const timestamp of [1, 2]) {
+    accumulator.addImage({
+      id: `camera-1-${timestamp}`,
+      transectId: 'transect-1',
+      cameraId: 'camera-1',
+      latitude: -33 - timestamp / 1_000,
+      longitude: 18,
+      altitude_agl: 100,
+      timestamp,
+    });
+    accumulator.addImage({
+      id: `camera-2-${timestamp}`,
+      transectId: 'transect-1',
+      cameraId: 'camera-2',
+      latitude: -33 - timestamp / 1_000,
+      longitude: 18,
+      altitude_agl: 100,
+      timestamp: timestamp + 0.1,
+    });
+  }
+  accumulator.addAnnotation({
+    id: 'primary',
+    objectId: 'primary',
+    imageId: 'camera-1-1',
+    categoryId: 'seen',
+  });
+  accumulator.addAnnotation({
+    id: 'secondary',
+    objectId: 'primary',
+    imageId: 'camera-2-1',
+    categoryId: 'seen',
+  });
+
+  const result = accumulator
+    .calculate()
+    .results.find((row) => row.categoryId === 'seen')!;
+  assert.equal(result.numSamples, 1);
+  assert.equal(result.animals, 1);
 });
 
 test('invalid images are excluded without aborting a computable stratum', () => {

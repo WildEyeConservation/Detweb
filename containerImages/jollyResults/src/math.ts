@@ -10,12 +10,10 @@ export function trimmedMean(values: number[], trimRatio = 0.2): number {
   );
 }
 
-// Ground strip width covered by one camera. Each camera is treated as an
-// independent strip: multi-camera swaths are the SUM of per-camera widths, with
-// overlap deliberately not subtracted. Any overlap is then present in both the
-// surveyed area and the animal counts, so density stays consistent. Because
-// only the width matters, the result is identical for tilt +t and -t and tilt
-// signs do not need to be known.
+// Ground strip width covered by one camera. The stored camera data does not
+// include the overlap extent or geometry needed by the Jolly calculation, so
+// the worker treats camera strips as non-overlapping. Because only the width
+// matters here, the result is identical for tilt +t and -t.
 export function cameraFootprintWidth(
   altitudeAgl: number,
   sensorWidthMm: number,
