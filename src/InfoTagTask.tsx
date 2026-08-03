@@ -35,6 +35,7 @@ export default function InfoTagTask() {
   const [queueZoom, setQueueZoom] = useState<number | null>(null);
   const processedRef = useRef(new Set<string>());
   const heartbeatTimersRef = useRef(new Set<number>());
+  const activeMessageReleasesRef = useRef(new Set<() => Promise<void>>());
 
   useEffect(() => {
     if (!queueId) return;
@@ -104,9 +105,13 @@ export default function InfoTagTask() {
 
   useEffect(
     () => () => {
+      for (const release of activeMessageReleasesRef.current) {
+        void release();
+      }
       for (const timer of heartbeatTimersRef.current) {
         window.clearInterval(timer);
       }
+      activeMessageReleasesRef.current.clear();
       heartbeatTimersRef.current.clear();
     },
     []
@@ -172,19 +177,56 @@ export default function InfoTagTask() {
         heartbeatTimersRef.current.delete(heartbeat);
       };
       body.stopHeartbeat = stopHeartbeat;
+      let settled = false;
+      let acknowledgePromise: Promise<void> | null = null;
+      let releasePromise: Promise<void> | null = null;
+      const release = async () => {
+        stopHeartbeat();
+        if (acknowledgePromise) await acknowledgePromise;
+        if (settled) return;
+        if (!releasePromise) {
+          releasePromise = (async () => {
+            try {
+              const releaseClient = await getSqsClient();
+              await releaseClient.send(
+                new ChangeMessageVisibilityCommand({
+                  QueueUrl: queueUrl,
+                  ReceiptHandle: entity.ReceiptHandle,
+                  VisibilityTimeout: 0,
+                })
+              );
+              settled = true;
+              activeMessageReleasesRef.current.delete(release);
+            } catch (error) {
+              console.warn('Info Tags message release failed', { imageId, error });
+            }
+          })();
+        }
+        await releasePromise;
+      };
+      activeMessageReleasesRef.current.add(release);
       body.ack = async () => {
         stopHeartbeat();
-        try {
-          const ackClient = await getSqsClient();
-          await ackClient.send(
-            new DeleteMessageCommand({
-              QueueUrl: queueUrl,
-              ReceiptHandle: entity.ReceiptHandle,
-            })
-          );
-        } catch (error) {
-          console.warn('Info Tags acknowledgement failed', { imageId, error });
+        if (releasePromise) await releasePromise;
+        if (settled) return;
+        if (!acknowledgePromise) {
+          acknowledgePromise = (async () => {
+            try {
+              const ackClient = await getSqsClient();
+              await ackClient.send(
+                new DeleteMessageCommand({
+                  QueueUrl: queueUrl,
+                  ReceiptHandle: entity.ReceiptHandle,
+                })
+              );
+              settled = true;
+              activeMessageReleasesRef.current.delete(release);
+            } catch (error) {
+              console.warn('Info Tags acknowledgement failed', { imageId, error });
+            }
+          })();
         }
+        await acknowledgePromise;
       };
       return body;
     }
