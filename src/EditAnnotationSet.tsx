@@ -31,11 +31,14 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
   const [statusMessage, setStatusMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [tab, setTab] = useState<number>(0);
-  const [handleMove, _setHandleMove] = useState<() => Promise<void>>(() =>
-    Promise.resolve()
-  );
   const [saveLabels, setSaveLabels] = useState<
+    ((
+      annotationSetId: string,
+      projectId: string,
+      group: string
+    ) => Promise<void>) | null
+  >(null);
+  const [saveInfoTags, setSaveInfoTags] = useState<
     ((
       annotationSetId: string,
       projectId: string,
@@ -51,6 +54,18 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
       const { data } = await client.models.Category.categoriesByAnnotationSetId(
         { annotationSetId: annotationSet.id }
       );
+      return data ?? [];
+    },
+  });
+  const { data: fetchedInfoTags, isFetching: infoTagsLoading } = useQuery({
+    queryKey: ['annotation-set-info-tags', annotationSet.id],
+    enabled: show,
+    staleTime: 0,
+    queryFn: async () => {
+      const { data } =
+        await client.models.InfoTag.infoTagsByAnnotationSetId({
+          annotationSetId: annotationSet.id,
+        });
       return data ?? [];
     },
   });
@@ -70,6 +85,13 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
       }
       if (saveLabels) {
         await saveLabels(
+          annotationSet.id,
+          project.id,
+          project.group || project.organizationId
+        );
+      }
+      if (saveInfoTags) {
+        await saveInfoTags(
           annotationSet.id,
           project.id,
           project.group || project.organizationId
@@ -98,12 +120,8 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
         <Title>Edit Annotation Set</Title>
       </Header>
       <Body>
-        <Tabs
-          onTabChange={(tab) => {
-            setTab(tab);
-          }}
-        >
-          <Tab label='Basic'>
+        <Tabs>
+          <Tab label='Labels'>
             <Form className='d-flex flex-column gap-2 p-3'>
               <Form.Group controlId='annotationSetName'>
                 <Form.Label>Name</Form.Label>
@@ -135,6 +153,32 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
               )}
             </Form>
           </Tab>
+          <Tab label='Info Tags'>
+            <Form className='d-flex flex-column gap-2 p-3'>
+              {infoTagsLoading || !fetchedInfoTags ? (
+                <div className='d-flex align-items-center gap-2 py-3'>
+                  <Spinner size='sm' />
+                  <span>Loading info tags...</span>
+                </div>
+              ) : (
+                <LabelEditor
+                  key={`info-tags-${annotationSet.id}`}
+                  defaultLabels={fetchedInfoTags.map((tag) => ({
+                    id: tag.id,
+                    name: tag.name,
+                    shortcutKey: tag.shortcutKey ?? '',
+                    color: tag.color ?? '',
+                  }))}
+                  isEditing
+                  modelName='InfoTag'
+                  title='Info Tags'
+                  description='Define optional informational tags that can be toggled on annotations.'
+                  setHandleSave={setSaveInfoTags}
+                  onStatusChange={setStatusMessage}
+                />
+              )}
+            </Form>
+          </Tab>
         </Tabs>
         <Footer>
           {errorMessage ? (
@@ -149,25 +193,14 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
           ) : null}
           <Button
             variant='primary'
-            disabled={isSaving}
-            onClick={() => {
-              switch (tab) {
-                case 0:
-                  handleSave();
-                  break;
-                case 1:
-                  handleMove();
-                  break;
-              }
-            }}
+            disabled={isSaving || categoriesLoading || infoTagsLoading}
+            onClick={handleSave}
           >
             {isSaving ? (
               <span className='d-flex align-items-center gap-2'>
                 <Spinner size='sm' />
                 Saving...
               </span>
-            ) : tab === 1 ? (
-              'Move Observations'
             ) : (
               'Save Changes'
             )}

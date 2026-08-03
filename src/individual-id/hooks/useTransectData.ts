@@ -8,6 +8,7 @@ import type {
   ImageNeighbourType,
   ImageType,
 } from '../../schemaTypes';
+import { attachInfoTagsToAnnotations } from '../../infoTags';
 
 // Amplify's return type doesn't reflect custom selectionSets, so we type this explicitly.
 type ImageWithNeighbours = Pick<
@@ -213,9 +214,14 @@ export function useTransectData(input: UseTransectDataInput) {
           )
         )
       );
-      const annotations = perCategory
+      const filteredAnnotations = perCategory
         .flat()
         .filter((a) => imageIds.has(a.imageId));
+      const annotations = await attachInfoTagsToAnnotations(
+        client,
+        filteredAnnotations,
+        setId
+      );
 
       const annotationsByImage: Record<string, AnnotationType[]> = {};
       for (const a of annotations) {
@@ -422,7 +428,11 @@ async function fetchChainData(opts: {
       )
     )
   );
-  const annotations = perImage.flat();
+  const annotations = await attachInfoTagsToAnnotations(
+    client,
+    perImage.flat(),
+    setId
+  );
   setProgress((p) => ({ ...p, annotations: annotations.length }));
 
   const annotationsByImage: Record<string, AnnotationType[]> = {};

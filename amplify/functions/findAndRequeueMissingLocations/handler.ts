@@ -135,6 +135,16 @@ type QCAnnotationForRequeue = {
   y: number;
 };
 
+type InfoTagManifestItem = {
+  imageId: string;
+  annotationIds: string[];
+};
+
+type InfoTagManifest = {
+  categoryIds: string[];
+  items: InfoTagManifestItem[];
+};
+
 // Entry point invoked by EventBridge schedule.
 export const handler: Handler = async () => {
   console.log('findAndRequeueMissingLocations invoked');
@@ -283,6 +293,10 @@ async function processQueue(queue: QueueRecord): Promise<number> {
   // Branch for QC review queues — manifest format and completion check differ.
   if (queue.tag === 'qc-review') {
     return processQCRequeue(queue);
+  }
+
+  if (queue.tag === 'info-tags') {
+    return processInfoTagRequeue(queue);
   }
 
   // Branch for homography queues — completion = real homography or skipped.
@@ -660,7 +674,12 @@ async function logRequeueAction(queue: QueueRecord, count: number): Promise<void
 
   const queueName = queue.tag || queue.name || 'Unknown';
   const attemptNumber = (queue.requeuesCompleted ?? 0) + 1;
-  const itemType = queue.tag === 'qc-review' ? 'unreviewed annotations' : 'missing locations';
+  const itemType =
+    queue.tag === 'qc-review'
+      ? 'unreviewed annotations'
+      : queue.tag === 'info-tags'
+        ? 'untagged annotations'
+        : 'missing locations';
   const message = `Requeued ${count} ${itemType} for queue "${queueName}" (attempt ${attemptNumber}/${MAX_REQUEUES}) in project "${projectName}"`;
 
   try {
@@ -912,6 +931,129 @@ const getImageNeighbourQuery = /* GraphQL */ `
     }
   }
 `;
+
+async function processInfoTagRequeue(queue: QueueRecord): Promise<number> {
+  console.log('Processing informational tagging queue', { queueId: queue.id });
+  const manifest = await downloadInfoTagManifest(queue.locationManifestS3Key!);
+  const outstanding: InfoTagManifestItem[] = [];
+  const limit = pLimit(50);
+
+  await Promise.all(
+    manifest.items.map((item) =>
+      limit(async () => {
+        const manifestIds = new Set(item.annotationIds);
+        let nextToken: string | undefined;
+        let hasOutstanding = false;
+        do {
+          const response = (await client.graphql({
+            query: annotationsByImageIdAndSetId,
+            variables: {
+              imageId: item.imageId,
+              setId: { eq: queue.annotationSetId! },
+              limit: 10000,
+              nextToken,
+            },
+          } as any)) as GraphQLResult<{
+            annotationsByImageIdAndSetId?: {
+              items?: Array<{
+                id: string;
+                infoTaggedBy?: string | null;
+              } | null>;
+              nextToken?: string | null;
+            };
+          }>;
+          if (response.errors?.length) {
+            throw new Error(
+              `GraphQL error: ${JSON.stringify(
+                response.errors.map((error) => error.message)
+              )}`
+            );
+          }
+          const page = response.data?.annotationsByImageIdAndSetId;
+          hasOutstanding ||= (page?.items ?? []).some(
+            (annotation) =>
+              annotation != null &&
+              manifestIds.has(annotation.id) &&
+              !annotation.infoTaggedBy
+          );
+          nextToken = page?.nextToken ?? undefined;
+        } while (nextToken && !hasOutstanding);
+
+        if (hasOutstanding) outstanding.push(item);
+      })
+    )
+  );
+
+  if (outstanding.length === 0) {
+    await executeGraphql(updateQueue, {
+      input: {
+        id: queue.id,
+        emptyQueueTimestamp: null,
+        requeuesCompleted: (queue.requeuesCompleted ?? 0) + 1,
+      },
+    });
+    return 0;
+  }
+
+  await requeueInfoTagImages(queue, outstanding, manifest.categoryIds);
+  await executeGraphql(updateQueue, {
+    input: {
+      id: queue.id,
+      emptyQueueTimestamp: null,
+      requeuesCompleted: (queue.requeuesCompleted ?? 0) + 1,
+      approximateSize: outstanding.length,
+    },
+  });
+  await logRequeueAction(queue, outstanding.length);
+  return outstanding.length;
+}
+
+async function downloadInfoTagManifest(
+  key: string
+): Promise<InfoTagManifest> {
+  const bucketName = env.OUTPUTS_BUCKET_NAME;
+  if (!bucketName) {
+    throw new Error('OUTPUTS_BUCKET_NAME environment variable not set');
+  }
+  const response = await s3Client.send(
+    new GetObjectCommand({ Bucket: bucketName, Key: key })
+  );
+  const body = await response.Body?.transformToString();
+  if (!body) throw new Error('Empty informational tagging manifest file');
+  return JSON.parse(body) as InfoTagManifest;
+}
+
+async function requeueInfoTagImages(
+  queue: QueueRecord,
+  items: InfoTagManifestItem[],
+  categoryIds: string[]
+) {
+  const limit = pLimit(10);
+  const tasks: Array<Promise<void>> = [];
+  for (let offset = 0; offset < items.length; offset += 10) {
+    const batch = items.slice(offset, offset + 10);
+    tasks.push(
+      limit(async () => {
+        await sqsClient.send(
+          new SendMessageBatchCommand({
+            QueueUrl: queue.url,
+            Entries: batch.map((item, index) => ({
+              Id: `msg-${offset + index}`,
+              MessageBody: JSON.stringify({
+                imageId: item.imageId,
+                annotationSetId: queue.annotationSetId,
+                categoryIds,
+                queueId: queue.id,
+                isRequeued: true,
+              }),
+            })),
+          })
+        );
+      })
+    );
+  }
+  await Promise.all(tasks);
+}
 
 type HomographyManifestItem = {
   pairKey: string;

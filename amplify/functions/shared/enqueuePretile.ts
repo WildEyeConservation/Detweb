@@ -18,6 +18,7 @@ export type PretileWorkflow =
   | 'species-labelling'
   | 'false-negatives'
   | 'qc-review'
+  | 'info-tags'
   | 'homography'
   | 'individual-id';
 

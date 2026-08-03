@@ -289,6 +289,8 @@ export function IndividualIdMapPair(props: Props) {
           ? conflictHighlightAnnotationIds.has(c.realA.id)
           : false,
         chainViewerHref: chainViewerHrefFor(chainAnnotation),
+        infoTags: (c.realA as (AnnotationType & { infoTags?: string[] }) | undefined)
+          ?.infoTags,
       });
     }
     // Informational markers for annotations belonging to other categories.
@@ -303,6 +305,7 @@ export function IndividualIdMapPair(props: Props) {
         status: 'pending',
         kind: classify(a, false),
         identityKey: a.objectId ?? a.id,
+        infoTags: (a as AnnotationType & { infoTags?: string[] }).infoTags,
         active: false,
         obscured: !!a.obscured,
         foreign: true,
@@ -353,6 +356,8 @@ export function IndividualIdMapPair(props: Props) {
           ? conflictHighlightAnnotationIds.has(c.realB.id)
           : false,
         chainViewerHref: chainViewerHrefFor(chainAnnotation),
+        infoTags: (c.realB as (AnnotationType & { infoTags?: string[] }) | undefined)
+          ?.infoTags,
       });
     }
     // Informational markers for annotations belonging to other categories.
@@ -367,6 +372,7 @@ export function IndividualIdMapPair(props: Props) {
         status: 'pending',
         kind: classify(a, false),
         identityKey: a.objectId ?? a.id,
+        infoTags: (a as AnnotationType & { infoTags?: string[] }).infoTags,
         active: false,
         obscured: !!a.obscured,
         foreign: true,

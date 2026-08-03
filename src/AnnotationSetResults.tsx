@@ -8,6 +8,10 @@ import { useContext, useState, useEffect, useMemo } from 'react';
 import { useUsers } from './apiInterface';
 import GenerateJollyResults from './GenerateJollyResults.tsx';
 import { Spinner } from 'react-bootstrap';
+import {
+  fetchAllInfoTagsForSet,
+  formatInfoTagsForCsv,
+} from './infoTags';
 
 export default function AnnotationSetResults({
   show,
@@ -96,6 +100,7 @@ export default function AnnotationSetResults({
               'objectId',
               'reviewCatId',
               'reviewedBy',
+              'infoTaggedBy',
               'image.originalPath',
               'image.timestamp',
               'image.latitude',
@@ -128,6 +133,14 @@ export default function AnnotationSetResults({
       return acc;
     }, {} as Record<string, string>);
 
+    const infoTagsBySet = await Promise.all(
+      annotationSets.map((set) =>
+        fetchAllInfoTagsForSet(client, set.id, (count) => {
+          setExportStatus(`Fetching info tags... (${count} fetched)`);
+        })
+      )
+    );
+
     let i = 0;
     let a = 0;
 
@@ -151,6 +164,10 @@ export default function AnnotationSetResults({
             x: anno.x,
             y: anno.y,
             source: anno.source,
+            infoTags: formatInfoTagsForCsv(
+              infoTagsBySet[i].get(anno.id) ?? []
+            ),
+            infoTaggedBy: userMap[anno.infoTaggedBy ?? ''],
             reviewedBy: userMap[anno.reviewedBy ?? ''],
             reviewedCategory: categoryMap[anno.reviewCatId ?? ''],
           };

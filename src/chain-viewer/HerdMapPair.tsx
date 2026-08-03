@@ -139,6 +139,7 @@ export function HerdMapPair({
             identityKey,
             active: identityKey === hoverIdentityKey,
             obscured: !!a.obscured,
+            infoTags: a.infoTags,
           };
         }),
     [categoryColors, hoverIdentityKey]

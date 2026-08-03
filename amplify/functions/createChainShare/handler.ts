@@ -44,6 +44,30 @@ const categoriesByAnnotationSetId = /* GraphQL */ `
     }
   }
 `;
+const annotationInfoTagsByAnnotationSetId = /* GraphQL */ `
+  query AnnotationInfoTagsBySet($annotationSetId: ID!, $nextToken: String) {
+    annotationInfoTagsByAnnotationSetId(
+      annotationSetId: $annotationSetId
+      nextToken: $nextToken
+      limit: 1000
+    ) {
+      items { annotationId infoTagId }
+      nextToken
+    }
+  }
+`;
+const infoTagsByAnnotationSetId = /* GraphQL */ `
+  query InfoTagsBySet($annotationSetId: ID!, $nextToken: String) {
+    infoTagsByAnnotationSetId(
+      annotationSetId: $annotationSetId
+      nextToken: $nextToken
+      limit: 1000
+    ) {
+      items { id name }
+      nextToken
+    }
+  }
+`;
 const camerasByProjectId = /* GraphQL */ `
   query CamerasByProject($projectId: ID!, $nextToken: String) {
     camerasByProjectId(projectId: $projectId, nextToken: $nextToken, limit: 1000) {
@@ -265,6 +289,14 @@ interface CategoryRow {
   color?: string | null;
   shortcutKey?: string | null;
 }
+interface AnnotationInfoTagRow {
+  annotationId: string;
+  infoTagId: string;
+}
+interface InfoTagRow {
+  id: string;
+  name: string;
+}
 interface ImageRow {
   id: string;
   width: number;
@@ -345,6 +377,48 @@ export const handler: CreateChainShareHandler = async (event) => {
         }) as Promise<GraphQLResult<{ categoriesByAnnotationSetId: PagedList<CategoryRow> }>>,
       'categoriesByAnnotationSetId'
     );
+
+    const [annotationInfoTags, infoTags] = await Promise.all([
+      fetchAllPages<
+        AnnotationInfoTagRow,
+        'annotationInfoTagsByAnnotationSetId'
+      >(
+        (nextToken) =>
+          client.graphql({
+            query: annotationInfoTagsByAnnotationSetId,
+            variables: { annotationSetId, nextToken },
+          }) as Promise<
+            GraphQLResult<{
+              annotationInfoTagsByAnnotationSetId: PagedList<AnnotationInfoTagRow>;
+            }>
+          >,
+        'annotationInfoTagsByAnnotationSetId'
+      ),
+      fetchAllPages<InfoTagRow, 'infoTagsByAnnotationSetId'>(
+        (nextToken) =>
+          client.graphql({
+            query: infoTagsByAnnotationSetId,
+            variables: { annotationSetId, nextToken },
+          }) as Promise<
+            GraphQLResult<{
+              infoTagsByAnnotationSetId: PagedList<InfoTagRow>;
+            }>
+          >,
+        'infoTagsByAnnotationSetId'
+      ),
+    ]);
+    const infoTagNameById = new Map(infoTags.map((tag) => [tag.id, tag.name]));
+    const infoTagsByAnnotationId = new Map<string, string[]>();
+    for (const row of annotationInfoTags) {
+      const name = infoTagNameById.get(row.infoTagId);
+      if (!name) continue;
+      const names = infoTagsByAnnotationId.get(row.annotationId);
+      if (names) names.push(name);
+      else infoTagsByAnnotationId.set(row.annotationId, [name]);
+    }
+    for (const names of infoTagsByAnnotationId.values()) {
+      names.sort((a, b) => a.localeCompare(b));
+    }
 
     const cameras = await fetchAllPages<{ id: string; name: string }, 'camerasByProjectId'>(
       (nextToken) =>
@@ -477,6 +551,7 @@ export const handler: CreateChainShareHandler = async (event) => {
             obscured: a.obscured ?? false,
             oov: a.oov ?? false,
             imageTimestamp: image?.timestamp ?? null,
+            infoTags: infoTagsByAnnotationId.get(a.id) ?? [],
             group,
           },
         },

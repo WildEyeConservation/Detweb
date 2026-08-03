@@ -5,6 +5,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useContext } from 'react';
 import { GlobalContext } from '../Context';
 import { useQueryClient } from '@tanstack/react-query';
+import pLimit from 'p-limit';
+import { fetchAllPaginatedResults } from '../utils';
 
 interface Label {
   id: string;
@@ -13,12 +15,33 @@ interface Label {
   color: string;
 }
 
+type EditableLabelModel = {
+  create: (input: {
+    projectId: string;
+    annotationSetId: string;
+    name: string;
+    shortcutKey: string;
+    color: string;
+    group: string;
+  }) => Promise<unknown>;
+  update: (input: {
+    id: string;
+    name: string;
+    shortcutKey: string;
+    color: string;
+  }) => Promise<unknown>;
+  delete: (input: { id: string }) => Promise<unknown>;
+};
+
 export default function LabelEditor({
   defaultLabels = [],
   importLabels = [],
   setHandleSave,
   isEditing = false,
   onStatusChange,
+  modelName = 'Category',
+  title = 'Labels',
+  description = 'Set up the labels based on the species you expect to encounter.',
 }: {
   defaultLabels?: Label[];
   importLabels?: Label[];
@@ -29,6 +52,9 @@ export default function LabelEditor({
   >;
   isEditing?: boolean;
   onStatusChange?: (status: string) => void;
+  modelName?: 'Category' | 'InfoTag';
+  title?: string;
+  description?: string;
 }) {
   const [keys, { start, stop, isRecording }] = useRecordHotkeys();
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
@@ -49,22 +75,54 @@ export default function LabelEditor({
         (l) => l.name !== '' && l.shortcutKey !== ''
       );
 
-      onStatusChangeRef.current?.('Updating labels...');
+      onStatusChangeRef.current?.(
+        modelName === 'Category' ? 'Updating labels...' : 'Updating info tags...'
+      );
+      const model = client.models[modelName] as EditableLabelModel;
 
       if (isEditing) {
         const currentDefaultLabels: Label[] = defaultLabelsRef.current;
         const filteredLabelIds = new Set<string>(filteredLabels.map((l: Label) => l.id));
         const defaultLabelIds = new Set<string>(currentDefaultLabels.map((l: Label) => l.id));
+        const labelsToDelete = currentDefaultLabels.filter(
+          (l) => !filteredLabelIds.has(l.id)
+        );
+
+        // Remove dependent links before their tag.
+        if (modelName === 'InfoTag') {
+          await Promise.all(
+            labelsToDelete.map(async (l) => {
+              const links = await fetchAllPaginatedResults(
+                client.models.AnnotationInfoTag
+                  .annotationInfoTagsByInfoTagId,
+                {
+                  infoTagId: l.id,
+                  selectionSet: ['annotationId', 'infoTagId'] as const,
+                  limit: 1000,
+                }
+              );
+              const limit = pLimit(10);
+              await Promise.all(
+                links.map((link) =>
+                  limit(() =>
+                    client.models.AnnotationInfoTag.delete({
+                      annotationId: link.annotationId,
+                      infoTagId: link.infoTagId,
+                    })
+                  )
+                )
+              );
+            })
+          );
+        }
 
         await Promise.all([
           // labels to delete
-          ...currentDefaultLabels
-            .filter((l) => !filteredLabelIds.has(l.id))
-            .map((l) => client.models.Category.delete({ id: l.id })),
+          ...labelsToDelete.map((l) => model.delete({ id: l.id })),
           // labels to create
           ...filteredLabels
             .filter((l) => !defaultLabelIds.has(l.id))
-            .map((l) => client.models.Category.create({
+            .map((l) => model.create({
               projectId,
               name: l.name,
               shortcutKey: l.shortcutKey,
@@ -75,7 +133,7 @@ export default function LabelEditor({
           // labels to update
           ...filteredLabels
             .filter((l) => defaultLabelIds.has(l.id))
-            .map((l) => client.models.Category.update({
+            .map((l) => model.update({
               id: l.id,
               name: l.name,
               shortcutKey: l.shortcutKey,
@@ -84,7 +142,7 @@ export default function LabelEditor({
         ]);
       } else {
         await Promise.all(
-          filteredLabels.map((l) => client.models.Category.create({
+          filteredLabels.map((l) => model.create({
             name: l.name,
             shortcutKey: l.shortcutKey,
             color: l.color,
@@ -95,27 +153,33 @@ export default function LabelEditor({
         );
       }
 
-      onStatusChangeRef.current?.('Refreshing project...');
-
-      await Promise.all([
-        client.models.Project.update({ id: projectId, status: 'active' }),
-        client.mutations.updateProjectMemberships({ projectId }),
-      ]);
+      if (modelName === 'Category') {
+        onStatusChangeRef.current?.('Refreshing project...');
+        await Promise.all([
+          client.models.Project.update({ id: projectId, status: 'active' }),
+          client.mutations.updateProjectMemberships({ projectId }),
+        ]);
+      }
 
       // Ensure any persisted/react-query caches for categories are refreshed
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['Category'] }),
+        queryClient.invalidateQueries({ queryKey: [modelName] }),
         queryClient.invalidateQueries({
-          queryKey: ['annotation-set-categories', annotationSetId],
+          queryKey: [
+            modelName === 'Category'
+              ? 'annotation-set-categories'
+              : 'annotation-set-info-tags',
+            annotationSetId,
+          ],
         }),
       ]);
     },
-    [client, labels, isEditing, queryClient]
+    [client, labels, isEditing, modelName, queryClient]
   );
 
   useEffect(() => {
     setHandleSave(() => handleSave);
-  }, [handleSave]);
+  }, [handleSave, setHandleSave]);
 
   useEffect(() => {
     if (importLabels.length > 0) {
@@ -125,19 +189,22 @@ export default function LabelEditor({
 
   return (
     <Form.Group>
-      <Form.Label className='mb-0'>Labels</Form.Label>
+      <Form.Label className='mb-0'>{title}</Form.Label>
       <span
         className='text-muted d-block mb-1'
         style={{ fontSize: 12, lineHeight: 1.2 }}
       >
-        Set up the labels based on the species you expect to encounter.
+        {description}
       </span>
       <MyTable
         tableHeadings={[
           { content: 'Name', style: { width: '25%' } },
           { content: 'Shortcut Key', style: { width: '25%' } },
           { content: 'Color', style: { width: '25%' } },
-          { content: 'Remove Label', style: { width: '25%' } },
+          {
+            content: `Remove ${modelName === 'Category' ? 'Label' : 'Info Tag'}`,
+            style: { width: '25%' },
+          },
         ]}
         tableData={labels.map((label) => ({
           id: label.id,
@@ -168,13 +235,13 @@ export default function LabelEditor({
                 const newShortcutKey = Array.from(keys).join('+');
                 if (newShortcutKey === ' ' || newShortcutKey.toLowerCase() === 'space') {
                   alert(
-                    'Spacebar is reserved and cannot be used as a label shortcut.'
+                    `Spacebar is reserved and cannot be used as a ${title.toLowerCase()} shortcut.`
                   );
                   return;
                 }
                 if (newShortcutKey === 'equal' || newShortcutKey === 'shift+equal' || newShortcutKey === 'add') {
                   alert(
-                    '"+" and "=" are reserved for False Positive and cannot be used as a label shortcut.'
+                    `"+" and "=" are reserved and cannot be used as a ${title.toLowerCase()} shortcut.`
                   );
                   return;
                 }
@@ -184,7 +251,7 @@ export default function LabelEditor({
                   )
                 ) {
                   alert(
-                    'This shortcut key is already in use by another label.'
+                    `This shortcut key is already in use by another ${modelName === 'Category' ? 'label' : 'info tag'}.`
                   );
                   return;
                 }
@@ -238,7 +305,9 @@ export default function LabelEditor({
         size='sm'
         onClick={() => {
           if (labels.some((l) => l.name === '' || l.shortcutKey === '')) {
-            alert('Please complete the current label before adding another');
+            alert(
+              `Please complete the current ${modelName === 'Category' ? 'label' : 'info tag'} before adding another`
+            );
             return;
           }
           setLabels([

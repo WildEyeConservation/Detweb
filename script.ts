@@ -100,6 +100,142 @@ if (!introspection) {
   );
 }
 
+// Extend the checked-in schema locally to keep generation deterministic.
+const scalarField = (
+  name: string,
+  type: string,
+  isRequired = false,
+  extra: Partial<FieldDefinition> = {}
+): FieldDefinition => ({
+  name,
+  type,
+  isRequired,
+  ...extra
+});
+const modelField = (
+  name: string,
+  model: string,
+  association: Record<string, unknown>,
+  isArray = false
+): FieldDefinition => ({
+  name,
+  type: { model },
+  isArray,
+  isArrayNullable: isArray,
+  isRequired: false,
+  association
+});
+const timestamps = {
+  createdAt: scalarField('createdAt', 'AWSDateTime', false, {
+    isReadOnly: true
+  }),
+  updatedAt: scalarField('updatedAt', 'AWSDateTime', false, {
+    isReadOnly: true
+  })
+};
+const indexAttribute = (queryField: string, fields: string[]) => ({
+  type: 'key',
+  properties: { name: queryField, queryField, fields }
+});
+
+introspection.models.Annotation.fields.infoTaggedBy = scalarField(
+  'infoTaggedBy',
+  'String'
+);
+introspection.models.Annotation.fields.infoTags = modelField(
+  'infoTags',
+  'AnnotationInfoTag',
+  { connectionType: 'HAS_MANY', associatedWith: ['annotationId'] },
+  true
+);
+introspection.models.AnnotationSet.fields.infoTags = modelField(
+  'infoTags',
+  'InfoTag',
+  { connectionType: 'HAS_MANY', associatedWith: ['annotationSetId'] },
+  true
+);
+introspection.models.SharedChainAnnotation.fields.infoTags = scalarField(
+  'infoTags',
+  'String',
+  false,
+  { isArray: true, isArrayNullable: true }
+);
+
+introspection.models.InfoTag = {
+  name: 'InfoTag',
+  fields: {
+    id: scalarField('id', 'ID', true),
+    projectId: scalarField('projectId', 'ID', true),
+    annotationSetId: scalarField('annotationSetId', 'ID', true),
+    annotationSet: modelField('annotationSet', 'AnnotationSet', {
+      connectionType: 'BELONGS_TO',
+      targetNames: ['annotationSetId']
+    }),
+    name: scalarField('name', 'String', true),
+    color: scalarField('color', 'String'),
+    shortcutKey: scalarField('shortcutKey', 'String'),
+    annotations: modelField(
+      'annotations',
+      'AnnotationInfoTag',
+      { connectionType: 'HAS_MANY', associatedWith: ['infoTagId'] },
+      true
+    ),
+    group: scalarField('group', 'String'),
+    ...timestamps
+  },
+  attributes: [
+    { type: 'model', properties: {} },
+    indexAttribute('infoTagsByAnnotationSetId', ['annotationSetId']),
+    indexAttribute('infoTagsByProjectId', ['projectId'])
+  ],
+  primaryKeyInfo: {
+    primaryKeyFieldName: 'id',
+    sortKeyFieldNames: [],
+    isCustomPrimaryKey: false
+  }
+};
+
+introspection.models.AnnotationInfoTag = {
+  name: 'AnnotationInfoTag',
+  fields: {
+    annotationId: scalarField('annotationId', 'ID', true),
+    annotation: modelField('annotation', 'Annotation', {
+      connectionType: 'BELONGS_TO',
+      targetNames: ['annotationId']
+    }),
+    infoTagId: scalarField('infoTagId', 'ID', true),
+    infoTag: modelField('infoTag', 'InfoTag', {
+      connectionType: 'BELONGS_TO',
+      targetNames: ['infoTagId']
+    }),
+    annotationSetId: scalarField('annotationSetId', 'ID', true),
+    projectId: scalarField('projectId', 'ID', true),
+    group: scalarField('group', 'String'),
+    ...timestamps
+  },
+  attributes: [
+    { type: 'model', properties: {} },
+    indexAttribute('annotationInfoTagsByInfoTagId', ['infoTagId']),
+    indexAttribute('annotationInfoTagsByAnnotationSetId', ['annotationSetId'])
+  ],
+  primaryKeyInfo: {
+    primaryKeyFieldName: 'annotationId',
+    sortKeyFieldNames: ['infoTagId'],
+    isCustomPrimaryKey: true
+  }
+};
+
+introspection.mutations = introspection.mutations ?? {};
+introspection.mutations.launchInfoTags = {
+  name: 'launchInfoTags',
+  isArray: false,
+  type: 'AWSJSON',
+  isRequired: false,
+  arguments: {
+    request: scalarField('request', 'String', true)
+  }
+};
+
 /* -------------------------------------------------------------------------- */
 /*                                    Utils                                   */
 /* -------------------------------------------------------------------------- */
