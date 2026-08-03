@@ -40,6 +40,7 @@ import { updateOrganizationMemberAdmin } from './functions/updateOrganizationMem
 import { deleteQueue } from './functions/deleteQueue/resource';
 import { updateActiveOrganizations } from './functions/updateActiveOrganizations/resource';
 import { launchQCReview } from './functions/launchQCReview/resource';
+import { launchInfoTags } from './functions/launchInfoTags/resource';
 import { launchHomography } from './functions/launchHomography/resource';
 import { reconcileHomographies } from './functions/reconcileHomographies/resource';
 import { registrationBucketCleanup } from './functions/registrationBucketCleanup/resource';
@@ -102,6 +103,7 @@ const backend = defineBackend({
   deleteQueue,
   updateActiveOrganizations,
   launchQCReview,
+  launchInfoTags,
   launchHomography,
   reconcileHomographies,
   registrationBucketCleanup,
@@ -260,6 +262,7 @@ const groupS3OutputsReadPolicy = new iam.PolicyStatement({
     'arn:aws:s3:::*/false-negative-history/*',
     'arn:aws:s3:::*/qc-review-manifests/*',
     'arn:aws:s3:::*/jolly-status/*',
+    'arn:aws:s3:::*/info-tag-manifests/*',
   ],
 });
 
@@ -1100,6 +1103,7 @@ backend.cleanupJobs.resources.lambda.addToRolePolicy(
       'arn:aws:s3:::*/queue-manifests/*',
       'arn:aws:s3:::*/false-negative-manifests/*',
       'arn:aws:s3:::*/qc-review-manifests/*',
+      'arn:aws:s3:::*/info-tag-manifests/*',
     ],
   })
 );
@@ -1184,6 +1188,26 @@ backend.launchQCReview.resources.lambda.addToRolePolicy(
     resources: [
       'arn:aws:s3:::*/queue-manifests/*',
       'arn:aws:s3:::*/qc-review-manifests/*',
+    ],
+  })
+);
+backend.launchInfoTags.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: [
+      'sqs:CreateQueue',
+      'sqs:SendMessage',
+      'sqs:GetQueueAttributes',
+      'sqs:GetQueueUrl',
+    ],
+    resources: ['*'],
+  })
+);
+backend.launchInfoTags.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['s3:PutObject'],
+    resources: [
+      'arn:aws:s3:::*/queue-manifests/*',
+      'arn:aws:s3:::*/info-tag-manifests/*',
     ],
   })
 );
@@ -1374,6 +1398,7 @@ const launchLambdasUsingPretile = [
   backend.launchAnnotationSet,
   backend.launchFalseNegatives,
   backend.launchQCReview,
+  backend.launchInfoTags,
   backend.launchHomography,
   backend.launchIndividualId,
 ];

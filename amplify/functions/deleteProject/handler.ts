@@ -112,6 +112,45 @@ const deleteLocation = /* GraphQL */ `
     deleteLocation(input: $input) { id group }
   }
 `;
+const deleteInfoTag = /* GraphQL */ `
+  mutation DeleteInfoTag($input: DeleteInfoTagInput!) {
+    deleteInfoTag(input: $input) { id group }
+  }
+`;
+const deleteAnnotationInfoTag = /* GraphQL */ `
+  mutation DeleteAnnotationInfoTag($input: DeleteAnnotationInfoTagInput!) {
+    deleteAnnotationInfoTag(input: $input) { annotationId infoTagId group }
+  }
+`;
+
+// These models are newer than the checked-in generated queries.
+const infoTagsByAnnotationSetId = /* GraphQL */ `
+  query InfoTagsByAnnotationSetId($annotationSetId: ID!, $nextToken: String) {
+    infoTagsByAnnotationSetId(
+      annotationSetId: $annotationSetId
+      nextToken: $nextToken
+      limit: 1000
+    ) {
+      items { id }
+      nextToken
+    }
+  }
+`;
+const annotationInfoTagsByAnnotationSetId = /* GraphQL */ `
+  query AnnotationInfoTagsByAnnotationSetId(
+    $annotationSetId: ID!
+    $nextToken: String
+  ) {
+    annotationInfoTagsByAnnotationSetId(
+      annotationSetId: $annotationSetId
+      nextToken: $nextToken
+      limit: 1000
+    ) {
+      items { annotationId infoTagId }
+      nextToken
+    }
+  }
+`;
 
 Amplify.configure(
   {
@@ -486,6 +525,66 @@ export const handler: DeleteProjectInFullHandler = async (event) => {
         });
       })
     );
+
+    for (const annotationSet of annotationSets) {
+      const infoTagLinks = await fetchAllPages<
+        { annotationId: string; infoTagId: string },
+        'annotationInfoTagsByAnnotationSetId'
+      >(
+        (nextToken) =>
+          client.graphql({
+            query: annotationInfoTagsByAnnotationSetId,
+            variables: { annotationSetId: annotationSet.id, nextToken },
+          }) as Promise<
+            GraphQLResult<{
+              annotationInfoTagsByAnnotationSetId: PagedList<{
+                annotationId: string;
+                infoTagId: string;
+              }>;
+            }>
+          >,
+        'annotationInfoTagsByAnnotationSetId'
+      );
+
+      await Promise.all(
+        infoTagLinks.map(async (link) => {
+          await client.graphql({
+            query: deleteAnnotationInfoTag,
+            variables: {
+              input: {
+                annotationId: link.annotationId,
+                infoTagId: link.infoTagId,
+              },
+            },
+          });
+        })
+      );
+
+      const infoTags = await fetchAllPages<
+        { id: string },
+        'infoTagsByAnnotationSetId'
+      >(
+        (nextToken) =>
+          client.graphql({
+            query: infoTagsByAnnotationSetId,
+            variables: { annotationSetId: annotationSet.id, nextToken },
+          }) as Promise<
+            GraphQLResult<{
+              infoTagsByAnnotationSetId: PagedList<{ id: string }>;
+            }>
+          >,
+        'infoTagsByAnnotationSetId'
+      );
+
+      await Promise.all(
+        infoTags.map(async (infoTag) => {
+          await client.graphql({
+            query: deleteInfoTag,
+            variables: { input: { id: infoTag.id } },
+          });
+        })
+      );
+    }
 
     // delete all annotations
     for (const annotationSet of annotationSets) {

@@ -42,6 +42,7 @@ type SharedAnnotationRow = {
   obscured?: boolean | null;
   oov?: boolean | null;
   imageTimestamp?: number | null;
+  infoTags?: string[] | null;
 };
 
 type SharedImageRow = {
@@ -86,9 +87,8 @@ export function useSharedChainData(shareId: string | undefined) {
   const { client } = useContext(GlobalContext)!;
 
   return useQuery<SharedChainData>({
-    // The 'v3' segment invalidates persisted caches written before location rows
-    // were included, or before Maps were replaced with JSON-safe records.
-    queryKey: ['shared-chain-data', 'v3', shareId],
+    // Bump when the persisted row shape changes.
+    queryKey: ['shared-chain-data', 'v4', shareId],
     enabled: Boolean(shareId),
     staleTime: Infinity,
     queryFn: async () => {
@@ -113,6 +113,7 @@ export function useSharedChainData(shareId: string | undefined) {
               'obscured',
               'oov',
               'imageTimestamp',
+              'infoTags',
             ] as const,
             limit: 10000,
           }
@@ -191,6 +192,7 @@ export function useSharedChainData(shareId: string | undefined) {
         oov: !!a.oov,
         imageTimestamp:
           typeof a.imageTimestamp === 'number' ? a.imageTimestamp : null,
+        infoTags: a.infoTags ?? [],
       }));
 
       const imagesById: Record<string, ImageType> = {};

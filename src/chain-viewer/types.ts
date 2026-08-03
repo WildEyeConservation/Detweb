@@ -18,6 +18,7 @@ export interface ChainAnnotation {
   oov: boolean;
   /** Image capture time (epoch seconds). Used to order annotations within a chain. */
   imageTimestamp: number | null;
+  infoTags?: string[];
 }
 
 /**

@@ -1,16 +1,17 @@
-import { Button, Form } from 'react-bootstrap';
+import { Alert, Button, Form } from 'react-bootstrap';
 import { Modal, Body, Header, Footer, Title } from '../Modal';
 import { useState, useContext, useEffect } from 'react';
 import { Tabs, Tab } from '../Tabs';
 import { Schema } from '../amplify/client-schema';
-import { GlobalContext } from '../Context';
+import { GlobalContext, UserContext } from '../Context';
 import SpeciesLabelling from './SpeciesLabelling';
 import FalseNegatives from './FalseNegatives';
 import QCReview from './QCReview';
+import InfoTagsLaunch from './InfoTagsLaunch';
 import HomographyLaunch from './HomographyLaunch';
 import IndividualId from './IndividualId';
 
-type TaskType = 'species-labelling' | 'registration' | 'false-negatives' | 'homographies' | 'qc-review' | 'individual-id';
+type TaskType = 'species-labelling' | 'registration' | 'false-negatives' | 'homographies' | 'qc-review' | 'info-tags' | 'individual-id';
 
 type LaunchHandlerType = {
   execute: (
@@ -36,21 +37,27 @@ export default function LaunchAnnotationSetModal({
   const [taskType, setTaskType] = useState<TaskType>('species-labelling');
   const [launching, setLaunching] = useState(false);
   const [progressMessage, setProgressMessage] = useState<string>('');
+  const [launchError, setLaunchError] = useState<string>('');
   const [launchDisabled, setLaunchDisabled] = useState<boolean>(false);
   const [speciesLaunchHandler, setSpeciesLaunchHandler] = useState<LaunchHandlerType>(null);
   const [falseNegativesLaunchHandler, setFalseNegativesLaunchHandler] = useState<LaunchHandlerType>(null);
   const [qcLaunchHandler, setQCLaunchHandler] = useState<LaunchHandlerType>(null);
+  const [infoTagsLaunchHandler, setInfoTagsLaunchHandler] = useState<LaunchHandlerType>(null);
   const [homographyLaunchHandler, setHomographyLaunchHandler] = useState<LaunchHandlerType>(null);
   const [individualIdLaunchHandler, setIndividualIdLaunchHandler] = useState<LaunchHandlerType>(null);
 
   // set up queue creation helper
   const { client, showModal } = useContext(GlobalContext)! as any;
+  const { cognitoGroups } = useContext(UserContext)!;
+  const isSysadmin = cognitoGroups.includes('sysadmin');
 
-  // Task type for each tab, in render order.
+  // Task type for each tab, in render order. Info tagging is still
+  // experimental, so its tab is only shown to sysadmins.
   const tabTaskTypes: TaskType[] = [
     'species-labelling',
     'false-negatives',
     'qc-review',
+    ...(isSysadmin ? (['info-tags'] as TaskType[]) : []),
     'homographies',
     'individual-id',
   ];
@@ -65,6 +72,7 @@ export default function LaunchAnnotationSetModal({
   function onClose() {
     setTaskType('species-labelling');
     setProgressMessage('');
+    setLaunchError('');
     showModal(null);
   }
 
@@ -83,6 +91,7 @@ export default function LaunchAnnotationSetModal({
   async function handleSubmit() {
     const originalStatus = project.status ?? 'active';
     setLaunching(true);
+    setLaunchError('');
 
     // Set optimistic status immediately so the project is blocked for the
     // user even before the modal closes, preventing rapid re-launches.
@@ -110,6 +119,12 @@ export default function LaunchAnnotationSetModal({
             await qcLaunchHandler.execute(setProgressMessage, () => {});
           }
           break;
+        case 'info-tags':
+          if (infoTagsLaunchHandler) {
+            setProgressMessage('Initializing launch...');
+            await infoTagsLaunchHandler.execute(setProgressMessage, () => {});
+          }
+          break;
         case 'homographies':
           if (homographyLaunchHandler) {
             setProgressMessage('Initializing launch...');
@@ -127,13 +142,19 @@ export default function LaunchAnnotationSetModal({
           break;
       }
     } catch (error) {
+      // Keep the modal open on failure: closing it silently made a failed
+      // launch look like it had been accepted.
       console.error('Launch error', error);
       onOptimisticStatus?.(project.id, originalStatus);
-      throw error;
-    } finally {
+      setProgressMessage('');
+      setLaunchError(
+        error instanceof Error ? error.message : 'Failed to launch the task'
+      );
       setLaunching(false);
-      onClose();
+      return;
     }
+    setLaunching(false);
+    onClose();
   }
 
   return (
@@ -178,6 +199,17 @@ export default function LaunchAnnotationSetModal({
                 setQCLaunchHandler={setQCLaunchHandler as any}
               />
             </Tab>
+            {isSysadmin && (
+              <Tab label='Info Tags'>
+                <InfoTagsLaunch
+                  project={project}
+                  annotationSet={annotationSet}
+                  launching={launching}
+                  setLaunchDisabled={setLaunchDisabled}
+                  setInfoTagsLaunchHandler={setInfoTagsLaunchHandler as any}
+                />
+              </Tab>
+            )}
             <Tab label='Homographies'>
               <HomographyLaunch
                 project={project}
@@ -200,6 +232,11 @@ export default function LaunchAnnotationSetModal({
             </Tab>
           </Tabs>
         </Form>
+        {launchError && (
+          <Alert variant='danger' className='mt-3 mb-0'>
+            {launchError}
+          </Alert>
+        )}
         {progressMessage && (
           <div className='mt-3 text-center text-muted d-flex justify-content-center align-items-center gap-2'>
             <span role='status' aria-live='polite'>
@@ -217,6 +254,7 @@ export default function LaunchAnnotationSetModal({
               (taskType === 'species-labelling' && !speciesLaunchHandler) ||
               (taskType === 'false-negatives' && !falseNegativesLaunchHandler) ||
               (taskType === 'qc-review' && !qcLaunchHandler) ||
+              (taskType === 'info-tags' && !infoTagsLaunchHandler) ||
               (taskType === 'homographies' && !homographyLaunchHandler) ||
               (taskType === 'individual-id' && !individualIdLaunchHandler)
             }

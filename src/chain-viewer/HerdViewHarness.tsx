@@ -15,6 +15,7 @@ import { ChainTilesModal } from './components/ChainTilesModal';
 import ChangeCategoryModal from '../ChangeCategoryModal';
 import type { ChainAnnotation } from './types';
 import './ChainViewer.css';
+import { fetchInfoTagDataForSet, infoTagNamesFor } from '../infoTags';
 
 interface Props {
   annotationSetId: string;
@@ -104,6 +105,12 @@ export function HerdViewHarness({ annotationSetId }: Props) {
           }
         );
         if (cancelled) return;
+        const infoTagData = await fetchInfoTagDataForSet(
+          client,
+          annotationSetId
+        );
+        const tagsDefined = infoTagData.nameById.size > 0;
+        if (cancelled) return;
         setAnnotations(
           (data as ChainAnnotationRow[]).map((a) => ({
             id: a.id,
@@ -116,6 +123,9 @@ export function HerdViewHarness({ annotationSetId }: Props) {
             oov: !!a.oov,
             imageTimestamp:
               typeof a.image?.timestamp === 'number' ? a.image.timestamp : null,
+            infoTags: tagsDefined
+              ? infoTagNamesFor(infoTagData, a.id)
+              : undefined,
           }))
         );
         setFetchStatus('done');
