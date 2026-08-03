@@ -1,4 +1,4 @@
-import { Button, Form } from 'react-bootstrap';
+import { Alert, Button, Form } from 'react-bootstrap';
 import { Modal, Body, Header, Footer, Title } from '../Modal';
 import { useState, useContext, useEffect } from 'react';
 import { Tabs, Tab } from '../Tabs';
@@ -37,6 +37,7 @@ export default function LaunchAnnotationSetModal({
   const [taskType, setTaskType] = useState<TaskType>('species-labelling');
   const [launching, setLaunching] = useState(false);
   const [progressMessage, setProgressMessage] = useState<string>('');
+  const [launchError, setLaunchError] = useState<string>('');
   const [launchDisabled, setLaunchDisabled] = useState<boolean>(false);
   const [speciesLaunchHandler, setSpeciesLaunchHandler] = useState<LaunchHandlerType>(null);
   const [falseNegativesLaunchHandler, setFalseNegativesLaunchHandler] = useState<LaunchHandlerType>(null);
@@ -68,6 +69,7 @@ export default function LaunchAnnotationSetModal({
   function onClose() {
     setTaskType('species-labelling');
     setProgressMessage('');
+    setLaunchError('');
     showModal(null);
   }
 
@@ -86,6 +88,7 @@ export default function LaunchAnnotationSetModal({
   async function handleSubmit() {
     const originalStatus = project.status ?? 'active';
     setLaunching(true);
+    setLaunchError('');
 
     // Set optimistic status immediately so the project is blocked for the
     // user even before the modal closes, preventing rapid re-launches.
@@ -136,13 +139,19 @@ export default function LaunchAnnotationSetModal({
           break;
       }
     } catch (error) {
+      // Keep the modal open on failure: closing it silently made a failed
+      // launch look like it had been accepted.
       console.error('Launch error', error);
       onOptimisticStatus?.(project.id, originalStatus);
-      throw error;
-    } finally {
+      setProgressMessage('');
+      setLaunchError(
+        error instanceof Error ? error.message : 'Failed to launch the task'
+      );
       setLaunching(false);
-      onClose();
+      return;
     }
+    setLaunching(false);
+    onClose();
   }
 
   return (
@@ -218,6 +227,11 @@ export default function LaunchAnnotationSetModal({
             </Tab>
           </Tabs>
         </Form>
+        {launchError && (
+          <Alert variant='danger' className='mt-3 mb-0'>
+            {launchError}
+          </Alert>
+        )}
         {progressMessage && (
           <div className='mt-3 text-center text-muted d-flex justify-content-center align-items-center gap-2'>
             <span role='status' aria-live='polite'>

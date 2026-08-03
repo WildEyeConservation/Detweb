@@ -7,6 +7,7 @@ import { fetchAllPaginatedResults } from '../utils';
 import type { DataClient } from '../../amplify/shared/data-schema.generated';
 import { logAdminAction } from '../utils/adminActionLogger';
 import { shouldIgnoreLaunchError } from './QCReview';
+import { parseLaunchResponse } from './launchResponse';
 
 type LaunchHandler = {
   execute: (
@@ -216,7 +217,7 @@ export default function InfoTagsLaunch({
         );
         onLaunchConfirmed();
         onProgress('Submitting informational tagging request...');
-        await sendLaunchRequest(client, {
+        const message = await sendLaunchRequest(client, {
           projectId: project.id,
           annotationSetId: annotationSet.id,
           categoryIds,
@@ -224,7 +225,7 @@ export default function InfoTagsLaunch({
           batchSize: batchSizeRef.current,
           hidden: hiddenRef.current,
         });
-        onProgress('Informational tagging launch submitted');
+        onProgress(message ?? 'Informational tagging launch submitted');
         await logAdminAction(
           client,
           user.userId,
@@ -366,14 +367,17 @@ export default function InfoTagsLaunch({
 async function sendLaunchRequest(
   client: DataClient,
   payload: Record<string, unknown>
-) {
+): Promise<string | undefined> {
   try {
-    await client.mutations.launchInfoTags(
+    const result = await client.mutations.launchInfoTags(
       { request: JSON.stringify(payload) },
       { retry: false }
     );
+    const body = parseLaunchResponse(result, 'Informational tagging launch failed');
+    return typeof body.message === 'string' ? body.message : undefined;
   } catch (error) {
-    if (shouldIgnoreLaunchError(error)) return;
+    // A timeout does not mean the launch failed - the Lambda keeps going.
+    if (shouldIgnoreLaunchError(error)) return undefined;
     throw error;
   }
 }

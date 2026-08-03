@@ -9,7 +9,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Badge, Button, Card } from 'react-bootstrap';
+import { Alert, Badge, Button, Card } from 'react-bootstrap';
 import {
   ChevronLeft,
   ChevronRight,
@@ -21,11 +21,13 @@ import { GlobalContext, UserContext } from './Context';
 import { getTileBlob } from './StorageLayer';
 import type { Schema } from './amplify/client-schema';
 import {
-  fetchInfoTagDataForSet,
+  assertNoGraphqlErrors,
+  commitInfoTagsForAnnotation,
+  fetchImageAnnotationsWithTags,
+  finalizeInfoTagImage,
   formatInfoTagsForDisplay,
-  infoTagNamesFor,
+  type InfoTagImageProgress,
 } from './infoTags';
-import { fetchAllPaginatedResults } from './utils';
 
 const TILE_SIZE = 256;
 const DEFAULT_ZOOM_OFFSET = 6;
@@ -56,6 +58,13 @@ type AnnotationRow = {
   x: number;
   y: number;
   infoTaggedBy: string | null;
+};
+
+// Kept so a save that failed mid-image can be retried without re-tagging.
+type CommitRecord = {
+  run: () => Promise<void>;
+  promise: Promise<void>;
+  failed: boolean;
 };
 
 type Props = {
@@ -145,20 +154,24 @@ export default function InfoTagAnnotation({
   const persistedPositionsRef = useRef(
     new Map<string, { x: number; y: number }>()
   );
-  const infoTagNamesRef = useRef(new Map<string, string[]>());
+  const commitsRef = useRef<CommitRecord[]>([]);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [markerPosition, setMarkerPosition] = useState({ x: 0, y: 0 });
   const [imageComplete, setImageComplete] = useState(false);
   const [readyToAdvance, setReadyToAdvance] = useState(false);
   const finishedRef = useRef(false);
-  const countedRef = useRef(false);
+  const progressRef = useRef<InfoTagImageProgress>({
+    counted: false,
+    acknowledged: false,
+  });
   const advancedRef = useRef(false);
   const wasVisibleRef = useRef(visible);
-  const committingRef = useRef(false);
   useEffect(() => {
     if (
       visible &&
       !wasVisibleRef.current &&
-      countedRef.current &&
+      progressRef.current.counted &&
       targets.length > 0
     ) {
       finishedRef.current = false;
@@ -191,71 +204,29 @@ export default function InfoTagAnnotation({
   useEffect(() => {
     let mounted = true;
     setLoading(true);
+    setLoadError(null);
     Promise.all([
       client.models.Image.get(
         { id: imageId },
         { selectionSet: ['id', 'width', 'height'] as const }
       ),
       client.models.ImageFile.imagesByimageId({ imageId }),
-      fetchAllPaginatedResults(
-        client.models.Annotation.annotationsByImageIdAndSetId,
-        {
-          imageId,
-          setId: { eq: annotationSetId },
-          selectionSet: [
-            'id',
-            'imageId',
-            'setId',
-            'projectId',
-            'group',
-            'categoryId',
-            'x',
-            'y',
-            'infoTaggedBy',
-          ] as const,
-          limit: 10000,
-        }
-      ),
+      fetchImageAnnotationsWithTags(client, imageId, annotationSetId),
     ])
-      .then(async ([imageResponse, filesResponse, annotationRows]) => {
+      .then(([imageResponse, filesResponse, rows]) => {
         if (!mounted || !imageResponse.data) return;
         const jpeg = filesResponse.data?.find(
           (file) => file.type === 'image/jpeg'
         );
         if (!jpeg) throw new Error(`No JPEG source found for image ${imageId}`);
-        const rows = annotationRows.map((annotation) => ({
-          id: annotation.id,
-          imageId: annotation.imageId,
-          setId: annotation.setId,
-          projectId: annotation.projectId,
-          group: annotation.group ?? null,
-          categoryId: annotation.categoryId,
-          x: annotation.x,
-          y: annotation.y,
-          infoTaggedBy: annotation.infoTaggedBy ?? null,
-        }));
         const categorySet = new Set(categoryIds);
         const work = rows.filter(
           (annotation) =>
             categorySet.has(annotation.categoryId) &&
             !annotation.infoTaggedBy
         );
-        const infoTagData = await fetchInfoTagDataForSet(
-          client,
-          annotationSetId
-        );
-        if (!mounted) return;
         const persisted = new Map(
-          work.map((annotation) => [
-            annotation.id,
-            new Set(infoTagData.tagIdsByAnnotation.get(annotation.id) ?? []),
-          ])
-        );
-        const infoTagNames = new Map(
-          rows.map((annotation) => [
-            annotation.id,
-            infoTagNamesFor(infoTagData, annotation.id),
-          ])
+          rows.map((annotation) => [annotation.id, new Set(annotation.tagIds)])
         );
         const ordered = buildTargetTour(
           work,
@@ -269,7 +240,6 @@ export default function InfoTagAnnotation({
             { x: annotation.x, y: annotation.y },
           ])
         );
-        infoTagNamesRef.current = infoTagNames;
         setImage(imageResponse.data);
         setSourceKey(jpeg.key);
         setAnnotations(rows);
@@ -282,9 +252,14 @@ export default function InfoTagAnnotation({
           setSelectedTagIds(new Set(persisted.get(first.id) ?? []));
         }
       })
-      .catch((error) =>
-        console.error('Failed to load informational tagging image', error)
-      )
+      .catch((error) => {
+        console.error('Failed to load informational tagging image', error);
+        if (mounted) {
+          setLoadError(
+            error?.message ?? 'Failed to load the annotations for this image'
+          );
+        }
+      })
       .finally(() => {
         if (mounted) setLoading(false);
       });
@@ -296,6 +271,19 @@ export default function InfoTagAnnotation({
   const currentTarget = targets[currentIndex];
   const currentCategory = categories.find(
     (category) => category.id === currentTarget?.categoryId
+  );
+
+  const tagNameById = useMemo(
+    () => new Map(infoTags.map((tag) => [tag.id, tag.name])),
+    [infoTags]
+  );
+  const namesForAnnotation = useCallback(
+    (annotationId: string) =>
+      Array.from(persistedTagIdsRef.current.get(annotationId) ?? [])
+        .map((tagId) => tagNameById.get(tagId))
+        .filter((name): name is string => Boolean(name))
+        .sort((a, b) => a.localeCompare(b)),
+    [tagNameById]
   );
 
   useEffect(() => {
@@ -381,9 +369,7 @@ export default function InfoTagAnnotation({
             : targetIds.has(annotation.id)
               ? 'pending'
               : 'context',
-          infoTags: JSON.stringify(
-            infoTagNamesRef.current.get(annotation.id) ?? []
-          ),
+          infoTags: JSON.stringify(namesForAnnotation(annotation.id)),
         },
         geometry: {
           type: 'Point',
@@ -391,7 +377,15 @@ export default function InfoTagAnnotation({
         },
       })),
     });
-  }, [annotations, categories, completedIds, map, targets, toLngLat]);
+  }, [
+    annotations,
+    categories,
+    completedIds,
+    map,
+    namesForAnnotation,
+    targets,
+    toLngLat,
+  ]);
 
   const updateVisibleTiles = useCallback(
     async (instance: maplibregl.Map | null) => {
@@ -760,36 +754,52 @@ export default function InfoTagAnnotation({
     setQueueZoom,
   ]);
 
+  // Nothing is acknowledged until every tag write for the image has landed, so
+  // a save that failed leaves the message on the queue to be handed out again.
+  const countCompletionRef = useRef(true);
   const finishImage = useCallback(
-    (commitPromise?: Promise<unknown>, countCompletion = true) => {
+    (countCompletion = true) => {
       if (finishedRef.current) return;
       finishedRef.current = true;
+      countCompletionRef.current = countCompletion;
       setImageComplete(true);
-      const firstCompletion = countCompletion && !countedRef.current;
-      if (firstCompletion) countedRef.current = true;
-      Promise.all([
-        commitPromise,
-        firstCompletion
-          ? client.mutations.incrementQueueCount({ id: queueId })
-          : undefined,
-        firstCompletion ? ack?.() : undefined,
-      ]).catch((error) =>
-        console.error('Failed to finish informational tagging image', error)
-      );
-      window.setTimeout(() => setReadyToAdvance(true), 800);
+      finalizeInfoTagImage({
+        commits: commitsRef.current.map((record) => record.promise),
+        progress: progressRef.current,
+        countCompletion,
+        incrementCount: async () =>
+          assertNoGraphqlErrors(
+            await client.mutations.incrementQueueCount({ id: queueId }),
+            'Failed to record queue progress'
+          ),
+        acknowledge: async () => {
+          await ack?.();
+        },
+      })
+        .then(() => {
+          setSaveError(null);
+          window.setTimeout(() => setReadyToAdvance(true), 800);
+        })
+        .catch((error) => {
+          console.error('Failed to finish informational tagging image', error);
+          finishedRef.current = false;
+          setImageComplete(false);
+          setSaveError(
+            error?.message ?? 'Failed to save informational tags for this image'
+          );
+        });
     },
     [ack, client, queueId]
   );
 
+  // An image whose annotations are all tagged already is acknowledged without
+  // being counted - but only once it is known to have loaded, otherwise a
+  // failed load would look like finished work and drop the queue message.
   useEffect(() => {
-    if (!loading && targets.length === 0) {
-      countedRef.current = true;
-      Promise.resolve(ack?.()).catch((error) =>
-        console.error('Failed to acknowledge completed image', error)
-      );
-      finishImage(undefined, false);
+    if (!loading && !loadError && image && targets.length === 0) {
+      finishImage(false);
     }
-  }, [ack, finishImage, loading, targets.length]);
+  }, [finishImage, image, loadError, loading, targets.length]);
 
   useEffect(() => {
     if (!readyToAdvance || !next || advancedRef.current) return;
@@ -797,68 +807,56 @@ export default function InfoTagAnnotation({
     next();
   }, [next, readyToAdvance]);
 
+  const startCommit = useCallback((record: CommitRecord) => {
+    record.failed = false;
+    record.promise = record.run().catch((error) => {
+      record.failed = true;
+      throw error;
+    });
+    // The outcome is inspected when the image is finished; this only keeps the
+    // rejection from being reported as unhandled in the meantime.
+    record.promise.catch(() => undefined);
+  }, []);
+
   const commitAndAdvance = useCallback(() => {
-    if (!currentTarget || committingRef.current || finishedRef.current) return;
-    committingRef.current = true;
-    const before = persistedTagIdsRef.current.get(currentTarget.id) ?? new Set();
+    if (!currentTarget || finishedRef.current) return;
+    const target = currentTarget;
+    const before = persistedTagIdsRef.current.get(target.id) ?? new Set<string>();
     const after = new Set(selectedTagIds);
-    persistedTagIdsRef.current.set(currentTarget.id, after);
-    persistedPositionsRef.current.set(currentTarget.id, markerPosition);
+    const position = markerPosition;
+    persistedTagIdsRef.current.set(target.id, after);
+    persistedPositionsRef.current.set(target.id, position);
     setAnnotations((current) =>
       current.map((annotation) =>
-        annotation.id === currentTarget.id
-          ? { ...annotation, ...markerPosition }
+        annotation.id === target.id
+          ? { ...annotation, ...position }
           : annotation
       )
     );
-    infoTagNamesRef.current.set(
-      currentTarget.id,
-      infoTags
-        .filter((tag) => after.has(tag.id))
-        .map((tag) => tag.name)
-        .sort((a, b) => a.localeCompare(b))
-    );
 
-    const creates = Array.from(after)
-      .filter((tagId) => !before.has(tagId))
-      .map((infoTagId) =>
-        client.models.AnnotationInfoTag.create({
-          annotationId: currentTarget.id,
-          infoTagId,
+    const record: CommitRecord = {
+      run: () =>
+        commitInfoTagsForAnnotation(client, {
+          annotationId: target.id,
           annotationSetId,
-          projectId: currentTarget.projectId || projectId!,
-          group: group ?? currentTarget.group ?? undefined,
-        })
-      );
-    const deletes = Array.from(before)
-      .filter((tagId) => !after.has(tagId))
-      .map((infoTagId) =>
-        client.models.AnnotationInfoTag.delete({
-          annotationId: currentTarget.id,
-          infoTagId,
-        })
-      );
-    const commitPromise = Promise.all([
-      ...creates,
-      ...deletes,
-      client.models.Annotation.update({
-        id: currentTarget.id,
-        infoTaggedBy: user.userId,
-        x: markerPosition.x,
-        y: markerPosition.y,
-      }),
-    ]).finally(() => {
-      committingRef.current = false;
-    });
+          projectId: target.projectId || projectId!,
+          group: group ?? target.group ?? undefined,
+          before,
+          after,
+          position,
+          taggedBy: user.userId,
+        }),
+      promise: Promise.resolve(),
+      failed: false,
+    };
+    commitsRef.current.push(record);
+    startCommit(record);
 
-    setCompletedIds((current) => new Set(current).add(currentTarget.id));
+    setCompletedIds((current) => new Set(current).add(target.id));
     if (currentIndex + 1 < targets.length) {
       setCurrentIndex((index) => index + 1);
-      commitPromise.catch((error) =>
-        console.error('Failed to save informational tags', error)
-      );
     } else {
-      finishImage(commitPromise);
+      finishImage();
     }
   }, [
     annotationSetId,
@@ -867,13 +865,21 @@ export default function InfoTagAnnotation({
     currentTarget,
     finishImage,
     group,
-    infoTags,
     markerPosition,
     projectId,
     selectedTagIds,
+    startCommit,
     targets.length,
     user.userId,
   ]);
+
+  const retrySave = useCallback(() => {
+    setSaveError(null);
+    for (const record of commitsRef.current) {
+      if (record.failed) startCommit(record);
+    }
+    finishImage(countCompletionRef.current);
+  }, [finishImage, startCommit]);
 
   const undo = useCallback(() => {
     if (currentIndex > 0) {
@@ -919,7 +925,14 @@ export default function InfoTagAnnotation({
   if (loading || !image || !sourceKey) {
     return (
       <div className='d-flex justify-content-center align-items-center w-100 h-100'>
-        <div className='text-muted'>Loading image annotations...</div>
+        {loadError ? (
+          <Alert variant='danger' className='mb-0'>
+            {loadError}. This image has not been taken off the queue - reload to
+            try again.
+          </Alert>
+        ) : (
+          <div className='text-muted'>Loading image annotations...</div>
+        )}
       </div>
     );
   }
@@ -954,6 +967,22 @@ export default function InfoTagAnnotation({
           </span>
         </button>
       </div>
+
+      {saveError && (
+        <Alert
+          variant='danger'
+          className='mb-0 d-flex align-items-center justify-content-between gap-3'
+          style={{ flexShrink: 0 }}
+        >
+          <span>
+            {saveError}. Your tags are not saved yet - this image stays on the
+            queue until they are.
+          </span>
+          <Button variant='light' size='sm' onClick={retrySave}>
+            Retry save
+          </Button>
+        </Alert>
+      )}
 
       <div className='d-flex' style={{ flex: 1, overflow: 'hidden' }}>
         <div style={{ flex: 1, position: 'relative' }}>

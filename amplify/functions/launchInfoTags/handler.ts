@@ -13,6 +13,11 @@ import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
 import pLimit from 'p-limit';
 import { enqueuePretile } from '../shared/enqueuePretile';
+import {
+  assertInputsBelongToProject,
+  parsePayload,
+  type LaunchInfoTagsPayload,
+} from './validation';
 
 const createQueueMutation = /* GraphQL */ `
   mutation CreateQueue($input: CreateQueueInput!) {
@@ -35,6 +40,18 @@ const updateProjectMembershipsMutation = /* GraphQL */ `
 const getProjectOrganizationId = /* GraphQL */ `
   query GetProject($id: ID!) {
     getProject(id: $id) { organizationId }
+  }
+`;
+
+const getAnnotationSetProjectId = /* GraphQL */ `
+  query GetAnnotationSet($id: ID!) {
+    getAnnotationSet(id: $id) { id projectId }
+  }
+`;
+
+const getCategoryOwnership = /* GraphQL */ `
+  query GetCategory($id: ID!) {
+    getCategory(id: $id) { id projectId annotationSetId }
   }
 `;
 
@@ -110,15 +127,6 @@ const credentials = {
 const sqsClient = new SQSClient({ region: env.AWS_REGION, credentials });
 const s3Client = new S3Client({ region: env.AWS_REGION, credentials });
 
-type LaunchInfoTagsPayload = {
-  projectId: string;
-  annotationSetId: string;
-  categoryIds: string[];
-  categoryNames?: string[];
-  batchSize: number;
-  hidden: boolean;
-};
-
 type AnnotationItem = {
   id: string;
   imageId: string;
@@ -161,6 +169,7 @@ export const handler: LaunchInfoTagsHandler = async (event) => {
       throw new Error('Unable to determine organizationId for project');
     }
     authorizeRequest(event.identity, organizationId);
+    await assertPayloadOwnership(payload);
 
     try {
       await setProjectStatus(payload.projectId, 'launching', {
@@ -185,7 +194,21 @@ export const handler: LaunchInfoTagsHandler = async (event) => {
       throw err;
     }
 
-    const result = await handleLaunch(payload, organizationId);
+    // The project is already flagged as launching, so anything that fails from
+    // here has to hand it back or the survey stays locked.
+    let result;
+    try {
+      result = await handleLaunch(payload, organizationId);
+    } catch (error) {
+      await setProjectStatus(payload.projectId, 'active').catch((statusError) =>
+        console.error(
+          'Failed to restore project status after launch failure',
+          statusError
+        )
+      );
+      throw error;
+    }
+
     executeGraphql<{ updateProjectMemberships?: string | null }>(
       updateProjectMembershipsMutation,
       { projectId: payload.projectId }
@@ -453,31 +476,33 @@ async function enqueueImages(
   await Promise.all(tasks);
 }
 
-function parsePayload(request: unknown): LaunchInfoTagsPayload {
-  if (typeof request !== 'string') {
-    throw new Error('Launch payload is required');
-  }
-  const parsed = JSON.parse(request);
-  if (
-    !parsed?.projectId ||
-    !parsed?.annotationSetId ||
-    !Array.isArray(parsed?.categoryIds) ||
-    parsed.categoryIds.length === 0
-  ) {
-    throw new Error(
-      'Launch payload missing required fields (projectId, annotationSetId, categoryIds)'
-    );
-  }
-  return {
-    projectId: parsed.projectId,
-    annotationSetId: parsed.annotationSetId,
-    categoryIds: Array.from(new Set(parsed.categoryIds)),
-    categoryNames: Array.isArray(parsed.categoryNames)
-      ? parsed.categoryNames
-      : undefined,
-    batchSize: parsed.batchSize ?? 200,
-    hidden: parsed.hidden ?? false,
-  };
+async function assertPayloadOwnership(payload: LaunchInfoTagsPayload) {
+  const limit = pLimit(10);
+  const [annotationSetData, categories] = await Promise.all([
+    executeGraphql<{
+      getAnnotationSet?: { id: string; projectId: string } | null;
+    }>(getAnnotationSetProjectId, { id: payload.annotationSetId }),
+    Promise.all(
+      payload.categoryIds.map((id) =>
+        limit(async () => {
+          const data = await executeGraphql<{
+            getCategory?: {
+              id: string;
+              projectId: string;
+              annotationSetId: string;
+            } | null;
+          }>(getCategoryOwnership, { id });
+          return data.getCategory ?? null;
+        })
+      )
+    ),
+  ]);
+
+  assertInputsBelongToProject(
+    payload,
+    annotationSetData.getAnnotationSet,
+    categories
+  );
 }
 
 async function executeGraphql<T>(
