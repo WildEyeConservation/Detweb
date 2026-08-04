@@ -39,6 +39,7 @@ import ChainShareResults from './chain-viewer/admin/ChainShareResults.tsx';
 import DisagreementExplorer from './chain-viewer/admin/DisagreementExplorer.tsx';
 import ImageNeighbourViewer from './ImageNeighbourViewer';
 import QCReviewTask from './QCReviewTask';
+import InfoTagTask from './InfoTagTask';
 import { lazy, Suspense } from 'react';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -171,6 +172,10 @@ const router = createBrowserRouter([
           {
             path: 'qc-review/:queueId',
             element: <QCReviewTask />,
+          },
+          {
+            path: 'info-tags/:queueId',
+            element: <InfoTagTask />,
           },
         ],
       },

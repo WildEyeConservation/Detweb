@@ -5,6 +5,8 @@ import { Spinner } from 'react-bootstrap';
 import MapLibreLightViewer, {
   LightAnnotation,
 } from './annotator/MapLibreLightViewer';
+import { useImageInfoTags } from './useInfoTags';
+import { formatInfoTagsForDisplay } from './infoTags';
 
 type AnnotationItem = {
   id: string;
@@ -32,6 +34,7 @@ export default function LightImageView({
   const [sourceKey, setSourceKey] = useState<string | null>(null);
   const [annotations, setAnnotations] = useState<AnnotationItem[]>([]);
   const [annotationsLoaded, setAnnotationsLoaded] = useState<boolean>(false);
+  const infoTagsByAnnotation = useImageInfoTags(imageId, annotationSetId);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,6 +138,7 @@ export default function LightImageView({
       filteredAnnotations.map((a) => {
         const categoryId = a.category?.id || 'Unknown';
         const isPrimary = a.id === a.objectId;
+        const infoTags = infoTagsByAnnotation.get(a.id);
         return {
           id: a.id,
           x: a.x,
@@ -144,10 +148,13 @@ export default function LightImageView({
           popupLines: [
             `Label: ${a.category?.name || 'Unknown'}`,
             `Sighting: ${isPrimary ? 'Primary' : 'Secondary'}`,
+            ...(infoTags?.length
+              ? [`Info tags: ${formatInfoTagsForDisplay(infoTags)}`]
+              : []),
           ],
         };
       }),
-    [filteredAnnotations, categoryColors]
+    [filteredAnnotations, categoryColors, infoTagsByAnnotation]
   );
 
   if (!imageMeta || !sourceKey || !annotationsLoaded)

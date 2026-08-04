@@ -1,12 +1,9 @@
 import type { DataClient } from '../../../amplify/shared/data-schema.generated';
 import type { PersistedCameraOrientationRotations } from '../../types/Orientation';
 
-// Session lifecycle. Transitions are owned exclusively by UploadOrchestrator:
-//   idle -> preparing -> uploading -> finalizing -> completed
-//   uploading -> waiting-retry -> preparing (retryable error, backoff)
-//   uploading/waiting-retry -> paused (user, offline or fatal error)
-//   any active -> cancelled (delete flow)
-//   waiting-retry -> failed (fatal error or attempts exhausted)
+// UploadOrchestrator owns all transitions. The normal path is
+// idle -> preparing -> uploading -> finalizing -> completed. Active work can
+// also retry, pause, fail, block for user input, or be cancelled.
 export type SessionPhase =
   | 'idle'
   | 'preparing'
@@ -16,6 +13,7 @@ export type SessionPhase =
   | 'finalizing'
   | 'completed'
   | 'failed'
+  | 'blocked'
   | 'cancelled';
 
 export type PauseReason = 'user' | 'offline' | 'fatal-error';
@@ -30,6 +28,18 @@ export const ACTIVE_PHASES: SessionPhase[] = [
 export interface ItemFailure {
   originalPath: string;
   message: string;
+}
+
+export type BlockedReasonKind =
+  | 'missing-from-folder'
+  | 'transfer-failed'
+  | 'not-in-storage';
+
+export interface BlockedItem {
+  originalPath: string;
+  kind: BlockedReasonKind;
+  /** Human-readable reason used in the UI and CSV export. */
+  reason: string;
 }
 
 export interface SessionSnapshot {
@@ -48,6 +58,8 @@ export interface SessionSnapshot {
   etaSeconds: number | null;
   /** Per-file failures from the most recent transfer run. */
   failures: ItemFailure[];
+  /** Files awaiting a retry-or-skip decision in the blocked phase. */
+  blocked: BlockedItem[];
   /** > 0 while in waiting-retry; the delay currently being waited out. */
   retryDelayMs: number;
   attempt: number;

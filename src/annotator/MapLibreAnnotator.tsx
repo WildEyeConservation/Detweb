@@ -90,6 +90,8 @@ export interface MapLibreAnnotatorProps {
   hideFnAnnotations?: boolean;
   /** Force the on-map legend visible (used when the side legend is collapsed). */
   showMapLegend?: boolean;
+  /** Informational tag names per annotation id, shown in the hover popup. */
+  infoTags?: Map<string, string[]>;
 }
 
 export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
@@ -110,6 +112,7 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
     categories,
     hideFnAnnotations,
     showMapLegend,
+    infoTags,
   } = props;
 
   const {
@@ -178,6 +181,10 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
   menuItemsRef.current = menuItems;
   const locationBoundsRef = useRef(locationBounds);
   locationBoundsRef.current = locationBounds;
+  // Read at hover time so tags arriving later show up without rebinding the
+  // map's interaction handlers.
+  const infoTagsRef = useRef(infoTags);
+  infoTagsRef.current = infoTags;
 
   const annotations = useMemo(
     () =>
@@ -507,7 +514,8 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
           const lines = buildAnnotationPopupLines(
             annotation,
             categoryName,
-            allUsers
+            allUsers,
+            infoTagsRef.current?.get(annotation.id)
           );
           lines.forEach((text) => {
             const row = document.createElement('div');

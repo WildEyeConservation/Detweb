@@ -5,6 +5,7 @@ import {
 } from 'unique-names-generator';
 import type { ExtendedAnnotationType } from '../schemaTypes';
 import { isWithinLocationBounds } from '../utils';
+import { formatInfoTagsForDisplay } from '../infoTags';
 
 export interface AnnotationBounds {
   x: number;
@@ -113,9 +114,13 @@ export function buildAnnotationFeatureCollection({
 export function buildAnnotationPopupLines(
   annotation: ExtendedAnnotationType,
   categoryName: (categoryId: string) => string,
-  users: ReadonlyArray<{ id: string; name?: string | null }>
+  users: ReadonlyArray<{ id: string; name?: string | null }>,
+  infoTags?: string[]
 ): string[] {
   const lines = [`Label: ${categoryName(annotation.categoryId)}`];
+  if (infoTags?.length) {
+    lines.push(`Info tags: ${formatInfoTagsForDisplay(infoTags)}`);
+  }
   if (isFalseNegative(annotation)) lines.push('False Negative');
   lines.push(
     `Created by: ${

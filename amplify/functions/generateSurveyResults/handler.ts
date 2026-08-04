@@ -1,25 +1,27 @@
-import { env } from '$amplify/env/deleteProject';
+import { randomUUID } from 'node:crypto';
+import { env } from '$amplify/env/generateSurveyResults';
 import { Amplify } from 'aws-amplify';
+import { generateClient, type GraphQLResult } from 'aws-amplify/data';
 import type { GenerateSurveyResultsHandler } from '../../data/resource';
 import { authorizeRequest } from '../shared/authorizeRequest';
 import {
-  camerasByProjectId,
-  strataByProjectId,
-  transectsByProjectId,
-  imagesByProjectId,
-  annotationsByAnnotationSetId,
-} from './graphql/queries';
-import { generateClient, GraphQLResult } from 'aws-amplify/data';
-
-// Inline minimal mutation – return composite key fields + `group` to avoid
-// nested-resolver auth failures while enabling subscription delivery via groupDefinedIn('group').
-const createJollyResult = /* GraphQL */ `
-  mutation CreateJollyResult($input: CreateJollyResultInput!) {
-    createJollyResult(input: $input) { surveyId stratumId annotationSetId categoryId group }
-  }
-`;
-// @ts-ignore
-import * as jStat from 'jstat';
+  ConditionalCheckFailedException,
+  DynamoDBClient,
+} from '@aws-sdk/client-dynamodb';
+import {
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb';
+import {
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  SFNClient,
+  StartExecutionCommand,
+} from '@aws-sdk/client-sfn';
 
 Amplify.configure(
   {
@@ -41,17 +43,20 @@ Amplify.configure(
             sessionToken: env.AWS_SESSION_TOKEN,
           },
         }),
-        clearCredentialsAndIdentityId: () => {
-          /* noop */
-        },
+        clearCredentialsAndIdentityId: () => undefined,
       },
     },
   }
 );
 
-const client = generateClient({
-  authMode: 'iam',
-});
+const client = generateClient({ authMode: 'iam' });
+const sdkConfig = { region: env.AWS_REGION, maxAttempts: 5 };
+const dynamo = DynamoDBDocumentClient.from(
+  new DynamoDBClient(sdkConfig),
+  { marshallOptions: { removeUndefinedValues: true } }
+);
+const s3 = new S3Client(sdkConfig);
+const stepFunctions = new SFNClient(sdkConfig);
 
 const getProjectOrganizationId = /* GraphQL */ `
   query GetProject($id: ID!) {
@@ -59,437 +64,308 @@ const getProjectOrganizationId = /* GraphQL */ `
   }
 `;
 
-// trims the outliers before calculating the mean
-function trimmedMean(values: number[], trimRatio: number = 0.2): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const n = sorted.length;
-  const trimCount = Math.floor(n * trimRatio);
-  const trimmed = sorted.slice(trimCount, n - trimCount);
-  return trimmed.reduce((sum, val) => sum + val, 0) / trimmed.length;
+interface JobItem {
+  jobKey: string;
+  jobId: string;
+  surveyId: string;
+  annotationSetId: string;
+  categoryIds: string[];
+  organizationId: string;
+  status: string;
+  phase: string;
+  statusKey: string;
+  heartbeatAt: number;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: number;
 }
 
-// Helper to handle pagination for GraphQL queries
-async function fetchAllPages<T>(
-  queryFn: (nextToken?: string) => Promise<GraphQLResult<any>>,
-  queryName: string
-): Promise<T[]> {
-  const allItems: T[] = [];
-  let nextToken: string | undefined;
-  do {
-    const response = await queryFn(nextToken);
-    const page = response.data?.[queryName];
-    const items: T[] = page?.items ?? [];
-    allItems.push(...items);
-    nextToken = page?.nextToken;
-  } while (nextToken);
-  return allItems;
+interface LaunchResponse {
+  jobId: string;
+  statusKey: string;
+  reused: boolean;
 }
 
-// Helper to compute transect width
-function transect_width(
-  agl_m: number,
-  sensor_width_mm: number,
-  focal_length_mm: number,
-  tilt_degrees: number
-) {
-  const tilt_rad = (tilt_degrees * Math.PI) / 180;
-  const fov_rad = 2 * Math.atan(sensor_width_mm / (2 * focal_length_mm));
-  const angle_a = tilt_rad - fov_rad / 2;
-  const angle_b = tilt_rad + fov_rad / 2;
-  return agl_m * (Math.tan(angle_b) - Math.tan(angle_a));
+const activeStatuses = new Set([
+  'PENDING',
+  'RUNNING',
+  'ROLLING_BACK',
+]);
+// The worker heartbeats every 30s while paging DynamoDB and while committing,
+// but `calculate()` is a single synchronous pass over the whole survey and
+// cannot heartbeat part-way through. This window has to exceed the worst-case
+// compute phase, or a second launch will treat a healthy worker as dead and
+// claim its job. 30 minutes buys headroom; the cost is that a genuinely dead
+// worker blocks relaunch for that long.
+const staleAfterMilliseconds = 30 * 60 * 1000;
+
+function requiredEnvironment(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is required`);
+  return value;
 }
 
-// Function to convert degrees to radians
-function toRad(deg: number) {
-  return (deg * Math.PI) / 180;
-}
-
-// More accurate ellipsoidal estimate of distance based on the WGS84 model
-function vincentyDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-) {
-  // WGS-84 ellipsiod parameters
-  const a = 6378137;
-  const b = 6356752.314245;
-  const f = 1 / 298.257223563;
-
-  const L = toRad(lon2 - lon1);
-  const U1 = Math.atan((1 - f) * Math.tan(toRad(lat1)));
-  const U2 = Math.atan((1 - f) * Math.tan(toRad(lat2)));
-
-  const sinU1 = Math.sin(U1),
-    cosU1 = Math.cos(U1);
-  const sinU2 = Math.sin(U2),
-    cosU2 = Math.cos(U2);
-
-  let λ = L;
-  let λP,
-    iterLimit = 100;
-  let cosSqAlpha, sinSigma, cos2SigmaM, cosSigma, sigma;
-
-  do {
-    const sinλ = Math.sin(λ),
-      cosλ = Math.cos(λ);
-    sinSigma = Math.sqrt(
-      cosU2 * sinλ * (cosU2 * sinλ) +
-        (cosU1 * sinU2 - sinU1 * cosU2 * cosλ) *
-          (cosU1 * sinU2 - sinU1 * cosU2 * cosλ)
+// The job table and state machine only exist when the Fargate pipeline is
+// deployed (AMPLIFY_ENABLE_ECS + AMPLIFY_ENABLE_JOLLY_FARGATE). The mutation
+// itself is always deployed, so without this the caller gets a bare
+// "JOLLY_JOB_TABLE_NAME is required" instead of an actionable message.
+function requireJollyPipeline(): {
+  jobTableName: string;
+  stateMachineArn: string;
+} {
+  const jobTableName = process.env.JOLLY_JOB_TABLE_NAME;
+  const stateMachineArn = process.env.JOLLY_STATE_MACHINE_ARN;
+  if (!jobTableName || !stateMachineArn) {
+    throw new Error(
+      'Results generation is not enabled in this environment'
     );
-
-    if (sinSigma === 0) return 0; // co-incident points
-
-    cosSigma = sinU1 * sinU2 + cosU1 * cosU2 * cosλ;
-    sigma = Math.atan2(sinSigma, cosSigma);
-    const sinAlpha = (cosU1 * cosU2 * sinλ) / sinSigma;
-    cosSqAlpha = 1 - sinAlpha * sinAlpha;
-    cos2SigmaM = cosSigma - (2 * sinU1 * sinU2) / cosSqAlpha;
-
-    if (isNaN(cos2SigmaM)) cos2SigmaM = 0; // equatorial line
-
-    const C = (f / 16) * cosSqAlpha * (4 + f * (4 - 3 * cosSqAlpha));
-    λP = λ;
-    λ =
-      L +
-      (1 - C) *
-        f *
-        sinAlpha *
-        (sigma +
-          C *
-            sinSigma *
-            (cos2SigmaM + C * cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM)));
-  } while (Math.abs(λ - λP) > 1e-12 && --iterLimit > 0);
-
-  if (iterLimit === 0) return NaN; // formula failed to converge
-
-  const uSq = (cosSqAlpha * (a * a - b * b)) / (b * b);
-  const A = 1 + (uSq / 16384) * (4096 + uSq * (-768 + uSq * (320 - 175 * uSq)));
-  const B = (uSq / 1024) * (256 + uSq * (-128 + uSq * (74 - 47 * uSq)));
-
-  const deltaSigma =
-    B *
-    sinSigma *
-    (cos2SigmaM +
-      (B / 4) *
-        (cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM) -
-          (B / 6) *
-            cos2SigmaM *
-            (-3 + 4 * sinSigma * sinSigma) *
-            (-3 + 4 * cos2SigmaM * cos2SigmaM)));
-
-  const s = b * A * (sigma - deltaSigma);
-
-  return s; // distance in meters
+  }
+  return { jobTableName, stateMachineArn };
 }
 
-// sample covariance
-function covariance(x: number[], y: number[]) {
-  const n = x.length;
-  if (n < 2) return 0;
-  const meanX = x.reduce((s, v) => s + v, 0) / n;
-  const meanY = y.reduce((s, v) => s + v, 0) / n;
-  let cov = 0;
-  for (let i = 0; i < n; i++) cov += (x[i] - meanX) * (y[i] - meanY);
-  return cov / (n - 1);
+function isFreshActiveJob(
+  item: Record<string, unknown> | undefined
+): item is Record<string, unknown> & JobItem {
+  return Boolean(
+    item &&
+      typeof item.status === 'string' &&
+      activeStatuses.has(item.status) &&
+      typeof item.heartbeatAt === 'number' &&
+      item.heartbeatAt > Date.now() - staleAfterMilliseconds &&
+      typeof item.jobId === 'string' &&
+      typeof item.statusKey === 'string'
+  );
 }
 
-export const handler: GenerateSurveyResultsHandler =
-  async (event, context) => {
-    const surveyId = event.arguments.surveyId;
-    const projectId = surveyId;
-    const annotationSetId = event.arguments.annotationSetId;
-    const categoryIds = event.arguments.categoryIds;
+function sameCategorySelection(
+  existing: unknown,
+  requested: string[]
+): boolean {
+  if (
+    !Array.isArray(existing) ||
+    existing.some((value) => typeof value !== 'string')
+  ) {
+    return false;
+  }
+  const existingIds = [...new Set(existing)].sort();
+  const requestedIds = [...new Set(requested)].sort();
+  return (
+    existingIds.length === requestedIds.length &&
+    existingIds.every(
+      (categoryId, index) => categoryId === requestedIds[index]
+    )
+  );
+}
 
-    try {
-      // fetch organization ID from the project for group-based access
-      const projectResponse = await client.graphql({
-        query: getProjectOrganizationId,
-        variables: { id: surveyId },
-      });
-      const organizationId = (projectResponse as GraphQLResult<any>).data?.getProject?.organizationId;
+async function getJob(
+  tableName: string,
+  jobKey: string
+): Promise<Record<string, unknown> | undefined> {
+  const response = await dynamo.send(
+    new GetCommand({
+      TableName: tableName,
+      Key: { jobKey },
+      ConsistentRead: true,
+    })
+  );
+  return response.Item;
+}
 
-      if (!organizationId) {
-        throw new Error('Project does not have an organizationId');
-      }
-      authorizeRequest(event.identity, organizationId);
-
-      // fetch project cameras
-      const cameras = await fetchAllPages<any>(
-        (nextToken) =>
-          client.graphql({
-            query: camerasByProjectId,
-            variables: { projectId, limit: 100, nextToken },
-          }),
-        'camerasByProjectId'
+async function claimJob(
+  tableName: string,
+  input: Omit<
+    JobItem,
+    'jobId' | 'statusKey' | 'heartbeatAt' | 'createdAt' | 'updatedAt' | 'expiresAt' | 'status' | 'phase'
+  >
+): Promise<{ item: JobItem; reused: boolean }> {
+  const existing = await getJob(tableName, input.jobKey);
+  if (isFreshActiveJob(existing)) {
+    if (!sameCategorySelection(existing.categoryIds, input.categoryIds)) {
+      throw new Error(
+        'A results job is already running for this annotation set with a different label selection'
       );
-      const cameraMap = new Map(cameras.map((cam) => [cam.id, cam]));
-
-      // fetch strata
-      const strataList = await fetchAllPages<any>(
-        (nextToken) =>
-          client.graphql({
-            query: strataByProjectId,
-            variables: { projectId, limit: 100, nextToken },
-          }),
-        'strataByProjectId'
-      );
-      const stratumMap = new Map(strataList.map((st) => [st.id, st]));
-
-      // fetch transects
-      const transectsList = await fetchAllPages<any>(
-        (nextToken) =>
-          client.graphql({
-            query: transectsByProjectId,
-            variables: { projectId, limit: 100, nextToken },
-          }),
-        'transectsByProjectId'
-      );
-      const transectMap = new Map(
-        transectsList.map((tr) => [tr.id, tr.stratumId])
-      );
-
-      // fetch images
-      const images = await fetchAllPages<any>(
-        (nextToken) =>
-          client.graphql({
-            query: imagesByProjectId,
-            variables: { projectId, limit: 100, nextToken },
-          }),
-        'imagesByProjectId'
-      );
-
-      // fetch annotations for project
-      const annotations = await fetchAllPages<any>(
-        (nextToken) =>
-          client.graphql({
-            query: annotationsByAnnotationSetId,
-            variables: {
-              setId: annotationSetId,
-              limit: 100,
-              nextToken,
-            },
-          }),
-        'annotationsByAnnotationSetId'
-      );
-
-      // validate input
-      if (cameras.length === 0) {
-        throw new Error('No cameras found for survey');
-      }
-      if (strataList.length === 0) {
-        throw new Error('No strata found for survey');
-      }
-      if (transectsList.length === 0) {
-        throw new Error('No transects found for survey');
-      }
-      if (images.length === 0) {
-        throw new Error('No images found for survey');
-      }
-      if (
-        images.some(
-          (img) =>
-            !img.transectId ||
-            !img.cameraId ||
-            !img.latitude ||
-            !img.longitude ||
-            !img.altitude_agl ||
-            !img.width ||
-            !img.height
-        )
-      ) {
-        throw new Error('Image data is missing required fields');
-      }
-      if (annotations.length === 0) {
-        throw new Error('No annotations found for survey');
-      }
-
-      // only keep primary annotations (objectId === id) and filter to only include those in the categoryIds list
-      const primaryAnnotations = annotations.filter(
-        (a) => a.id === a.objectId && categoryIds.includes(a.categoryId)
-      );
-      // count annotations per image per category
-      const annotCountByImageByCategory: Record<
-        string,
-        Record<string, number>
-      > = {};
-      for (const a of primaryAnnotations) {
-        (annotCountByImageByCategory[a.imageId] ||= {})[a.categoryId] =
-          (annotCountByImageByCategory[a.imageId][a.categoryId] || 0) + 1;
-      }
-      // enrich images with per-category counts
-      const imagesWithCounts = images.map((img) => ({
-        ...img,
-        categoryCounts: annotCountByImageByCategory[img.id] || {},
-      }));
-
-      // group by transect
-      const byTransect: Record<string, typeof imagesWithCounts> = {};
-      for (const img of imagesWithCounts) {
-        if (!img.transectId) continue;
-        (byTransect[img.transectId] ||= []).push(img);
-      }
-
-      // compute survey-wide categories list
-      const allCategoryIds = Array.from(
-        new Set(primaryAnnotations.map((a) => a.categoryId))
-      );
-
-      // compute per-transect metrics
-      type TransMetrics = {
-        stratumId: string;
-        transectId: string;
-        distance: number;
-        widthAvg: number;
-        area_km2: number;
-        animalCounts: Record<string, number>;
-      };
-      const transMetricsList: TransMetrics[] = [];
-      for (const [tid, imgs] of Object.entries(byTransect)) {
-        imgs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-        const deltas = imgs
-          .map((_, i) =>
-            i > 0 ? imgs[i].timestamp! - imgs[i - 1].timestamp! : 0
-          )
-          .slice(1);
-        const valid = deltas.filter((d) => d > 0);
-        const meanDelta = trimmedMean(valid, 0.2);
-        const sections: number[] = [];
-        for (let i = 0; i < imgs.length; i++) {
-          sections[i] =
-            i === 0
-              ? 0
-              : sections[i - 1] + (deltas[i - 1] > 3 * meanDelta ? 1 : 0);
-        }
-        let distance = 0;
-        for (const secId of Array.from(new Set(sections))) {
-          const secImgs = imgs.filter((_, i) => sections[i] === secId);
-          const start = secImgs[0],
-            end = secImgs[secImgs.length - 1];
-          distance += vincentyDistance(
-            start.latitude!,
-            start.longitude!,
-            end.latitude!,
-            end.longitude!
-          );
-        }
-        const stratumId = transectMap.get(tid)!;
-        const widths = imgs.map((i) => {
-          const cam = cameraMap.get(i.cameraId!);
-          return transect_width(
-            i.altitude_agl!,
-            cam.sensorWidthMm!,
-            cam.focalLengthMm!,
-            cam.tiltDegrees!
-          );
-        });
-        const widthAvg = widths.reduce((s, w) => s + w, 0) / widths.length;
-        const area_km2 = (distance * widthAvg) / 1e6;
-        const animalCounts: Record<string, number> = {};
-        for (const categoryId of allCategoryIds) {
-          animalCounts[categoryId] = imgs.reduce(
-            (s, img) => s + (img.categoryCounts[categoryId] || 0),
-            0
-          );
-        }
-        transMetricsList.push({
-          stratumId,
-          transectId: tid,
-          distance,
-          widthAvg,
-          area_km2,
-          animalCounts,
-        });
-      }
-
-      // group per stratum
-      const metricsByStratum: Record<string, TransMetrics[]> = {};
-      for (const m of transMetricsList) {
-        (metricsByStratum[m.stratumId] ||= []).push(m);
-      }
-
-      const results: any[] = [];
-      for (const [sid, metrics] of Object.entries(metricsByStratum)) {
-        const stratum = stratumMap.get(sid)!;
-        const n = metrics.length;
-        const areaSurveyed = metrics.reduce((s, m) => s + m.area_km2, 0);
-        const yArr = metrics.map((m) => m.area_km2);
-        const avgWidthAvg = metrics.reduce((s, m) => s + m.widthAvg, 0) / n;
-        const N = stratum.baselineLength! / avgWidthAvg;
-        for (const categoryId of allCategoryIds) {
-          const xArr = metrics.map((m) => m.animalCounts[categoryId] || 0);
-          const animals = xArr.reduce((s, a) => s + a, 0);
-          const density = animals / areaSurveyed;
-          const covAA = covariance(xArr, xArr);
-          const covAB = covariance(xArr, yArr);
-          const covBB = covariance(yArr, yArr);
-          const popVar =
-            n < 2
-              ? 0
-              : ((N * (N - n)) / n) *
-                (covAA - 2 * density * covAB + density * density * covBB);
-          const popSE = Math.sqrt(popVar);
-          const df = n - 1;
-          const tcrit = jStat.studentt.inv(0.975, df);
-          const popEst = density * stratum.area!;
-          const lower95 = popEst - tcrit * popSE;
-          const upper95 = popEst + tcrit * popSE;
-          const estimate = popEst;
-          // persist via GraphQL mutation including categoryId
-          await client.graphql({
-            query: createJollyResult,
-            variables: {
-              input: {
-                surveyId,
-                stratumId: sid,
-                annotationSetId,
-                categoryId,
-                animals,
-                areaSurveyed,
-                density,
-                variance: popVar,
-                standardError: popSE,
-                numSamples: n,
-                estimate,
-                lowerBound95: lower95,
-                upperBound95: upper95,
-                group: organizationId,
-              },
-            },
-          });
-          results.push({
-            stratumId: sid,
-            categoryId,
-            annotationSetId,
-            animals,
-            areaSurveyed,
-            density,
-            variance: popVar,
-            standardError: popSE,
-            numSamples: n,
-            estimate,
-            lowerBound95: lower95,
-            upperBound95: upper95,
-          });
-        }
-      }
-
-      return {
-        statusCode: 200,
-        body: JSON.stringify({
-          message: 'Survey results generated successfully',
-        }),
-      };
-    } catch (error: any) {
-      console.error('Error details:', error);
-
-      return {
-        statusCode: 500,
-        body: JSON.stringify({
-          message: 'Error generating survey results',
-          error: error.message,
-        }),
-      };
     }
+    return { item: existing, reused: true };
+  }
+
+  const nowMilliseconds = Date.now();
+  const now = new Date(nowMilliseconds).toISOString();
+  const jobId = randomUUID();
+  const item: JobItem = {
+    ...input,
+    jobId,
+    statusKey: `jolly-status/jobs/${jobId}.json`,
+    status: 'PENDING',
+    phase: 'PENDING',
+    heartbeatAt: nowMilliseconds,
+    createdAt: now,
+    updatedAt: now,
+    expiresAt: Math.floor(nowMilliseconds / 1000) + 30 * 24 * 60 * 60,
   };
+  try {
+    await dynamo.send(
+      new PutCommand({
+        TableName: tableName,
+        Item: item,
+        ConditionExpression:
+          'attribute_not_exists(jobKey) OR heartbeatAt < :staleBefore OR NOT (#status IN (:pending, :running, :rollingBack))',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: {
+          ':staleBefore': nowMilliseconds - staleAfterMilliseconds,
+          ':pending': 'PENDING',
+          ':running': 'RUNNING',
+          ':rollingBack': 'ROLLING_BACK',
+        },
+      })
+    );
+    return { item, reused: false };
+  } catch (error) {
+    if (!(error instanceof ConditionalCheckFailedException)) throw error;
+    const winner = await getJob(tableName, input.jobKey);
+    if (!isFreshActiveJob(winner)) throw error;
+    if (!sameCategorySelection(winner.categoryIds, input.categoryIds)) {
+      throw new Error(
+        'A results job is already running for this annotation set with a different label selection'
+      );
+    }
+    return { item: winner, reused: true };
+  }
+}
+
+async function putStatus(
+  bucketName: string,
+  item: JobItem,
+  status: string,
+  error: string | null
+): Promise<void> {
+  const now = new Date().toISOString();
+  const body = {
+    jobId: item.jobId,
+    surveyId: item.surveyId,
+    annotationSetId: item.annotationSetId,
+    status,
+    phase: status,
+    updatedAt: now,
+    error,
+  };
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: bucketName,
+      Key: item.statusKey,
+      Body: JSON.stringify(body),
+      ContentType: 'application/json',
+    })
+  );
+}
+
+async function failLaunch(
+  tableName: string,
+  bucketName: string,
+  item: JobItem,
+  error: unknown
+): Promise<void> {
+  const message =
+    error instanceof Error ? error.message : String(error);
+  const now = new Date().toISOString();
+  await dynamo.send(
+    new UpdateCommand({
+      TableName: tableName,
+      Key: { jobKey: item.jobKey },
+      ConditionExpression: 'jobId = :jobId',
+      UpdateExpression:
+        'SET #status = :failed, phase = :failed, updatedAt = :updatedAt, heartbeatAt = :heartbeatAt, #error = :error',
+      ExpressionAttributeNames: {
+        '#status': 'status',
+        '#error': 'error',
+      },
+      ExpressionAttributeValues: {
+        ':jobId': item.jobId,
+        ':failed': 'FAILED',
+        ':updatedAt': now,
+        ':heartbeatAt': Date.now(),
+        ':error': message,
+      },
+    })
+  );
+  await putStatus(bucketName, item, 'FAILED', message);
+}
+
+export const handler: GenerateSurveyResultsHandler = async (event) => {
+  const surveyId = event.arguments.surveyId;
+  const annotationSetId = event.arguments.annotationSetId;
+  const categoryIds = [
+    ...new Set(event.arguments.categoryIds ?? []),
+  ];
+  if (categoryIds.length === 0) {
+    throw new Error('At least one category is required');
+  }
+
+  const projectResponse = await client.graphql({
+    query: getProjectOrganizationId,
+    variables: { id: surveyId },
+  });
+  const organizationId = (
+    projectResponse as GraphQLResult<{
+      getProject?: { organizationId?: string | null } | null;
+    }>
+  ).data?.getProject?.organizationId;
+  if (!organizationId) {
+    throw new Error('Project does not have an organizationId');
+  }
+  authorizeRequest(event.identity, organizationId);
+
+  const { jobTableName, stateMachineArn } = requireJollyPipeline();
+  const bucketName = requiredEnvironment('OUTPUTS_BUCKET_NAME');
+  const jobKey = `${surveyId}#${annotationSetId}`;
+  const claimed = await claimJob(jobTableName, {
+    jobKey,
+    surveyId,
+    annotationSetId,
+    categoryIds,
+    organizationId,
+  });
+  if (claimed.reused) {
+    return {
+      jobId: claimed.item.jobId,
+      statusKey: claimed.item.statusKey,
+      reused: true,
+    } satisfies LaunchResponse;
+  }
+
+  try {
+    await putStatus(
+      bucketName,
+      claimed.item,
+      'PENDING',
+      null
+    );
+    await stepFunctions.send(
+      new StartExecutionCommand({
+        stateMachineArn,
+        name: `jolly-${claimed.item.jobId}`,
+        input: JSON.stringify({
+          jobId: claimed.item.jobId,
+          jobKey,
+          surveyId,
+          annotationSetId,
+          categoryIds,
+          organizationId,
+          statusKey: claimed.item.statusKey,
+        }),
+      })
+    );
+    return {
+      jobId: claimed.item.jobId,
+      statusKey: claimed.item.statusKey,
+      reused: false,
+    } satisfies LaunchResponse;
+  } catch (error) {
+    await failLaunch(
+      jobTableName,
+      bucketName,
+      claimed.item,
+      error
+    );
+    throw error;
+  }
+};

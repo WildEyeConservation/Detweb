@@ -16,6 +16,7 @@ import { Badge, Button } from 'react-bootstrap';
 import { Share2, SearchCheck, RotateCcw, LogOut } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import MapLibreAnnotator from './annotator/MapLibreAnnotator';
+import { useImageInfoTags } from './useInfoTags';
 import type { CategoryType } from './schemaTypes';
 import type {
   AnnotationLocation,
@@ -43,6 +44,7 @@ interface AnnotationSessionProps {
   categories: CategoryType[];
   hideFnAnnotations?: boolean;
   showMapLegend?: boolean;
+  infoTags?: Map<string, string[]>;
 }
 
 /*
@@ -67,6 +69,7 @@ function AnnotationSession(props: AnnotationSessionProps) {
     categories,
     hideFnAnnotations,
     showMapLegend,
+    infoTags,
     stats,
     zoom,
     viewBoundsScale,
@@ -103,6 +106,7 @@ function AnnotationSession(props: AnnotationSessionProps) {
         categories={categories}
         hideFnAnnotations={hideFnAnnotations}
         showMapLegend={showMapLegend}
+        infoTags={infoTags}
       />
       {waiting && <WaitingOverlay message={waitingMessage} />}
     </div>
@@ -283,6 +287,13 @@ export default function AnnotationWorkspace(props: AnnotationWorkspaceProps) {
     return isFalseNegativesJob ? `${baseSource}-false-negative` : baseSource;
   }, [taskTag, isFalseNegativesJob]);
 
+  // Tags are keyed off the real set: during a test the annotations live in an
+  // ephemeral set, so there is nothing to look up there.
+  const infoTagsByAnnotation = useImageInfoTags(
+    location.image.id,
+    annotationSetId
+  );
+
   const filteredCategories = useMemo(
     () =>
       (legendCategories ?? projectCategories)?.filter(
@@ -400,6 +411,7 @@ export default function AnnotationWorkspace(props: AnnotationWorkspaceProps) {
             categories={filteredCategories}
             hideFnAnnotations={!isFalseNegativesJob}
             showMapLegend={legendCollapsed}
+            infoTags={infoTagsByAnnotation}
           />
         </div>
         <div className='d-flex flex-column align-items-center gap-3'>

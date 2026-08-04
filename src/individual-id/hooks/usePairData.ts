@@ -8,6 +8,7 @@ import type {
   ImageNeighbourType,
   ImageType,
 } from '../../schemaTypes';
+import { attachInfoTagsToAnnotations } from '../../infoTags';
 
 type ImageWithNeighbours = Pick<
   ImageType,
@@ -217,7 +218,10 @@ export function usePairData(input: UsePairDataInput) {
         }
       }
 
-      const annotations = [...pairAnnotations, ...chainExtras];
+      const annotations = await attachInfoTagsToAnnotations(client, [
+        ...pairAnnotations,
+        ...chainExtras,
+      ], annotationSetId!);
       const imagesById: Record<string, ImageType> = {
         [img1.id]: img1 as unknown as ImageType,
         [img2.id]: img2 as unknown as ImageType,

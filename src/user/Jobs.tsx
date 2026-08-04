@@ -348,9 +348,14 @@ export default function Jobs() {
   async function handleTakeJob(job: { queueId: string; projectId: string; tag?: string | null }) {
     setTakingJob(true);
 
-    // QC review and homography jobs navigate directly to their routes (no membership update needed).
     if (job.tag === 'qc-review') {
       navigate(`/surveys/${job.projectId}/qc-review/${job.queueId}`);
+      setTakingJob(false);
+      return;
+    }
+
+    if (job.tag === 'info-tags') {
+      navigate(`/surveys/${job.projectId}/info-tags/${job.queueId}`);
       setTakingJob(false);
       return;
     }
@@ -448,11 +453,11 @@ export default function Jobs() {
                   <div>
                     {compactMode ? (
                       <h6 className='mb-0'>
-                        {queue.tag === 'qc-review' || queue.tag === 'homography' ? queue.name : (queue.tag || project.name)}
+                        {queue.tag === 'qc-review' || queue.tag === 'info-tags' || queue.tag === 'homography' ? queue.name : (queue.tag || project.name)}
                       </h6>
                     ) : (
                       <h5 className='mb-0'>
-                        {queue.tag === 'qc-review' || queue.tag === 'homography' ? queue.name : (queue.tag || project.name)}
+                        {queue.tag === 'qc-review' || queue.tag === 'info-tags' || queue.tag === 'homography' ? queue.name : (queue.tag || project.name)}
                       </h5>
                     )}
                     {!compactMode && (
@@ -467,7 +472,7 @@ export default function Jobs() {
                         marginBottom: '0px',
                       }}
                     >
-                      Type: {queue.tag === 'qc-review' ? 'Review' : queue.tag === 'homography' ? 'Homography' : queue.name}
+                      Type: {queue.tag === 'qc-review' ? 'Review' : queue.tag === 'info-tags' ? 'Info Tags' : queue.tag === 'homography' ? 'Homography' : queue.name}
                     </p>
                   </div>
                   {myOrganizationHook.data?.find(

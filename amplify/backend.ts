@@ -2,7 +2,7 @@ import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { addUserToGroup } from './functions/add-user-to-group/resource';
-import { Stack, Fn } from 'aws-cdk-lib';
+import { ArnFormat, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { outputBucket, inputBucket } from './storage/resource';
 import { generateTile } from './storage/generateTile/resource';
@@ -40,6 +40,7 @@ import { updateOrganizationMemberAdmin } from './functions/updateOrganizationMem
 import { deleteQueue } from './functions/deleteQueue/resource';
 import { updateActiveOrganizations } from './functions/updateActiveOrganizations/resource';
 import { launchQCReview } from './functions/launchQCReview/resource';
+import { launchInfoTags } from './functions/launchInfoTags/resource';
 import { launchHomography } from './functions/launchHomography/resource';
 import { reconcileHomographies } from './functions/reconcileHomographies/resource';
 import { registrationBucketCleanup } from './functions/registrationBucketCleanup/resource';
@@ -55,12 +56,18 @@ import { claimIndividualIdTransect } from './functions/claimIndividualIdTransect
 import { completeIndividualIdTransect } from './functions/completeIndividualIdTransect/resource';
 import { reconcileIndividualId } from './functions/reconcileIndividualId/resource';
 import { releaseIndividualIdTransects } from './functions/releaseIndividualIdTransects/resource';
+import { generateSurveyResults } from './functions/generateSurveyResults/resource';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as path from 'path';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Duration } from 'aws-cdk-lib';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
+import * as sfnTasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 
 const backend = defineBackend({
   auth,
@@ -96,6 +103,7 @@ const backend = defineBackend({
   deleteQueue,
   updateActiveOrganizations,
   launchQCReview,
+  launchInfoTags,
   launchHomography,
   reconcileHomographies,
   registrationBucketCleanup,
@@ -111,6 +119,7 @@ const backend = defineBackend({
   completeIndividualIdTransect,
   reconcileIndividualId,
   releaseIndividualIdTransects,
+  generateSurveyResults,
 });
 
 const userPoolClient = backend.auth.resources.cfnResources.cfnUserPoolClient;
@@ -123,7 +132,6 @@ userPoolClient.tokenValidityUnits = {
 };
 
 const observationTable = backend.data.resources.tables['Observation'];
-const annotationTable = backend.data.resources.tables['Annotation'];
 const policy = new Policy(
   Stack.of(observationTable),
   'MyDynamoDBFunctionStreamingPolicy',
@@ -253,6 +261,8 @@ const groupS3OutputsReadPolicy = new iam.PolicyStatement({
     'arn:aws:s3:::*/false-negative-pools/*',
     'arn:aws:s3:::*/false-negative-history/*',
     'arn:aws:s3:::*/qc-review-manifests/*',
+    'arn:aws:s3:::*/jolly-status/*',
+    'arn:aws:s3:::*/info-tag-manifests/*',
   ],
 });
 
@@ -264,14 +274,6 @@ const groupS3LaunchPayloadsPolicy = new iam.PolicyStatement({
 const groupS3QueueManifestsPolicy = new iam.PolicyStatement({
   actions: ['s3:PutObject'],
   resources: ['arn:aws:s3:::*/queue-manifests/*'],
-});
-
-const groupDynamoDbQueryPolicy = new iam.PolicyStatement({
-  actions: ['dynamodb:Query', 'dynamodb:Scan', 'dynamodb:BatchGetItem'],
-  resources: [
-    'arn:aws:dynamodb:*:*:table/*',
-    'arn:aws:dynamodb:*:*:table/*/index/*',
-  ],
 });
 
 const groupEcsListPolicy = new iam.PolicyStatement({
@@ -287,7 +289,6 @@ Object.values(backend.auth.resources.groups).forEach(({ role }) => {
   role.addToPrincipalPolicy(generalBucketPolicy);
   role.addToPrincipalPolicy(groupS3ListPolicy);
   role.addToPrincipalPolicy(groupS3ObjectsPolicy);
-  role.addToPrincipalPolicy(groupDynamoDbQueryPolicy);
   role.addToPrincipalPolicy(sqsAnnotatorStatement);
   role.addToPrincipalPolicy(groupS3OutputsReadPolicy);
   role.addToPrincipalPolicy(groupS3LaunchPayloadsPolicy);
@@ -329,6 +330,8 @@ const enableOwlDDetector =
   (process.env.AMPLIFY_ENABLE_ECS_OWL_D ?? 'true').toLowerCase() === 'true';
 const enableElephantDetector =
   (process.env.AMPLIFY_ENABLE_ECS_ELEPHANT ?? 'true').toLowerCase() === 'true';
+const enableJollyFargate =
+  (process.env.AMPLIFY_ENABLE_JOLLY_FARGATE ?? 'true').toLowerCase() === 'true';
 
 const envName =
   process.env.AMPLIFY_ENV ?? process.env.AWS_BRANCH ?? 'production';
@@ -547,8 +550,6 @@ if (enableEcs) {
         visibilityTimeout: Duration.minutes(
           Number(process.env.OWL_D_VISIBILITY_MINUTES ?? '60')
         ),
-        spotPrice: process.env.OWL_D_SPOT_PRICE ?? '2.00',
-        capacityRebalance: true,
       }
     );
 
@@ -587,6 +588,425 @@ if (enableEcs) {
       iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppSyncInvokeFullAccess')
     );
     elephantDetectorQueueUrl = elephantDetectorAutoProcessor.queue.queueUrl;
+  }
+
+  if (enableJollyFargate) {
+    // Gateway endpoints are free and keep the bulk DynamoDB/S3 traffic off the
+    // NAT. ECR image pulls and CloudWatch Logs still egress via NAT: interface
+    // endpoints for those would cost more per month than the handful of task
+    // runs this pipeline does. If NATs are ever removed from this VPC, this
+    // task stops being able to start and those endpoints become mandatory.
+    ecsvpc.addGatewayEndpoint('JollyDynamoDbGatewayEndpoint', {
+      service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
+    });
+    ecsvpc.addGatewayEndpoint('JollyS3GatewayEndpoint', {
+      service: ec2.GatewayVpcEndpointAwsService.S3,
+    });
+
+    const jollyStack = backend.createStack('DetwebJollyResults');
+    const resourceEnvName = envName
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 32) || 'default';
+    const jobTableName = `detweb-jolly-jobs-${resourceEnvName}`;
+    const stateMachineName = `detweb-jolly-results-${resourceEnvName}`;
+    const outputBucketResource =
+      backend.outputBucket.resources.bucket;
+    const jollyTables = {
+      Project: backend.data.resources.tables['Project'],
+      Camera: backend.data.resources.tables['Camera'],
+      Stratum: backend.data.resources.tables['Stratum'],
+      Transect: backend.data.resources.tables['Transect'],
+      Image: backend.data.resources.tables['Image'],
+      Annotation: backend.data.resources.tables['Annotation'],
+      JollyResult: backend.data.resources.tables['JollyResult'],
+    };
+
+    // The table name is pinned rather than CDK-generated so the launcher (which
+    // lives in the data stack) can derive the ARN with formatArn instead of
+    // importing it, which would make the data and Jolly stacks mutually
+    // dependent. Trade-off: with RETAIN, tearing this stack down and
+    // redeploying into the same environment fails on a name conflict until the
+    // retained table is deleted by hand.
+    const jobTable = new dynamodb.Table(jollyStack, 'JollyJobControl', {
+      tableName: jobTableName,
+      partitionKey: {
+        name: 'jobKey',
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: true,
+      timeToLiveAttribute: 'expiresAt',
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+
+    const cluster = new ecs.Cluster(jollyStack, 'JollyCluster', {
+      vpc: ecsvpc,
+      containerInsights: true,
+    });
+    const taskRole = new iam.Role(jollyStack, 'JollyTaskRole', {
+      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+    });
+    const executionRole = new iam.Role(
+      jollyStack,
+      'JollyExecutionRole',
+      {
+        assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AmazonECSTaskExecutionRolePolicy'
+          ),
+        ],
+      }
+    );
+    const taskDefinition = new ecs.FargateTaskDefinition(
+      jollyStack,
+      'JollyTaskDefinition',
+      {
+        cpu: 1024,
+        memoryLimitMiB: 4096,
+        taskRole,
+        executionRole,
+        runtimePlatform: {
+          operatingSystemFamily:
+            ecs.OperatingSystemFamily.LINUX,
+          cpuArchitecture: ecs.CpuArchitecture.X86_64,
+        },
+      }
+    );
+    const workerLogGroup = new logs.LogGroup(
+      jollyStack,
+      'JollyWorkerLogs',
+      {
+        retention: logs.RetentionDays.ONE_MONTH,
+        removalPolicy: RemovalPolicy.RETAIN,
+      }
+    );
+    const workerContainer = taskDefinition.addContainer(
+      'JollyWorker',
+      {
+        image: ecs.ContainerImage.fromAsset(
+          'containerImages/jollyResults'
+        ),
+        essential: true,
+        readonlyRootFilesystem: true,
+        stopTimeout: Duration.seconds(60),
+        logging: ecs.LogDrivers.awsLogs({
+          streamPrefix: 'jolly-results',
+          logGroup: workerLogGroup,
+          mode: ecs.AwsLogDriverMode.BLOCKING,
+        }),
+        environment: {
+          OUTPUTS_BUCKET_NAME: outputBucketResource.bucketName,
+          JOLLY_JOB_TABLE_NAME: jobTable.tableName,
+          PROJECT_TABLE_NAME: jollyTables.Project.tableName,
+          CAMERA_TABLE_NAME: jollyTables.Camera.tableName,
+          STRATUM_TABLE_NAME: jollyTables.Stratum.tableName,
+          TRANSECT_TABLE_NAME: jollyTables.Transect.tableName,
+          IMAGE_TABLE_NAME: jollyTables.Image.tableName,
+          ANNOTATION_TABLE_NAME: jollyTables.Annotation.tableName,
+          JOLLY_RESULT_TABLE_NAME:
+            jollyTables.JollyResult.tableName,
+        },
+      }
+    );
+    const taskSecurityGroup = new ec2.SecurityGroup(
+      jollyStack,
+      'JollyTaskSecurityGroup',
+      {
+        vpc: ecsvpc,
+        description:
+          'Outbound-only security group for Jolly Results Fargate tasks',
+        allowAllOutbound: true,
+      }
+    );
+
+    taskRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: ['dynamodb:Query', 'dynamodb:DescribeTable'],
+        resources: Object.values(jollyTables).flatMap((table) => [
+          table.tableArn,
+          `${table.tableArn}/index/*`,
+        ]),
+      })
+    );
+    taskRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: ['dynamodb:GetItem'],
+        resources: [jollyTables.Project.tableArn],
+      })
+    );
+    taskRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'dynamodb:BatchWriteItem',
+          'dynamodb:PutItem',
+          'dynamodb:DeleteItem',
+        ],
+        resources: [jollyTables.JollyResult.tableArn],
+      })
+    );
+    taskRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: ['dynamodb:GetItem', 'dynamodb:UpdateItem'],
+        resources: [jobTable.tableArn],
+      })
+    );
+    taskRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        // TransactWriteItems authorizes each component operation separately.
+        // The ownership guard in commitResults uses a ConditionCheck.
+        actions: ['dynamodb:ConditionCheckItem'],
+        resources: [jobTable.tableArn],
+      })
+    );
+    outputBucketResource.grantReadWrite(
+      taskRole,
+      'jolly-status/*'
+    );
+    outputBucketResource.grantReadWrite(
+      taskRole,
+      'jolly-commits/*'
+    );
+
+    const finalizer = new NodejsFunction(
+      jollyStack,
+      'FinalizeJollyResults',
+      {
+        entry: path.join(
+          __dirname,
+          'functions/finalizeJollyResults/handler.ts'
+        ),
+        handler: 'handler',
+        runtime: lambda.Runtime.NODEJS_20_X,
+        timeout: Duration.minutes(5),
+        memorySize: 1024,
+        environment: {
+          OUTPUTS_BUCKET_NAME: outputBucketResource.bucketName,
+          JOLLY_JOB_TABLE_NAME: jobTable.tableName,
+          JOLLY_RESULT_TABLE_NAME:
+            jollyTables.JollyResult.tableName,
+        },
+      }
+    );
+    finalizer.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['dynamodb:GetItem', 'dynamodb:UpdateItem'],
+        resources: [jobTable.tableArn],
+      })
+    );
+    finalizer.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['dynamodb:Query', 'dynamodb:BatchWriteItem'],
+        resources: [jollyTables.JollyResult.tableArn],
+      })
+    );
+    outputBucketResource.grantRead(
+      finalizer,
+      'jolly-commits/*'
+    );
+    outputBucketResource.grantReadWrite(
+      finalizer,
+      'jolly-status/*'
+    );
+
+    const runTask = new sfnTasks.EcsRunTask(
+      jollyStack,
+      'RunJollyWorker',
+      {
+        integrationPattern: sfn.IntegrationPattern.RUN_JOB,
+        cluster,
+        taskDefinition,
+        launchTarget: new sfnTasks.EcsFargateLaunchTarget({
+          platformVersion: ecs.FargatePlatformVersion.LATEST,
+        }),
+        assignPublicIp: false,
+        subnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        securityGroups: [taskSecurityGroup],
+        containerOverrides: [
+          {
+            containerDefinition: workerContainer,
+            environment: [
+              {
+                name: 'JOLLY_JOB_INPUT',
+                value: sfn.JsonPath.jsonToString(
+                  sfn.JsonPath.objectAt('$')
+                ),
+              },
+            ],
+          },
+        ],
+        taskTimeout: sfn.Timeout.duration(Duration.hours(2)),
+        resultPath: '$.ecsResult',
+      }
+    );
+
+    const finalizeSuccess = new sfnTasks.LambdaInvoke(
+      jollyStack,
+      'ValidateJollyCompletion',
+      {
+        lambdaFunction: finalizer,
+        payload: sfn.TaskInput.fromObject({
+          jobId: sfn.JsonPath.stringAt('$.jobId'),
+          jobKey: sfn.JsonPath.stringAt('$.jobKey'),
+          outcome: 'SUCCEEDED',
+        }),
+        payloadResponseOnly: true,
+        resultPath: '$.finalizeResult',
+        taskTimeout: sfn.Timeout.duration(Duration.minutes(5)),
+      }
+    );
+    finalizeSuccess.addRetry({
+      errors: [
+        'Lambda.ServiceException',
+        'Lambda.SdkClientException',
+      ],
+      interval: Duration.seconds(2),
+      maxAttempts: 3,
+      backoffRate: 2,
+    });
+    const finalizeFailure = new sfnTasks.LambdaInvoke(
+      jollyStack,
+      'FinalizeJollyFailure',
+      {
+        lambdaFunction: finalizer,
+        payload: sfn.TaskInput.fromObject({
+          jobId: sfn.JsonPath.stringAt('$.jobId'),
+          jobKey: sfn.JsonPath.stringAt('$.jobKey'),
+          outcome: 'FAILED',
+          workflowError: sfn.JsonPath.objectAt('$.workflowError'),
+        }),
+        payloadResponseOnly: true,
+        resultPath: '$.finalizeResult',
+        taskTimeout: sfn.Timeout.duration(Duration.minutes(5)),
+      }
+    );
+    finalizeFailure.addRetry({
+      errors: [
+        'Lambda.ServiceException',
+        'Lambda.SdkClientException',
+      ],
+      interval: Duration.seconds(2),
+      maxAttempts: 3,
+      backoffRate: 2,
+    });
+
+    const completed = new sfn.Succeed(
+      jollyStack,
+      'JollyWorkflowCompleted'
+    );
+    const failed = new sfn.Fail(
+      jollyStack,
+      'JollyWorkflowFailed',
+      {
+        error: 'JollyResultsJobFailed',
+        cause: 'The Jolly Results worker or rollback failed',
+      }
+    );
+    const completionChoice = new sfn.Choice(
+      jollyStack,
+      'JollyCompletionValid'
+    )
+      .when(
+        sfn.Condition.booleanEquals(
+          '$.finalizeResult.ok',
+          true
+        ),
+        completed
+      )
+      .otherwise(failed);
+
+    runTask.addCatch(finalizeFailure.next(failed), {
+      errors: ['States.ALL'],
+      resultPath: '$.workflowError',
+    });
+    const workflowDefinition = runTask
+      .next(finalizeSuccess)
+      .next(completionChoice);
+    const workflowLogGroup = new logs.LogGroup(
+      jollyStack,
+      'JollyWorkflowLogs',
+      {
+        retention: logs.RetentionDays.ONE_MONTH,
+        removalPolicy: RemovalPolicy.RETAIN,
+      }
+    );
+    const stateMachine = new sfn.StateMachine(
+      jollyStack,
+      'JollyStateMachine',
+      {
+        stateMachineName,
+        stateMachineType: sfn.StateMachineType.STANDARD,
+        definitionBody:
+          sfn.DefinitionBody.fromChainable(workflowDefinition),
+        timeout: Duration.hours(3),
+        tracingEnabled: true,
+        logs: {
+          destination: workflowLogGroup,
+          level: sfn.LogLevel.ALL,
+          includeExecutionData: true,
+        },
+      }
+    );
+
+    new cloudwatch.Alarm(jollyStack, 'JollyWorkflowFailureAlarm', {
+      metric: stateMachine.metricFailed({
+        period: Duration.minutes(5),
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    new cloudwatch.Alarm(jollyStack, 'JollyWorkflowTimeoutAlarm', {
+      metric: stateMachine.metricTimedOut({
+        period: Duration.minutes(5),
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    const launcher = backend.generateSurveyResults.resources.lambda;
+    const launcherStack = Stack.of(launcher);
+    const launcherJobTableArn = launcherStack.formatArn({
+      service: 'dynamodb',
+      resource: 'table',
+      resourceName: jobTableName,
+    });
+    const launcherStateMachineArn = launcherStack.formatArn({
+      service: 'states',
+      resource: 'stateMachine',
+      resourceName: stateMachineName,
+      arnFormat: ArnFormat.COLON_RESOURCE_NAME,
+    });
+    backend.generateSurveyResults.addEnvironment(
+      'JOLLY_JOB_TABLE_NAME',
+      jobTableName
+    );
+    backend.generateSurveyResults.addEnvironment(
+      'JOLLY_STATE_MACHINE_ARN',
+      launcherStateMachineArn
+    );
+    launcher.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'dynamodb:GetItem',
+          'dynamodb:PutItem',
+          'dynamodb:UpdateItem',
+        ],
+        resources: [launcherJobTableArn],
+      })
+    );
+    launcher.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['states:StartExecution'],
+        resources: [launcherStateMachineArn],
+      })
+    );
   }
 }
 
@@ -683,6 +1103,7 @@ backend.cleanupJobs.resources.lambda.addToRolePolicy(
       'arn:aws:s3:::*/queue-manifests/*',
       'arn:aws:s3:::*/false-negative-manifests/*',
       'arn:aws:s3:::*/qc-review-manifests/*',
+      'arn:aws:s3:::*/info-tag-manifests/*',
     ],
   })
 );
@@ -767,6 +1188,26 @@ backend.launchQCReview.resources.lambda.addToRolePolicy(
     resources: [
       'arn:aws:s3:::*/queue-manifests/*',
       'arn:aws:s3:::*/qc-review-manifests/*',
+    ],
+  })
+);
+backend.launchInfoTags.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: [
+      'sqs:CreateQueue',
+      'sqs:SendMessage',
+      'sqs:GetQueueAttributes',
+      'sqs:GetQueueUrl',
+    ],
+    resources: ['*'],
+  })
+);
+backend.launchInfoTags.resources.lambda.addToRolePolicy(
+  new iam.PolicyStatement({
+    actions: ['s3:PutObject'],
+    resources: [
+      'arn:aws:s3:::*/queue-manifests/*',
+      'arn:aws:s3:::*/info-tag-manifests/*',
     ],
   })
 );
@@ -957,6 +1398,7 @@ const launchLambdasUsingPretile = [
   backend.launchAnnotationSet,
   backend.launchFalseNegatives,
   backend.launchQCReview,
+  backend.launchInfoTags,
   backend.launchHomography,
   backend.launchIndividualId,
 ];

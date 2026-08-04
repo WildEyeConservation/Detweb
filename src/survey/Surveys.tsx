@@ -26,6 +26,7 @@ import localforage from 'localforage';
 import ProjectProgress from '../user/ProjectProgress.tsx';
 import IndividualIdProgress from '../individual-id/IndividualIdProgress.tsx';
 import { logAdminAction } from '../utils/adminActionLogger.ts';
+import { deleteInfoTagDataForSet } from '../infoTags.ts';
 
 const PROJECT_SELECTION_SET = [
   'id',
@@ -332,6 +333,19 @@ export default function Surveys() {
     );
     const annotationSetName = annotationSet?.name || 'Unknown';
     const projectName = project?.name || 'Unknown';
+
+    // Info tags and their annotation links hang off the set and are not
+    // cascaded by the delete, so clear them before the set itself goes. If they
+    // cannot be cleared, keep the set rather than orphaning them.
+    try {
+      await deleteInfoTagDataForSet(client, annotationSetId);
+    } catch (error) {
+      console.error('Failed to delete info tags for annotation set', error);
+      alert(
+        `Could not delete "${annotationSetName}": its informational tags could not be removed. Please try again.`
+      );
+      return;
+    }
 
     await client.models.AnnotationSet.delete({ id: annotationSetId });
 

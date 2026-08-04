@@ -599,7 +599,7 @@ async function sendLaunchQCReviewRequest(
   }
 }
 
-function shouldIgnoreLaunchError(error: any): boolean {
+export function shouldIgnoreLaunchError(error: any): boolean {
   const messages: string[] = [];
   if (error?.message) messages.push(String(error.message));
   if (Array.isArray(error?.errors)) {

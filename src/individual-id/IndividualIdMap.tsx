@@ -67,6 +67,7 @@ export interface MapMarker {
    * marker, or for a shadow marker's real partner when available.
    */
   chainViewerHref?: string;
+  infoTags?: string[];
 }
 
 export type MapInstanceCallback = (
@@ -669,11 +670,18 @@ export function IndividualIdMap({
       interactive && !isShadow && commentRef.current
         ? `<button data-action="comment" style="${btnStyle}background:#5B6977;">Comment</button>`
         : '';
+    const infoTagsHtml =
+      data.infoTags !== undefined
+        ? `<div style="font-size:10px;opacity:0.85;margin-top:3px">Tags: ${escape(
+            data.infoTags.length > 0 ? data.infoTags.join(', ') : '—'
+          )}</div>`
+        : '';
     el.innerHTML = `
       <div style="font-weight:600">${escape(nameFor(data.identityKey))}</div>
       <div style="font-size:10px;opacity:0.7;text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">
         ${kindLabel}
       </div>
+      ${infoTagsHtml}
       ${
         data.conflictHighlight
           ? `<div style="font-size:10px;color:#7e22ce;margin-top:3px;font-weight:700">Blocked merge conflict</div>`
