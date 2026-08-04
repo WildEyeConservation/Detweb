@@ -23,28 +23,45 @@ export function formatInfoTagsForCsv(names: string[]): string {
     .join(INFO_TAG_CSV_DELIMITER);
 }
 
+// The tags defined on a set - small, and cheap enough to load on its own when
+// only the names are needed (a filter's options, a popup's lookup table).
+export async function fetchInfoTagNamesForSet(
+  client: DataClient,
+  annotationSetId: string
+): Promise<Map<string, string>> {
+  const tags = await fetchAllPaginatedResults(
+    client.models.InfoTag.infoTagsByAnnotationSetId,
+    {
+      annotationSetId,
+      selectionSet: ['id', 'name'] as const,
+      limit: 1000,
+    }
+  );
+  return new Map(tags.map((tag) => [tag.id, tag.name]));
+}
+
 // Query by annotation set to avoid scanning the link table per annotation.
 export async function fetchInfoTagDataForSet(
   client: DataClient,
   annotationSetId: string,
   onProgress?: (count: number) => void
 ): Promise<InfoTagSetData> {
-  const [links, tags] = await Promise.all([
-    fetchAllPaginatedResults(
-      client.models.AnnotationInfoTag.annotationInfoTagsByAnnotationSetId,
-      {
-        annotationSetId,
-        selectionSet: ['annotationId', 'infoTagId'] as const,
-        limit: 10000,
-      },
-      onProgress
-    ),
-    fetchAllPaginatedResults(client.models.InfoTag.infoTagsByAnnotationSetId, {
+  // A set with no tags defined cannot have any links, so the scan of the link
+  // index - by far the expensive half - is skipped for untagged sets.
+  const nameById = await fetchInfoTagNamesForSet(client, annotationSetId);
+  if (nameById.size === 0) {
+    return { tagIdsByAnnotation: new Map(), nameById };
+  }
+
+  const links = await fetchAllPaginatedResults(
+    client.models.AnnotationInfoTag.annotationInfoTagsByAnnotationSetId,
+    {
       annotationSetId,
-      selectionSet: ['id', 'name'] as const,
-      limit: 1000,
-    }),
-  ]);
+      selectionSet: ['annotationId', 'infoTagId'] as const,
+      limit: 10000,
+    },
+    onProgress
+  );
 
   const tagIdsByAnnotation = new Map<string, string[]>();
   for (const link of links) {
@@ -53,10 +70,7 @@ export async function fetchInfoTagDataForSet(
     else tagIdsByAnnotation.set(link.annotationId, [link.infoTagId]);
   }
 
-  return {
-    tagIdsByAnnotation,
-    nameById: new Map(tags.map((tag) => [tag.id, tag.name])),
-  };
+  return { tagIdsByAnnotation, nameById };
 }
 
 export function infoTagNamesFor(
@@ -229,6 +243,31 @@ export async function fetchImageAnnotationsWithTags(
   } while (nextToken);
 
   return rows;
+}
+
+// Tag names per annotation for a single image. Reading the image's annotations
+// (which carry their links) costs one query, where the set-wide link index
+// would be scanned in full for every image opened in a viewer.
+export async function fetchInfoTagNamesForImage(
+  client: DataClient,
+  imageId: string,
+  annotationSetId: string,
+  nameById: Map<string, string>
+): Promise<Map<string, string[]>> {
+  const rows = await fetchImageAnnotationsWithTags(
+    client,
+    imageId,
+    annotationSetId
+  );
+  const result = new Map<string, string[]>();
+  for (const row of rows) {
+    const names = row.tagIds
+      .map((tagId) => nameById.get(tagId))
+      .filter((name): name is string => Boolean(name))
+      .sort((a, b) => a.localeCompare(b));
+    if (names.length) result.set(row.id, names);
+  }
+  return result;
 }
 
 export type InfoTagCommit = {

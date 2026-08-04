@@ -203,6 +203,7 @@ export default function AnnotationImage(props: any) {
         key='showMarkers'
         annotationSetId={testSetId}
         realAnnotationSetId={annotationSetId}
+        imageId={location.image.id}
         categoriesOverride={legendCategories ?? undefined}
         hideFnAnnotations={!isFalseNegativesJob}
         locationBounds={

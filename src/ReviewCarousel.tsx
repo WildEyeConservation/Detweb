@@ -4,6 +4,7 @@ import AnnotationImage from './AnnotationImage';
 import { PreloaderFactory } from './Preloader';
 import BufferSource from './BufferSource';
 import { Spinner } from 'react-bootstrap';
+import { useInfoTagData } from './useInfoTags';
 
 type LabeledValue = { label: string; value: string };
 
@@ -11,6 +12,8 @@ interface ReviewCarouselProps {
   selectedAnnotationSet: string;
   selectedCategories: LabeledValue[];
   selectedUsers?: LabeledValue[];
+  /** Keep only items carrying at least one of these informational tags. */
+  infoTagNames?: string[];
   imageBased?: boolean;
 }
 
@@ -26,12 +29,15 @@ interface LocationLike {
   };
   taskTag?: string;
   id: string;
+  /** Annotations backing this item, used to apply the info tag filter. */
+  annotationIds: string[];
 }
 
 export default function ReviewCarousel({
   selectedAnnotationSet,
   selectedCategories,
   selectedUsers = [],
+  infoTagNames = [],
   imageBased = true,
 }: ReviewCarouselProps) {
   const { client } = useContext(GlobalContext)!;
@@ -45,6 +51,10 @@ export default function ReviewCarousel({
 
   const [index, setIndex] = useState(0);
   const [bufferSource, setBufferSource] = useState<BufferSource | null>(null);
+
+  const { namesFor } = useInfoTagData(
+    selectedAnnotationSet ? [selectedAnnotationSet] : []
+  );
 
   // When none selected, assume all categories from the selected set
   const effectiveCategories = useMemo<LabeledValue[]>(() => {
@@ -89,6 +99,7 @@ export default function ReviewCarousel({
                 { categoryId },
                 {
                   selectionSet: [
+                    'id',
                     'x',
                     'y',
                     'owner',
@@ -103,6 +114,7 @@ export default function ReviewCarousel({
               );
             const { data, nextToken } = result as {
               data: Array<{
+                id: string;
                 x: number;
                 y: number;
                 owner?: string | null;
@@ -128,7 +140,7 @@ export default function ReviewCarousel({
 
             setAnnotations((prev) => [
               ...prev,
-              ...filteredData.map(({ x, y, image }) => ({
+              ...filteredData.map(({ id, x, y, image }) => ({
                 location: {
                   x,
                   y,
@@ -143,6 +155,7 @@ export default function ReviewCarousel({
                   annotationSetId: selectedAnnotationSet,
                 },
                 id: crypto.randomUUID(),
+                annotationIds: [id],
               })),
             ]);
             setLocationsLoaded((prev) => prev + filteredData.length);
@@ -161,8 +174,9 @@ export default function ReviewCarousel({
 
       setLocationsLoaded(0);
       try {
-        const imagesFound = new Set<string>();
-        const locations: LocationLike[] = [];
+        // Keyed by image id: one carousel item per image, carrying every
+        // annotation on it so the info tag filter can be applied afterwards.
+        const byImage = new Map<string, LocationLike>();
         for (const { value: categoryId } of effectiveCategories) {
           let nextNextToken: string | null | undefined = undefined;
           do {
@@ -171,6 +185,7 @@ export default function ReviewCarousel({
                 { categoryId },
                 {
                   selectionSet: [
+                    'id',
                     'owner',
                     'image.id',
                     'image.width',
@@ -183,6 +198,7 @@ export default function ReviewCarousel({
               );
             const { data, nextToken } = result as {
               data: Array<{
+                id: string;
                 owner?: string | null;
                 image: {
                   id: string;
@@ -203,34 +219,37 @@ export default function ReviewCarousel({
                   })
                 : data;
 
-            for (const { image } of filteredData) {
-              if (!imagesFound.has(image.id)) {
-                imagesFound.add(image.id);
-                locations.push({
-                  location: {
-                    x: image.width / 2,
-                    y: image.height / 2,
+            for (const { id, image } of filteredData) {
+              const existing = byImage.get(image.id);
+              if (existing) {
+                existing.annotationIds.push(id);
+                continue;
+              }
+              byImage.set(image.id, {
+                location: {
+                  x: image.width / 2,
+                  y: image.height / 2,
+                  width: image.width,
+                  height: image.height,
+                  image: {
+                    id: image.id,
                     width: image.width,
                     height: image.height,
-                    image: {
-                      id: image.id,
-                      width: image.width,
-                      height: image.height,
-                      timestamp: image.timestamp,
-                    },
-                    annotationSetId: selectedAnnotationSet,
+                    timestamp: image.timestamp,
                   },
-                  taskTag: 'review',
-                  id: crypto.randomUUID(),
-                });
-                setLocationsLoaded((prev) => prev + 1);
-              }
+                  annotationSetId: selectedAnnotationSet,
+                },
+                taskTag: 'review',
+                id: crypto.randomUUID(),
+                annotationIds: [id],
+              });
+              setLocationsLoaded((prev) => prev + 1);
             }
             nextNextToken = nextToken ?? null;
           } while (nextNextToken);
         }
         if (cancelled) return;
-        locations.sort(
+        const locations = Array.from(byImage.values()).sort(
           (a, b) => a.location.image.timestamp - b.location.image.timestamp
         );
         setAnnotations(locations);
@@ -258,11 +277,29 @@ export default function ReviewCarousel({
     };
   }, [client, selectedAnnotationSet, effectiveCategories, selectedUserIds, imageBased]);
 
+  // Applied after fetching (rather than as part of it) so toggling a tag
+  // re-slices what is already loaded instead of re-running the queries.
+  const infoTagKey = infoTagNames.join(',');
+  const filteredAnnotations = useMemo(() => {
+    if (!infoTagNames.length) return annotations;
+    const wanted = new Set(infoTagNames);
+    return annotations.filter((item) =>
+      item.annotationIds.some((annotationId) =>
+        namesFor(selectedAnnotationSet, annotationId).some((name) =>
+          wanted.has(name)
+        )
+      )
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [annotations, infoTagKey, namesFor, selectedAnnotationSet]);
+
+  useEffect(() => setIndex(0), [infoTagKey]);
+
   useEffect(() => {
-    if (annotations.length) {
-      setBufferSource(new BufferSource(annotations));
+    if (filteredAnnotations.length) {
+      setBufferSource(new BufferSource(filteredAnnotations));
     }
-  }, [annotations]);
+  }, [filteredAnnotations]);
 
   const Preloader = useMemo(() => PreloaderFactory(AnnotationImage), []);
 
@@ -290,12 +327,15 @@ export default function ReviewCarousel({
           </div>
         </div>
       ) : (
-        bufferSource && (
+        bufferSource &&
+        (filteredAnnotations.length ? (
           <div className='d-flex flex-column align-items-center h-100 w-100 mt-3'>
             <Preloader
               key={
                 selectedAnnotationSet +
-                effectiveCategories.map((cat) => cat.value).join(',')
+                effectiveCategories.map((cat) => cat.value).join(',') +
+                '|' +
+                infoTagKey
               }
               index={index}
               setIndex={setIndex}
@@ -312,15 +352,19 @@ export default function ReviewCarousel({
                 value={index}
                 onChange={(e) => setIndex(parseInt(e.target.value))}
                 min={0}
-                max={Math.max(annotations.length - 1, 0)}
+                max={Math.max(filteredAnnotations.length - 1, 0)}
                 className='form-range'
               />
               <div style={{ textAlign: 'center' }}>
-                Done with {index} out of {annotations.length} locations
+                Done with {index} out of {filteredAnnotations.length} locations
               </div>
             </div>
           </div>
-        )
+        ) : (
+          <div className='d-flex flex-column align-items-center justify-content-center h-100 w-100'>
+            No images match the selected info tags.
+          </div>
+        ))
       )}
     </>
   );

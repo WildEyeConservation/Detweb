@@ -21,6 +21,7 @@ import ReviewCarousel from './ReviewCarousel';
 import DensityMap, { type DensitySource } from './DensityMap';
 import { useUsers } from './apiInterface';
 import { fetchAllPaginatedResults } from './utils';
+import { useInfoTagData } from './useInfoTags';
 
 type Option = { label: string; value: string };
 
@@ -48,6 +49,7 @@ const menuPortalStyles = {
 
 export function Review({ showAnnotationSetDropdown = true }) {
   const [selectedCategories, setSelectedCategories] = useState<Option[]>([]);
+  const [selectedInfoTags, setSelectedInfoTags] = useState<Option[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<Option[]>([]);
   const [tab, setTab] = useState<'carousel' | 'map'>('map');
   const [selectedAnnotationSet, setSelectedAnnotationSet] =
@@ -281,6 +283,32 @@ export function Review({ showAnnotationSetDropdown = true }) {
     [selectedCategories]
   );
 
+  // Informational tags defined on the primary set. Tags are filtered by name so
+  // the selection also applies to any other sets overlaid on the map.
+  const { tagNames: infoTagOptionNames } = useInfoTagData(
+    selectedAnnotationSet ? [selectedAnnotationSet] : []
+  );
+  const infoTagOptions = useMemo<Option[]>(
+    () => infoTagOptionNames.map((name) => ({ label: name, value: name })),
+    [infoTagOptionNames]
+  );
+  const infoTagNames = useMemo(
+    () => selectedInfoTags.map((t) => t.value),
+    [selectedInfoTags]
+  );
+
+  // Drop selections the newly-chosen set does not define (but not while its
+  // tags are still loading, which would clear the filter on every set change).
+  useEffect(() => {
+    if (!infoTagOptionNames.length) return;
+    setSelectedInfoTags((prev) => {
+      if (!prev.length) return prev;
+      const valid = new Set(infoTagOptionNames);
+      const next = prev.filter((tag) => valid.has(tag.value));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [infoTagOptionNames]);
+
   // The map reports the transects it found (with the numbering it renders); we
   // turn those into filter options and prune selections that no longer exist.
   const handleTransectsLoaded = useCallback(
@@ -426,6 +454,31 @@ export function Review({ showAnnotationSetDropdown = true }) {
                     />
                   )}
                 </div>
+
+                {/* Only surveys that have been informationally tagged get the
+                    filter - everyone else would see an empty control. */}
+                {infoTagOptions.length > 0 && (
+                  <div className='w-100'>
+                    <Form.Label>Info Tags</Form.Label>
+                    <Select
+                      value={selectedInfoTags}
+                      onChange={(newValue: MultiValue<Option>) =>
+                        setSelectedInfoTags([...(newValue as Option[])])
+                      }
+                      isMulti
+                      name='Info tags to review'
+                      options={infoTagOptions}
+                      className='text-black w-100'
+                      closeMenuOnSelect={false}
+                      placeholder='Any tags'
+                      menuPortalTarget={document.body}
+                      styles={menuPortalStyles}
+                    />
+                    <Form.Text muted>
+                      Keeps sightings carrying any of the selected tags.
+                    </Form.Text>
+                  </div>
+                )}
 
                 <div className='w-100'>
                   <Form.Label>Users</Form.Label>
@@ -604,6 +657,7 @@ export function Review({ showAnnotationSetDropdown = true }) {
                     sources={mapSources}
                     primaryAnnotationSetId={selectedAnnotationSet}
                     categoryNames={categoryNames}
+                    infoTagNames={infoTagNames}
                     selectedUserIds={selectedUsers.map((u) => u.value)}
                     transectIds={selectedTransectIds}
                     onTransectsLoaded={handleTransectsLoaded}
@@ -617,6 +671,7 @@ export function Review({ showAnnotationSetDropdown = true }) {
                   selectedAnnotationSet={selectedAnnotationSet}
                   selectedCategories={selectedCategories}
                   selectedUsers={selectedUsers}
+                  infoTagNames={infoTagNames}
                   imageBased={imageBased}
                 />
               </Tab>
