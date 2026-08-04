@@ -9,11 +9,15 @@ import type {
   ExtendedAnnotationType,
 } from './schemaTypes';
 import DetwebMarker from './DetwebMarker';
+import { useImageInfoTags } from './useInfoTags';
 
 interface ShowMarkersProps {
   activeAnnotation?: AnnotationType;
   annotationSetId: string; // ID used to filter which annotations to show
   realAnnotationSetId?: string; // optional real ID used to filter categories
+  // Image whose informational tags are shown in the marker tooltips. Omitted
+  // by callers that do not have a single backing image (eg. paired views).
+  imageId?: string;
   onShadowDrag?: (id: string, x: number, y: number) => void; // callback to reposition shadow annotations
   // Optional categories list to use instead of the current project's categories
   categoriesOverride?: CategoryType[];
@@ -45,6 +49,10 @@ export function ShowMarkers(props: ShowMarkersProps) {
     update: updateAnnotation,
   } = annotationsHook;
   const activeAnnotation = props.activeAnnotation;
+  const infoTagsByAnnotation = useImageInfoTags(
+    props.imageId,
+    props.realAnnotationSetId ?? props.annotationSetId
+  );
 
   useHotkeys(
     'Tab',
@@ -89,6 +97,7 @@ export function ShowMarkers(props: ShowMarkersProps) {
               hideIdenticon={(annotation as any).objectId !== annotation.id}
               onClick={props.onSelectAnnotation}
               locationBounds={props.locationBounds}
+              infoTags={infoTagsByAnnotation.get(annotation.id)}
             />
           ))}
         {/* {Array.from({ length: 500 }, (_, i) => (

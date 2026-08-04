@@ -18,7 +18,12 @@ import {
   Undo2,
 } from 'lucide-react';
 import { GlobalContext, UserContext } from './Context';
-import { applyActiveMarkerStyle } from './activeMarkerStyle';
+import {
+  ACTIVE_MARKER_SIZE,
+  applyActiveMarkerStyle,
+  applyTagBadgeContainerStyle,
+  applyTagBadgeStyle,
+} from './activeMarkerStyle';
 import { getTileBlob } from './StorageLayer';
 import type { Schema } from './amplify/client-schema';
 import {
@@ -193,6 +198,7 @@ export default function InfoTagAnnotation({
   const blobUrlsRef = useRef<string[]>([]);
   const cancelledRef = useRef(false);
   const dragMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const tagBadgeMarkerRef = useRef<maplibregl.Marker | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const baseZoomRef = useRef<number | null>(null);
   const [zoomOffset, setZoomOffset] = useState(() => {
@@ -356,6 +362,9 @@ export default function InfoTagAnnotation({
       ],
     });
     dragMarkerRef.current?.setLngLat(
+      toLngLat(markerPosition.x, markerPosition.y)
+    );
+    tagBadgeMarkerRef.current?.setLngLat(
       toLngLat(markerPosition.x, markerPosition.y)
     );
   }, [
@@ -615,6 +624,24 @@ export default function InfoTagAnnotation({
         )
         .addTo(instance);
       dragMarkerRef.current = dragMarker;
+
+      // Selected tags are shown beside the active marker so hotkey users can
+      // check what they toggled without looking away from the animal.
+      const badges = document.createElement('div');
+      applyTagBadgeContainerStyle(badges);
+      tagBadgeMarkerRef.current = new maplibregl.Marker({
+        element: badges,
+        anchor: 'left',
+        offset: [ACTIVE_MARKER_SIZE / 2 + 6, 0],
+      })
+        .setLngLat(
+          toLngLat(
+            firstTarget?.x ?? image.width / 2,
+            firstTarget?.y ?? image.height / 2
+          )
+        )
+        .addTo(instance);
+
       dragMarker.on('dragend', () => {
         const point = dragMarker.getLngLat();
         setMarkerPosition({
@@ -644,6 +671,8 @@ export default function InfoTagAnnotation({
       cancelledRef.current = true;
       dragMarkerRef.current?.remove();
       dragMarkerRef.current = null;
+      tagBadgeMarkerRef.current?.remove();
+      tagBadgeMarkerRef.current = null;
       popupRef.current?.remove();
       popupRef.current = null;
       instance.remove();
@@ -669,6 +698,22 @@ export default function InfoTagAnnotation({
       currentTarget ? ['!=', ['get', 'id'], currentTarget.id] : null
     );
   }, [currentTarget, map]);
+
+  useEffect(() => {
+    const element = tagBadgeMarkerRef.current?.getElement();
+    if (!element) return;
+    element.replaceChildren(
+      ...infoTags
+        .filter((tag) => selectedTagIds.has(tag.id))
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((tag) => {
+          const badge = document.createElement('span');
+          badge.textContent = tag.name;
+          applyTagBadgeStyle(badge);
+          return badge;
+        })
+    );
+  }, [infoTags, map, selectedTagIds]);
 
   const [markerHidden, setMarkerHidden] = useState(false);
   useEffect(() => {
@@ -696,6 +741,8 @@ export default function InfoTagAnnotation({
     const hidden = markerHidden || !currentTarget;
     const element = dragMarkerRef.current?.getElement();
     if (element) element.style.visibility = hidden ? 'hidden' : '';
+    const badges = tagBadgeMarkerRef.current?.getElement();
+    if (badges) badges.style.visibility = hidden ? 'hidden' : '';
     if (map.getLayer(LAYER_CURRENT_LABEL)) {
       map.setLayoutProperty(
         LAYER_CURRENT_LABEL,

@@ -14,6 +14,9 @@ import type {
 } from './schemaTypes';
 import { ManagementContext, GlobalContext } from './Context';
 import ChangeCategoryModal from './ChangeCategoryModal';
+import { formatInfoTagsForDisplay } from './infoTags';
+
+const EMPTY_TAGS: string[] = [];
 
 interface LocationBounds {
   x: number;
@@ -47,6 +50,8 @@ interface DetwebMarkerProps {
   hideIdenticon?: boolean;
   onClick?: (annotation: ExtendedAnnotationType) => void;
   locationBounds?: LocationBounds;
+  /** Informational tag names applied to this annotation, if any. */
+  infoTags?: string[];
 }
 
 function createIcon(
@@ -124,6 +129,7 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
       onShadowDrag,
       onClick,
       locationBounds,
+      infoTags,
     } = props;
     const { allUsers } = useContext(ManagementContext)!;
     const { client } = useContext(GlobalContext)!;
@@ -353,6 +359,11 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
           >
             <Tooltip>
               Label: {getType(annotation)} <br />
+              {infoTags && infoTags.length > 0 && (
+                <>
+                  Info tags: {formatInfoTagsForDisplay(infoTags)} <br />
+                </>
+              )}
               {String((annotation as { source?: string }).source || '')
                 .toLowerCase()
                 .includes('false-negative') && (
@@ -414,7 +425,9 @@ const DetwebMarker: React.FC<DetwebMarkerProps> = memo(
       prevAnno.createdAt === nextAnno.createdAt &&
       prevAnno.owner === nextAnno.owner &&
       prevProps.activeAnnotation?.id === nextProps.activeAnnotation?.id &&
-      prevProps.locationBounds === nextProps.locationBounds;
+      prevProps.locationBounds === nextProps.locationBounds &&
+      (prevProps.infoTags ?? EMPTY_TAGS).join() ===
+        (nextProps.infoTags ?? EMPTY_TAGS).join();
     return arePropsEqual;
   }
 );

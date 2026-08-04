@@ -12,6 +12,8 @@ import {
   names,
 } from 'unique-names-generator';
 import { Spinner, Form } from 'react-bootstrap';
+import { useInfoTagData } from './useInfoTags';
+import { formatInfoTagsForDisplay } from './infoTags';
 
 /**
  * A single (survey, annotation set) pair whose annotations should be plotted.
@@ -33,6 +35,11 @@ interface DensityMapProps {
   categoryIds?: string[];
   /** ... and/or by category name (generalises across surveys). */
   categoryNames?: string[];
+  /**
+   * Keep only annotations carrying at least one of these informational tags
+   * (matched by name, so a filter spans the sets of every overlaid survey).
+   */
+  infoTagNames?: string[];
   selectedUserIds?: string[];
   /** Filter to annotations/images whose image belongs to these transects. */
   transectIds?: string[];
@@ -123,6 +130,20 @@ function hashString(s: string): number {
   return Math.abs(h);
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      })[character]!
+  );
+}
+
 function isValidLatLng(lat: number, lng: number): boolean {
   return (
     lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 &&
@@ -150,6 +171,7 @@ export default function DensityMap({
   annotationSetId,
   categoryIds = [],
   categoryNames = [],
+  infoTagNames = [],
   selectedUserIds = [],
   transectIds = [],
   primaryOnly = false,
@@ -265,6 +287,12 @@ export default function DensityMap({
     })),
   });
 
+  // Informational tags for every set on the map: used both to filter and to
+  // show what a sighting was tagged with in its popup.
+  const { namesFor: infoTagNamesFor, dataSig: infoTagSig } = useInfoTagData(
+    uniqueSetSources.map((s) => s.annotationSetId)
+  );
+
   const loading =
     surveyQueries.some((q) => q.isLoading) ||
     annotationQueries.some((q) => q.isLoading);
@@ -366,6 +394,7 @@ export default function DensityMap({
   const categoryIdKey = categoryIds.join(',');
   const categoryNameKey = categoryNames.join(',');
   const transectKey = transectIds.join(',');
+  const infoTagKey = infoTagNames.join(',');
 
   // Annotation points GeoJSON, joined to image coordinates and filtered.
   const annotationsFC = useMemo<FeatureCollection>(() => {
@@ -373,6 +402,7 @@ export default function DensityMap({
     const catIdSet = new Set(categoryIds);
     const catNameSet = new Set(categoryNames);
     const transectIdSet = new Set(transectIds);
+    const infoTagSet = new Set(infoTagNames);
     const hasCatFilter = catIdSet.size > 0 || catNameSet.size > 0;
     const features: any[] = [];
 
@@ -408,6 +438,10 @@ export default function DensityMap({
         ) {
           continue;
         }
+        const tagNames = infoTagNamesFor(q.data.annotationSetId, a.id);
+        if (infoTagSet.size && !tagNames.some((n) => infoTagSet.has(n))) {
+          continue;
+        }
 
         // Small deterministic jitter (~3m) so co-located sightings separate.
         const h = hashString(a.id);
@@ -429,6 +463,7 @@ export default function DensityMap({
             imageId: a.imageId,
             setId: a.setId ?? q.data.annotationSetId,
             categoryName: a.category.name,
+            infoTags: formatInfoTagsForDisplay(tagNames),
           },
         });
       }
@@ -444,6 +479,8 @@ export default function DensityMap({
     categoryIdKey,
     categoryNameKey,
     transectKey,
+    infoTagKey,
+    infoTagSig,
   ]);
 
   // Image points GeoJSON, coloured by transect (per survey) and transect-filtered.
@@ -706,7 +743,10 @@ export default function DensityMap({
         pointPopup(
           (f.geometry as any).coordinates.slice(),
           name,
-          `<div><strong>Label:</strong> ${p.categoryName ?? ''}</div>`,
+          `<div><strong>Label:</strong> ${escapeHtml(p.categoryName ?? '')}</div>` +
+            (p.infoTags
+              ? `<div><strong>Info tags:</strong> ${escapeHtml(p.infoTags)}</div>`
+              : ''),
           p.imageId,
           p.setId
         );

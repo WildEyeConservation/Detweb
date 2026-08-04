@@ -6,6 +6,8 @@ import { StorageLayer } from './StorageLayer';
 import { fetchAllPaginatedResults } from './utils';
 import { CircleMarker, Popup, LayerGroup } from 'react-leaflet';
 import { Spinner } from 'react-bootstrap';
+import { useImageInfoTags } from './useInfoTags';
+import { formatInfoTagsForDisplay } from './infoTags';
 
 type AnnotationItem = {
   id: string;
@@ -33,6 +35,7 @@ export default function LightImageView({
   const [sourceKey, setSourceKey] = useState<string | null>(null);
   const [annotations, setAnnotations] = useState<AnnotationItem[]>([]);
   const [annotationsLoaded, setAnnotationsLoaded] = useState<boolean>(false);
+  const infoTagsByAnnotation = useImageInfoTags(imageId, annotationSetId);
 
   useEffect(() => {
     let cancelled = false;
@@ -234,6 +237,14 @@ export default function LightImageView({
                       <div>
                         <strong>Sighting:</strong> {sightingType}
                       </div>
+                      {infoTagsByAnnotation.has(a.id) && (
+                        <div>
+                          <strong>Info tags:</strong>{' '}
+                          {formatInfoTagsForDisplay(
+                            infoTagsByAnnotation.get(a.id)!
+                          )}
+                        </div>
+                      )}
                     </div>
                   </Popup>
                 </CircleMarker>
