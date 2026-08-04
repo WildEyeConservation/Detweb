@@ -18,6 +18,7 @@ import {
   Undo2,
 } from 'lucide-react';
 import { GlobalContext, UserContext } from './Context';
+import { applyActiveMarkerStyle } from './activeMarkerStyle';
 import { getTileBlob } from './StorageLayer';
 import type { Schema } from './amplify/client-schema';
 import {
@@ -32,7 +33,6 @@ import {
 const TILE_SIZE = 256;
 const DEFAULT_ZOOM_OFFSET = 6;
 const SOURCE_CURRENT = 'info-tag-current';
-const LAYER_CURRENT_CROSSHAIR = 'info-tag-current-crosshair';
 const LAYER_CURRENT_LABEL = 'info-tag-current-label';
 const SOURCE_ANNOTATIONS = 'info-tag-annotations';
 const LAYER_ANNOTATIONS = 'info-tag-annotations-circles';
@@ -166,6 +166,10 @@ export default function InfoTagAnnotation({
     acknowledged: false,
   });
   const advancedRef = useRef(false);
+  const [waiting, setWaiting] = useState(false);
+  const [secondsRemaining, setSecondsRemaining] = useState(60);
+  const waitingTimerRef = useRef<number>();
+  const countdownRef = useRef<number>();
   const wasVisibleRef = useRef(visible);
   useEffect(() => {
     if (
@@ -200,6 +204,19 @@ export default function InfoTagAnnotation({
   );
 
   useEffect(() => () => stopHeartbeat?.(), [stopHeartbeat]);
+
+  const clearWaitingTimers = useCallback(() => {
+    if (waitingTimerRef.current !== undefined) {
+      window.clearTimeout(waitingTimerRef.current);
+      waitingTimerRef.current = undefined;
+    }
+    if (countdownRef.current !== undefined) {
+      window.clearInterval(countdownRef.current);
+      countdownRef.current = undefined;
+    }
+  }, []);
+
+  useEffect(() => clearWaitingTimers, [clearWaitingTimers]);
 
   useEffect(() => {
     let mounted = true;
@@ -510,34 +527,6 @@ export default function InfoTagAnnotation({
         data: { type: 'FeatureCollection', features: [] },
       });
 
-      const size = 24;
-      const canvas = document.createElement('canvas');
-      canvas.width = size;
-      canvas.height = size;
-      const context = canvas.getContext('2d')!;
-      context.strokeStyle = '#00e5ff';
-      context.lineWidth = 2;
-      const center = size / 2;
-      const radius = center - 2;
-      context.beginPath();
-      context.arc(center, center, radius, 0, Math.PI * 2);
-      context.stroke();
-      context.beginPath();
-      context.moveTo(center, 3);
-      context.lineTo(center, center - 2);
-      context.moveTo(center, center + 2);
-      context.lineTo(center, size - 3);
-      context.moveTo(3, center);
-      context.lineTo(center - 2, center);
-      context.moveTo(center + 2, center);
-      context.lineTo(size - 3, center);
-      context.stroke();
-      instance.addImage('info-tag-crosshair', {
-        width: size,
-        height: size,
-        data: context.getImageData(0, 0, size, size).data,
-      });
-
       instance.addLayer({
         id: LAYER_ANNOTATIONS,
         type: 'circle',
@@ -558,23 +547,13 @@ export default function InfoTagAnnotation({
         },
       });
       instance.addLayer({
-        id: LAYER_CURRENT_CROSSHAIR,
-        type: 'symbol',
-        source: SOURCE_CURRENT,
-        layout: {
-          'icon-image': 'info-tag-crosshair',
-          'icon-allow-overlap': true,
-          'icon-ignore-placement': true,
-        },
-      });
-      instance.addLayer({
         id: LAYER_CURRENT_LABEL,
         type: 'symbol',
         source: SOURCE_CURRENT,
         layout: {
           'text-field': ['get', 'label'],
           'text-size': 14,
-          'text-offset': [0, -1.8],
+          'text-offset': [0, -2],
           'text-allow-overlap': true,
           'text-ignore-placement': true,
           'text-font': ['Open Sans Regular'],
@@ -619,9 +598,10 @@ export default function InfoTagAnnotation({
         popup.remove();
       });
 
+      // The drag handle is also the active-marker rendering - the annotation
+      // being tagged is filtered out of LAYER_ANNOTATIONS so it is drawn once.
       const handle = document.createElement('div');
-      handle.style.cssText =
-        'width:36px;height:36px;background:transparent;cursor:move;';
+      applyActiveMarkerStyle(handle);
       const dragMarker = new maplibregl.Marker({
         element: handle,
         draggable: true,
@@ -679,31 +659,51 @@ export default function InfoTagAnnotation({
     zoomOffset,
   ]);
 
+  // The active annotation is drawn by the drag marker instead, so it must not
+  // also be drawn as a plain circle - otherwise the circle would still give
+  // its position away while the marker is hidden with Tab.
   useEffect(() => {
-    if (!map || !visible) return;
-    const setVisibility = (visibility: 'visible' | 'none') => {
-      for (const layer of [LAYER_CURRENT_CROSSHAIR, LAYER_CURRENT_LABEL]) {
-        if (map.getLayer(layer)) {
-          map.setLayoutProperty(layer, 'visibility', visibility);
-        }
-      }
-    };
+    if (!map || !map.getLayer(LAYER_ANNOTATIONS)) return;
+    map.setFilter(
+      LAYER_ANNOTATIONS,
+      currentTarget ? ['!=', ['get', 'id'], currentTarget.id] : null
+    );
+  }, [currentTarget, map]);
+
+  const [markerHidden, setMarkerHidden] = useState(false);
+  useEffect(() => {
+    if (!visible) return;
     const keyDown = (event: KeyboardEvent) => {
       if (event.key === 'Tab') {
         event.preventDefault();
-        setVisibility('none');
+        setMarkerHidden(true);
       }
     };
     const keyUp = (event: KeyboardEvent) => {
-      if (event.key === 'Tab') setVisibility('visible');
+      if (event.key === 'Tab') setMarkerHidden(false);
     };
     window.addEventListener('keydown', keyDown);
     window.addEventListener('keyup', keyUp);
     return () => {
       window.removeEventListener('keydown', keyDown);
       window.removeEventListener('keyup', keyUp);
+      setMarkerHidden(false);
     };
-  }, [map, visible]);
+  }, [visible]);
+
+  useEffect(() => {
+    if (!map) return;
+    const hidden = markerHidden || !currentTarget;
+    const element = dragMarkerRef.current?.getElement();
+    if (element) element.style.visibility = hidden ? 'hidden' : '';
+    if (map.getLayer(LAYER_CURRENT_LABEL)) {
+      map.setLayoutProperty(
+        LAYER_CURRENT_LABEL,
+        'visibility',
+        hidden ? 'none' : 'visible'
+      );
+    }
+  }, [currentTarget, map, markerHidden]);
 
   const toggleTag = useCallback((tagId: string) => {
     setSelectedTagIds((current) => {
@@ -778,7 +778,7 @@ export default function InfoTagAnnotation({
       })
         .then(() => {
           setSaveError(null);
-          window.setTimeout(() => setReadyToAdvance(true), 800);
+          setReadyToAdvance(true);
         })
         .catch((error) => {
           console.error('Failed to finish informational tagging image', error);
@@ -802,10 +802,32 @@ export default function InfoTagAnnotation({
   }, [finishImage, image, loadError, loading, targets.length]);
 
   useEffect(() => {
-    if (!readyToAdvance || !next || advancedRef.current) return;
-    advancedRef.current = true;
-    next();
-  }, [next, readyToAdvance]);
+    if (!readyToAdvance || advancedRef.current) return;
+
+    if (next) {
+      clearWaitingTimers();
+      setWaiting(false);
+      advancedRef.current = true;
+      next();
+      return;
+    }
+
+    if (waitingTimerRef.current !== undefined) return;
+
+    setWaiting(true);
+    setSecondsRemaining(60);
+    countdownRef.current = window.setInterval(() => {
+      setSecondsRemaining((previous) => Math.max(0, previous - 1));
+    }, 1000);
+    waitingTimerRef.current = window.setTimeout(() => {
+      clearWaitingTimers();
+      setWaiting(false);
+      alert(
+        'No new work was loaded. The job appears to be complete. Thank you for your contribution!'
+      );
+      navigate('/jobs');
+    }, 60000);
+  }, [clearWaitingTimers, navigate, next, readyToAdvance]);
 
   const startCommit = useCallback((record: CommitRecord) => {
     record.failed = false;
@@ -951,12 +973,10 @@ export default function InfoTagAnnotation({
             </Badge>
           )}
           <span className='text-muted' style={{ fontSize: 12 }}>
-            Press shortcut keys to toggle tags · Space to continue
+            Press shortcut keys to toggle tags · Space to continue · Tip: Hold
+            Tab to hide the marker
           </span>
         </div>
-        <span className='text-muted' style={{ fontSize: 12 }}>
-          Hold Tab to hide the marker
-        </span>
         <button
           className='p-0 m-0 border-0 bg-transparent d-flex align-items-center text-white'
           onClick={saveDefaultZoom}
@@ -997,25 +1017,39 @@ export default function InfoTagAnnotation({
               border: '1px solid rgba(255,255,255,0.1)',
             }}
           />
-          {imageComplete && (
+          {waiting && (
             <div
               style={{
                 position: 'absolute',
-                inset: 0,
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                zIndex: 1000,
+                backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                borderRadius: 12,
+                padding: '20px 32px',
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
-                justifyContent: 'center',
-                pointerEvents: 'none',
-                background: 'rgba(0,0,0,0.28)',
-                zIndex: 10,
+                gap: 12,
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
               }}
             >
               <div
-                className='rounded px-4 py-3 text-white'
-                style={{ background: 'rgba(0,0,0,0.78)', fontWeight: 600 }}
+                style={{
+                  width: 32,
+                  height: 32,
+                  border: '3px solid rgba(255, 255, 255, 0.2)',
+                  borderTopColor: '#fff',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite',
+                }}
+              />
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+              <div
+                style={{ color: '#fff', fontSize: 14, textAlign: 'center' }}
               >
-                Image complete
-                {readyToAdvance && !next ? ' - waiting for the next image...' : ''}
+                Waiting for new work... ({secondsRemaining}s remaining)
               </div>
             </div>
           )}
