@@ -41,6 +41,7 @@ import {
   type MenuState,
 } from './AnnotatorOverlays';
 import useImageFileSource from './useImageFileSource';
+import MapRotateControl from './MapRotateControl';
 
 /*
 MapLibre-based replacement for the Leaflet stack in the species-labelling
@@ -239,6 +240,15 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
 
     const map = createImageMap(containerRef.current, projection);
     mapRef.current = map;
+    map.setZoomSnap(1);
+    map.addControl(
+      new maplibregl.NavigationControl({
+        showCompass: false,
+        showZoom: true,
+      }),
+      'top-left'
+    );
+    map.addControl(new MapRotateControl(), 'top-left');
 
     // Generate marker icons on demand: identicons per objectId and the
     // false-negative "!" badge.
@@ -463,8 +473,10 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
         duration: 0,
       });
     }
+    // Reapply when a default changes while this buffered workspace is already
+    // mounted. Other inputs are fixed for the lifetime of this map.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReady]);
+  }, [mapReady, zoom]);
 
   // ── Annotation data sync ──
   useEffect(() => {

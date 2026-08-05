@@ -11,6 +11,7 @@ import type {
   TaskAcknowledgement,
 } from './annotationTypes';
 import { fetchAllPaginatedResults, isWithinLocationBounds } from './utils';
+import { subscribeToSharedDefaultZoom } from './defaultZoomEvents';
 
 const LOCATION_SELECTION = [
   'id',
@@ -78,6 +79,17 @@ export default function useAnnotationTaskQueue() {
     unannotatedJobs,
     setUnannotatedJobs,
   } = useContext(UserContext)!;
+
+  // Keep future task fetches on the value saved during this active session.
+  useEffect(
+    () =>
+      subscribeToSharedDefaultZoom((update) => {
+        if (update.surveyId === currentPM.projectId) {
+          setZoom(update.zoom);
+        }
+      }),
+    [currentPM.projectId]
+  );
 
   // Count consecutive unannotated jobs, and decide when to slip in a test.
   useEffect(() => {

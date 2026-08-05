@@ -19,12 +19,15 @@ export function ImageContextFromHook({
   image,
   children,
   taskTag,
+  onAnnotationCreate,
 }: {
   hook: AnnotationsHook;
   locationId?: string;
   image: AnnotationImage;
   children: React.ReactNode;
   taskTag?: string;
+  /** Called synchronously once a locally-created annotation passes validation. */
+  onAnnotationCreate?: () => void;
 }) {
   const [annoCount, setAnnoCount] = useState(0);
   const lastAnnotationTimeRef = useRef<number>(0);
@@ -176,6 +179,10 @@ export function ImageContextFromHook({
         annotation.id = crypto.randomUUID();
         annotation.objectId = annotation.id;
       }
+      // Notify the task workspace before starting the mutation. A visible-time
+      // revalidation may be querying the same annotations concurrently and
+      // must not mistake this local annotation for pre-existing work.
+      onAnnotationCreate?.();
       setAnnoCount((old) => old + 1);
 
       setCurrentAnnoCount((old) => {
@@ -187,7 +194,7 @@ export function ImageContextFromHook({
       });
       return hook.create(annotation);
     },
-    [hook.create, hook.data, setAnnoCount, zoom, taskTag]
+    [hook.create, hook.data, onAnnotationCreate, setAnnoCount, zoom, taskTag]
   );
 
   const update = useCallback(

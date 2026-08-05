@@ -23,6 +23,10 @@ import type {
   AnnotationWorkspaceProps,
   TaskAcknowledgement,
 } from './annotationTypes';
+import {
+  publishSharedDefaultZoom,
+  subscribeToSharedDefaultZoom,
+} from './defaultZoomEvents';
 
 interface AnnotationSessionProps {
   location: AnnotationLocation;
@@ -135,19 +139,45 @@ export default function AnnotationWorkspace(props: AnnotationWorkspaceProps) {
   const { annotationSetId } = location;
   const { client } = useContext(GlobalContext)!;
   const hasRevalidated = useRef(false);
+  const localAnnotationCreated = useRef(false);
+  const nextRef = useRef(next);
+  const ackRef = useRef(ack);
+  nextRef.current = next;
+  ackRef.current = ack;
 
   // Queue tasks are filtered when fetched and checked once more when they
   // become visible, in case another user annotated the location meanwhile.
+  // Ignore a result after local annotation creation: the revalidation query
+  // can otherwise see that new row and incorrectly advance to another task.
   useEffect(() => {
     if (!visible || !revalidate || hasRevalidated.current) return;
     hasRevalidated.current = true;
-    revalidate().then((isValid: boolean) => {
-      if (!isValid) {
-        ack?.();
-        next?.();
-      }
-    });
-  }, [visible, revalidate, ack, next]);
+    let settled = false;
+    let cancelled = false;
+
+    revalidate()
+      .then((isValid: boolean) => {
+        settled = true;
+        if (cancelled || localAnnotationCreated.current) return;
+        if (!isValid) {
+          ackRef.current?.();
+          nextRef.current?.();
+        }
+      })
+      .catch((error: unknown) => {
+        settled = true;
+        if (!cancelled) {
+          console.error('Failed to revalidate annotation task', error);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      // If the task was hidden before its check completed, allow a fresh
+      // revalidation when the user returns instead of using a stale result.
+      if (!settled) hasRevalidated.current = false;
+    };
+  }, [visible, revalidate]);
 
   const { currentTaskTag, isAnnotatePath, myMembershipHook } =
     useContext(UserContext)!;
@@ -163,6 +193,18 @@ export default function AnnotationWorkspace(props: AnnotationWorkspaceProps) {
     }
     return zoom ?? null;
   });
+
+  // TaskBuffer keeps upcoming workspaces mounted. Synchronize a shared zoom
+  // save across those preloaded workspaces without rebuilding the job buffer.
+  useEffect(() => {
+    return subscribeToSharedDefaultZoom(
+      ({ surveyId: updatedSurveyId, zoom: updatedZoom }) => {
+        if (updatedSurveyId === surveyId) {
+          setDefaultZoom(updatedZoom);
+        }
+      }
+    );
+  }, [surveyId]);
   const [isFalseNegativesJob, setIsFalseNegativesJob] =
     useState<boolean>(false);
   useEffect(() => {
@@ -336,6 +378,9 @@ export default function AnnotationWorkspace(props: AnnotationWorkspaceProps) {
       locationId={location.id}
       image={location.image}
       taskTag={taskTag}
+      onAnnotationCreate={() => {
+        localAnnotationCreated.current = true;
+      }}
     >
       <div
         className={`d-flex flex-md-row flex-column w-100 h-100 gap-3 overflow-auto ${
@@ -504,13 +549,22 @@ function SetDefaultZoom({
         }
 
         if (result?.toLowerCase() === 'y') {
-          await client.models.Queue.update({
-            id: currentProjectMembership.queueId,
-            zoom: zoom,
-          });
-          alert(
-            'Please save this job and pick it up again for the default zoom to take effect.'
-          );
+          try {
+            const sharedZoom = Math.round(zoom);
+            await client.models.Queue.update({
+              id: currentProjectMembership.queueId,
+              // Queue.zoom is an AppSync Int retained from the legacy Leaflet
+              // viewer, while MapLibre reports fractional zoom levels.
+              zoom: sharedZoom,
+            });
+            setDefaultZoom(sharedZoom);
+            setZoom(sharedZoom);
+            publishSharedDefaultZoom({ surveyId: surveyId!, zoom: sharedZoom });
+            alert('Default zoom updated.');
+          } catch (error) {
+            console.error('Failed to update the shared default zoom', error);
+            alert('Could not update the default zoom. Please try again.');
+          }
           return;
         }
       }
