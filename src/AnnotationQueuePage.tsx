@@ -10,7 +10,8 @@ tasks mounted for instant navigation, and shows the queue/session totals.
 */
 export default function AnnotationQueuePage() {
   const [index, setIndex] = useState(0);
-  const { fetcher } = useAnnotationTaskQueue();
+  const { fetcher, standbyTestFetcher, beforeNext } =
+    useAnnotationTaskQueue();
 
   return (
     <div
@@ -23,6 +24,9 @@ export default function AnnotationQueuePage() {
             index={index}
             setIndex={setIndex}
             fetcher={fetcher}
+            standbyFetcher={standbyTestFetcher}
+            standbyN={2}
+            beforeNext={beforeNext}
             visible
             preloadN={3}
             historyN={2}

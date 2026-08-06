@@ -8,7 +8,6 @@ import {
 } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import * as jdenticon from 'jdenticon';
 import { useHotkeys, isHotkeyPressed } from 'react-hotkeys-hook';
 import {
   makeProjection,
@@ -42,6 +41,11 @@ import {
 } from './AnnotatorOverlays';
 import useImageFileSource from './useImageFileSource';
 import MapRotateControl from './MapRotateControl';
+import {
+  addAnnotationMarkerLayers,
+  ANNOTATION_MARKER_LAYERS,
+  registerAnnotationMarkerImages,
+} from './annotationMarkerLayers';
 
 /*
 MapLibre-based replacement for the Leaflet stack in the species-labelling
@@ -61,11 +65,11 @@ the Leaflet scale, so we convert on the way in (zoom - 1) and out (zoom + 1).
 */
 
 const SOURCE_ANNOTATIONS = 'annotations';
-const LAYER_ACTIVE = 'annotation-active-ring';
-const LAYER_OUTLINES = 'annotation-outlines';
-const LAYER_CIRCLES = 'annotation-circles';
-const LAYER_ICONS = 'annotation-icons';
-const LAYER_STATUS_ICONS = 'annotation-status-icons';
+const LAYER_ACTIVE = ANNOTATION_MARKER_LAYERS.active;
+const LAYER_OUTLINES = ANNOTATION_MARKER_LAYERS.outlines;
+const LAYER_CIRCLES = ANNOTATION_MARKER_LAYERS.circles;
+const LAYER_ICONS = ANNOTATION_MARKER_LAYERS.icons;
+const LAYER_STATUS_ICONS = ANNOTATION_MARKER_LAYERS.statusIcons;
 const SOURCE_LOCATION = 'location-rect';
 const LAYER_LOCATION = 'location-rect-line';
 
@@ -250,67 +254,7 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
     );
     map.addControl(new MapRotateControl(), 'top-left');
 
-    // Generate marker icons on demand: identicons per objectId and the
-    // false-negative "!" badge.
-    map.on('styleimagemissing', (e: maplibregl.MapStyleImageMissingEvent) => {
-      const id: string = e.id;
-      if (id === 'fn-marker') {
-        const canvas = document.createElement('canvas');
-        canvas.width = canvas.height = 20;
-        const ctx = canvas.getContext('2d')!;
-        ctx.font = 'bold 16px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText('!', 10, 11);
-        map.addImage(
-          id,
-          ctx.getImageData(0, 0, 20, 20) as unknown as ImageData
-        );
-      } else if (id.startsWith('identicon-')) {
-        const canvas = document.createElement('canvas');
-        canvas.width = canvas.height = 14;
-        const ctx = canvas.getContext('2d')!;
-        jdenticon.drawIcon(ctx, id.slice('identicon-'.length), 14);
-        if (!map.hasImage(id)) {
-          map.addImage(id, ctx.getImageData(0, 0, 14, 14));
-        }
-      } else if (id === 'obscured-marker') {
-        const canvas = document.createElement('canvas');
-        const size = 32;
-        canvas.width = canvas.height = size;
-        const ctx = canvas.getContext('2d')!;
-
-        ctx.fillStyle = '#ffffff';
-        ctx.strokeStyle = '#1f2933';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(size / 2, size / 2, size / 2 - 1, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.save();
-        ctx.translate(5, 5);
-        ctx.scale(22 / 24, 22 / 24);
-        ctx.strokeStyle = '#1f2933';
-        ctx.lineWidth = 2.75;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        [
-          'M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49',
-          'M14.084 14.158a3 3 0 0 1-4.242-4.242',
-          'M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143',
-          'm2 2 20 20',
-        ].forEach((path) => ctx.stroke(new Path2D(path)));
-        ctx.restore();
-
-        if (!map.hasImage(id)) {
-          map.addImage(id, ctx.getImageData(0, 0, size, size), {
-            pixelRatio: 2,
-          });
-        }
-      }
-    });
+    const unregisterMarkerImages = registerAnnotationMarkerImages(map);
 
     map.on('load', () => {
       addImageTiles(map, sourceKey, image, projection);
@@ -350,76 +294,7 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
       });
-      map.addLayer({
-        id: LAYER_OUTLINES,
-        type: 'circle',
-        source: SOURCE_ANNOTATIONS,
-        paint: {
-          'circle-radius': ['+', 10, ['get', 'borderWidth']],
-          'circle-color': 'rgba(0, 0, 0, 0)',
-          'circle-stroke-width': 1,
-          'circle-stroke-color': 'rgba(0, 0, 0, 0.45)',
-          'circle-opacity': ['get', 'opacity'],
-          'circle-stroke-opacity': ['get', 'opacity'],
-        },
-      });
-      map.addLayer({
-        id: LAYER_ACTIVE,
-        type: 'circle',
-        source: SOURCE_ANNOTATIONS,
-        filter: ['==', ['get', 'active'], true],
-        paint: {
-          'circle-radius': ['+', 10, ['get', 'borderWidth']],
-          'circle-color': 'rgba(0, 0, 0, 0)',
-          'circle-stroke-width': 3,
-          'circle-stroke-color': '#ff8c1a',
-          'circle-opacity': ['get', 'opacity'],
-          'circle-stroke-opacity': ['get', 'opacity'],
-        },
-      });
-      map.addLayer({
-        id: LAYER_CIRCLES,
-        type: 'circle',
-        source: SOURCE_ANNOTATIONS,
-        paint: {
-          'circle-radius': 10,
-          'circle-color': ['get', 'color'],
-          'circle-stroke-width': ['get', 'borderWidth'],
-          'circle-stroke-color': ['get', 'borderColor'],
-          'circle-opacity': ['get', 'opacity'],
-          'circle-stroke-opacity': ['get', 'opacity'],
-        },
-      });
-      map.addLayer({
-        id: LAYER_ICONS,
-        type: 'symbol',
-        source: SOURCE_ANNOTATIONS,
-        filter: ['!=', ['get', 'icon'], ''],
-        layout: {
-          'icon-image': ['get', 'icon'],
-          'icon-allow-overlap': true,
-          'icon-ignore-placement': true,
-        },
-        paint: {
-          'icon-opacity': ['get', 'opacity'],
-        },
-      });
-      map.addLayer({
-        id: LAYER_STATUS_ICONS,
-        type: 'symbol',
-        source: SOURCE_ANNOTATIONS,
-        filter: ['!=', ['get', 'statusIcon'], ''],
-        layout: {
-          'icon-image': ['get', 'statusIcon'],
-          'icon-allow-overlap': true,
-          'icon-ignore-placement': true,
-        },
-        paint: {
-          'icon-translate': [7, -7],
-          'icon-translate-anchor': 'viewport',
-          'icon-opacity': ['get', 'opacity'],
-        },
-      });
+      addAnnotationMarkerLayers(map, SOURCE_ANNOTATIONS);
 
       refreshAnnotationSource();
       setMapReady(true);
@@ -432,6 +307,7 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
     });
 
     return () => {
+      unregisterMarkerImages();
       popupRef.current?.remove();
       popupRef.current = null;
       map.remove();

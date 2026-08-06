@@ -13,7 +13,13 @@ import { ImageContextFromHook } from './ImageContext';
 import { Schema } from './amplify/client-schema';
 import useImageStats from './useImageStats';
 import { Badge, Button } from 'react-bootstrap';
-import { Share2, SearchCheck, RotateCcw, LogOut } from 'lucide-react';
+import {
+  FlaskConical,
+  Share2,
+  SearchCheck,
+  RotateCcw,
+  LogOut,
+} from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import MapLibreAnnotator from './annotator/MapLibreAnnotator';
 import { useImageInfoTags } from './useInfoTags';
@@ -378,6 +384,7 @@ export default function AnnotationWorkspace(props: AnnotationWorkspaceProps) {
       locationId={location.id}
       image={location.image}
       taskTag={taskTag}
+      active={visible}
       onAnnotationCreate={() => {
         localAnnotationCreated.current = true;
       }}
@@ -422,6 +429,17 @@ export default function AnnotationWorkspace(props: AnnotationWorkspaceProps) {
                     ? `${taskTag || currentTaskTag}`
                     : 'Viewing image'}
                 </Badge>
+                {isTest && (
+                  <Badge
+                    bg='warning'
+                    text='dark'
+                    className='d-inline-flex align-items-center gap-1 text-uppercase'
+                    title='This image is part of a test task'
+                  >
+                    <FlaskConical size={13} aria-hidden='true' />
+                    Test task
+                  </Badge>
+                )}
                 {!hideZoomSetting && (
                   <SetDefaultZoom
                     setDefaultZoom={setDefaultZoom}

@@ -10,8 +10,7 @@ export default function useTesting() {
   // Use ref for index to prevent race conditions when multiple fetcher calls happen concurrently
   const iRef = useRef(0);
   const [zoom, setZoom] = useState<number | undefined>(undefined);
-  const [hasPrimaryCandidates, setHasPrimaryCandidates] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const setupPromiseRef = useRef<Promise<void>>(Promise.resolve());
 
   const primaryCandidates = useRef<
     { locationId: string; annotationSetId: string; testPresetId: string }[]
@@ -24,14 +23,10 @@ export default function useTesting() {
 
   useEffect(() => {
     async function setup() {
-      setLoading(true);
-
       if (currentPM.queueId) {
-        client.models.Queue.get({ id: currentPM.queueId }).then(
-          ({ data }) => {
-            if (data?.zoom) setZoom(data.zoom);
-          }
-        );
+        client.models.Queue.get({ id: currentPM.queueId }).then(({ data }) => {
+          if (data?.zoom) setZoom(data.zoom);
+        });
       }
 
       const { data: config } = await client.models.ProjectTestConfig.get({
@@ -39,7 +34,6 @@ export default function useTesting() {
       });
 
       if (!config) {
-        setLoading(false);
         return;
       }
 
@@ -51,12 +45,10 @@ export default function useTesting() {
         }
       );
 
-      fetchPrimaryLocations(presets);
-
-      setLoading(false);
+      await fetchPrimaryLocations(presets);
     }
 
-    setup();
+    setupPromiseRef.current = setup();
   }, [currentPM]);
 
   async function fetchPrimaryLocations(presets: { testPresetId: string }[]) {
@@ -80,7 +72,8 @@ export default function useTesting() {
       )
       .sort(
         (a, b) =>
-          new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
+          new Date(b.createdAt ?? 0).getTime() -
+          new Date(a.createdAt ?? 0).getTime()
       )
       .filter(
         (location, index, self) =>
@@ -122,7 +115,8 @@ export default function useTesting() {
       )
       .sort(
         (a, b) =>
-          new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
+          new Date(b.createdAt ?? 0).getTime() -
+          new Date(a.createdAt ?? 0).getTime()
       );
 
     // add seen locations to the end of the array as backup (only if still part of current test presets)
@@ -143,8 +137,6 @@ export default function useTesting() {
       annotationSetId: l.annotationSetId,
       testPresetId: l.testPresetId,
     }));
-
-    setHasPrimaryCandidates(primaryCandidates.current.length > 0);
   }
 
   async function getTestLocation() {
@@ -230,8 +222,14 @@ export default function useTesting() {
     return body;
   }, [primaryCandidates, zoom]);
 
+  const fetchWhenReady = useCallback(async (): Promise<Identifiable | null> => {
+    await setupPromiseRef.current;
+    if (primaryCandidates.current.length === 0) return null;
+    return fetcher();
+  }, [fetcher]);
+
   return {
-    fetcher: !loading && hasPrimaryCandidates ? fetcher : undefined,
+    fetcher: fetchWhenReady,
     fetchedLocation: currentLocation.current,
   };
 }
