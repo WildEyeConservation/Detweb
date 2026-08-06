@@ -1,14 +1,15 @@
 import { useParams } from 'react-router-dom';
 import { useContext, useEffect, useState } from 'react';
 import { GlobalContext } from './Context';
-import AnnotationImage from './AnnotationImage';
+import AnnotationWorkspace from './AnnotationWorkspace';
 
 export function LocationLoader() {
   const { locationId, annotationSetId } = useParams();
-  const [element, setElement] = useState<JSX.Element | null>(null);
+  const [location, setLocation] = useState<any>(null);
   const { client } = useContext(GlobalContext)!;
 
   useEffect(() => {
+    let cancelled = false;
     client.models.Location.get(
       { id: locationId! },
       {
@@ -30,14 +31,11 @@ export function LocationLoader() {
         ],
       }
     ).then(({ data }) => {
-      setElement(
-        <AnnotationImage
-          visible={true}
-          location={{ ...data, annotationSetId }}
-          hideNavButtons
-        />
-      );
+      if (!cancelled) setLocation(data);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [locationId, annotationSetId]);
 
   return (
@@ -45,7 +43,13 @@ export function LocationLoader() {
       className='d-flex flex-column align-items-center w-100 h-100'
       style={{ paddingTop: '12px', paddingBottom: '12px' }}
     >
-      {element}
+      {location && (
+        <AnnotationWorkspace
+          visible={true}
+          location={{ ...location, annotationSetId }}
+          hideNavButtons
+        />
+      )}
     </div>
   );
 }

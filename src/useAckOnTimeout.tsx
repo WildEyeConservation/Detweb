@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BaseImageProps } from './BaseImage';
 
 export interface UseAckOnTimeoutProps {
   next?: () => void;
   visible: boolean;
-  ack: () => void;
+  /** Called to ack the task. Receives the timestamp at which the user submitted (paged past), since the call itself is deliberately delayed. */
+  ack: (submittedAt?: number) => void;
 }
 
 export interface UseAckOnTimeoutResult {
@@ -44,8 +44,7 @@ export default function useAckOnTimeout({
   const [timer, setTimer] = useState<number | undefined>(undefined);
   const [done, setDone] = useState(false);
   const [wasHidden, setWasHidden] = useState<boolean>(false);
-  const [id] = useState<string>(crypto.randomUUID());
-  
+
   // Waiting state for when queue is temporarily empty
   const [waiting, setWaiting] = useState(false);
   const [waitingMessage, setWaitingMessage] = useState('');
@@ -68,7 +67,6 @@ export default function useAckOnTimeout({
   // Handle when next becomes available while waiting
   useEffect(() => {
     if (next && waiting) {
-      console.log(`New work arrived while waiting for ${id}`);
       // Clear the waiting timeout
       if (waitingTimerRef.current) {
         clearTimeout(waitingTimerRef.current);
@@ -82,27 +80,27 @@ export default function useAckOnTimeout({
       setWaitingMessage('');
       setSecondsRemaining(QUEUE_WAIT_TIMEOUT / 1000);
     }
-  }, [next, waiting, id]);
+  }, [next, waiting]);
 
   const onNext = useCallback(() => {
-    console.log(`timer set for ${id}`);
     setWasHidden(false);
-    setTimer(window.setTimeout(ack, 2000));
+    // Capture the submit time now — the ack fires 2s later (grace period for
+    // paging back), and observation timing must not include that delay.
+    const submittedAt = Date.now();
+    setTimer(window.setTimeout(() => ack(submittedAt), 2000));
     if (next) {
       next();
     } else {
-      // Queue is empty - start waiting for new messages
-      // But only if we're not already waiting (prevents multiple timers from repeated next clicks)
+      // Queue is empty: wait for new messages. Guard against repeated next
+      // clicks stacking up multiple timers.
       if (waiting || waitingTimerRef.current) {
-        console.log(`Already waiting for ${id}, ignoring additional next click`);
         return;
       }
-      
-      console.log(`Queue empty, starting wait timer for ${id}`);
+
       setWaiting(true);
       setSecondsRemaining(QUEUE_WAIT_TIMEOUT / 1000);
       setWaitingMessage('Waiting for new work to be loaded...');
-      
+
       // Start countdown display
       countdownRef.current = window.setInterval(() => {
         setSecondsRemaining((prev) => {
@@ -116,10 +114,9 @@ export default function useAckOnTimeout({
           return prev - 1;
         });
       }, 1000);
-      
+
       // Set timeout for job completion
       waitingTimerRef.current = window.setTimeout(() => {
-        console.log(`Wait timeout expired for ${id}, job complete`);
         setWaiting(false);
         waitingTimerRef.current = undefined;
         setDone(true);
@@ -130,11 +127,10 @@ export default function useAckOnTimeout({
         alert(
           'No new work was loaded. The job appears to be complete. Thank you for your contribution!'
         );
-        // Navigate back to surveys
         navigate('/surveys');
       }, QUEUE_WAIT_TIMEOUT);
     }
-  }, [next, ack, id, navigate, waiting]);
+  }, [next, ack, navigate, waiting]);
 
   useEffect(() => {
     // If the component was hidden but is now visible and there is a timer running, cancel the timer.
@@ -144,13 +140,11 @@ export default function useAckOnTimeout({
 
     if (wasHidden && visible && timer && next) {
       // Read the number of milliseconds left on the timer
-      console.log(`timer cleared for ${id}`);
       clearTimeout(timer); // Cancel the timer
       setTimer(undefined);
       setWasHidden(false);
     } else if (wasHidden && visible && waiting) {
       // User navigated back while waiting for new work - cancel the waiting timer
-      console.log(`Waiting timer cancelled (navigated back) for ${id}`);
       if (waitingTimerRef.current) {
         clearTimeout(waitingTimerRef.current);
         waitingTimerRef.current = undefined;
@@ -165,9 +159,8 @@ export default function useAckOnTimeout({
       setWasHidden(false);
     } else if (!wasHidden && !visible) {
       setWasHidden(true);
-      console.log(`wasHidden set for ${id}`);
     }
-  }, [visible, timer, next, wasHidden, id, waiting]);
+  }, [visible, timer, next, wasHidden, waiting]);
 
   useEffect(() => {
     // If the provided onNext has changed, new work may have been loaded to the queue. In this case we need to clear the done flag again
@@ -188,20 +181,8 @@ export default function useAckOnTimeout({
   };
 }
 
-// interface WithAckOnTimeoutProps extends UseAckOnTimeoutProps {
-//   [key: string]: any; // To allow any other props to be passed
-// }
-
-// Combined props for the HOC - using intersection with index signature for flexibility
-// The location object at runtime includes an ack function from SQS source
-interface CombinedProps extends BaseImageProps {
-  next?: () => void;
-  visible: boolean;
-  location?: BaseImageProps['location'] & { ack?: () => void };
-}
-
 // Subtle loading overlay component for when waiting for new work
-function WaitingOverlay({ message }: { message: string }) {
+export function WaitingOverlay({ message }: { message: string }) {
   return (
     <div
       style={{
@@ -249,26 +230,4 @@ function WaitingOverlay({ message }: { message: string }) {
       </div>
     </div>
   );
-}
-
-export function withAckOnTimeout<T extends CombinedProps>(
-  WrappedComponent: React.ComponentType<T>
-) {
-  const WithAckOnTimeout: React.FC<T> = (props) => {
-    const { next, visible, location } = props;
-    const ack = location?.ack ?? (() => {});
-    const { onNext, waiting, waitingMessage } = useAckOnTimeout({
-      next,
-      visible,
-      ack,
-    });
-
-    return (
-      <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-        <WrappedComponent {...props} next={onNext} />
-        {waiting && <WaitingOverlay message={waitingMessage} />}
-      </div>
-    );
-  };
-  return WithAckOnTimeout;
 }

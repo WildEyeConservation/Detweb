@@ -15,12 +15,21 @@ import {
 } from '@aws-sdk/client-sqs';
 import { Badge } from 'react-bootstrap';
 import { GlobalContext, UserContext } from './Context';
-import { PreloaderFactory } from './Preloader';
+import { TaskBuffer } from './TaskBuffer';
 import InfoTagAnnotation from './InfoTagAnnotation';
 import { fetchAllPaginatedResults } from './utils';
 
 const VISIBILITY_TIMEOUT_SECONDS = 3600;
 const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
+
+/** One informational-tagging job, as taken off the queue. */
+type InfoTagTaskPayload = {
+  imageId: string;
+  annotationSetId: string;
+  categoryIds: string[];
+  ack: () => Promise<void>;
+  stopHeartbeat: () => void;
+};
 
 export default function InfoTagTask() {
   const { queueId } = useParams<{ queueId: string }>();
@@ -117,7 +126,7 @@ export default function InfoTagTask() {
     []
   );
 
-  const fetcher = useCallback(async () => {
+  const fetcher = useCallback(async (): Promise<InfoTagTaskPayload> => {
     for (;;) {
       if (!queueUrl) {
         await new Promise((resolve) => window.setTimeout(resolve, 2000));
@@ -256,7 +265,16 @@ export default function InfoTagTask() {
     return () => window.clearInterval(timer);
   }, [getSqsClient, queueUrl]);
 
-  const Preloader = useMemo(() => PreloaderFactory(InfoTagAnnotation), []);
+  const adminMemberships = useMemo(
+    () =>
+      myMembershipHook.data
+        ?.filter((membership) => membership.isAdmin)
+        .map((membership) => ({
+          projectId: membership.projectId,
+          queueId: membership.queueId!,
+        })),
+    [myMembershipHook.data]
+  );
 
   return (
     <div
@@ -265,29 +283,28 @@ export default function InfoTagTask() {
     >
       <div className='w-100 h-100'>
         {queueUrl && categories.length > 0 && infoTags.length > 0 ? (
-          <Preloader
+          <TaskBuffer
             index={index}
             setIndex={setIndex}
             fetcher={fetcher}
             visible
             preloadN={2}
             historyN={1}
-            categories={categories}
-            infoTags={infoTags}
-            projectId={projectId}
-            annotationSetId={annotationSetId}
-            group={group}
-            queueId={queueId}
-            queueZoom={queueZoom}
-            setQueueZoom={setQueueZoom}
-            adminMemberships={myMembershipHook.data
-              ?.filter((membership) => membership.isAdmin)
-              .map((membership) => ({
-                projectId: membership.projectId,
-                queueId: membership.queueId!,
-              }))}
-            legendCollapsed={legendCollapsed}
-            setLegendCollapsed={setLegendCollapsed}
+            renderTask={(task) => (
+              <InfoTagAnnotation
+                {...task}
+                categories={categories}
+                infoTags={infoTags}
+                projectId={projectId}
+                group={group}
+                queueId={queueId!}
+                queueZoom={queueZoom}
+                setQueueZoom={setQueueZoom}
+                adminMemberships={adminMemberships}
+                legendCollapsed={legendCollapsed}
+                setLegendCollapsed={setLegendCollapsed}
+              />
+            )}
           />
         ) : (
           <div className='d-flex justify-content-center align-items-center h-100'>

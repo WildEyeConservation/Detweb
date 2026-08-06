@@ -1,14 +1,16 @@
 import { useParams } from 'react-router-dom';
 import { useContext, useEffect, useState } from 'react';
 import { GlobalContext } from './Context';
-import AnnotationImage from './AnnotationImage';
+import AnnotationWorkspace from './AnnotationWorkspace';
+import type { ImageType } from './schemaTypes';
 
 export function ImageLoader() {
   const { imageId, annotationSetId } = useParams();
-  const [element, setElement] = useState<JSX.Element | null>(null);
+  const [image, setImage] = useState<ImageType | null>(null);
   const { client } = useContext(GlobalContext)!;
 
   useEffect(() => {
+    let cancelled = false;
     client.models.Image.get(
       { id: imageId! },
       {
@@ -24,22 +26,11 @@ export function ImageLoader() {
         ],
       }
     ).then(({ data }) => {
-      if (!data) return;
-      setElement(
-        <AnnotationImage
-          visible={true}
-          location={{
-            image: { ...data },
-            annotationSetId,
-            x: data.width / 2,
-            y: data.height / 2,
-            width: data.width,
-            height: data.height,
-          }}
-          hideNavButtons={true}
-        />
-      );
+      if (!cancelled && data) setImage(data as ImageType);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [imageId, annotationSetId]);
 
   return (
@@ -47,7 +38,20 @@ export function ImageLoader() {
       className='d-flex flex-column align-items-center w-100 h-100'
       style={{ paddingTop: '12px', paddingBottom: '12px' }}
     >
-      {element}
+      {image && (
+        <AnnotationWorkspace
+          visible={true}
+          location={{
+            image,
+            annotationSetId: annotationSetId!,
+            x: image.width / 2,
+            y: image.height / 2,
+            width: image.width,
+            height: image.height,
+          }}
+          hideNavButtons={true}
+        />
+      )}
     </div>
   );
 }
