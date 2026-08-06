@@ -1,193 +1,235 @@
-// @ts-nocheck
-import { useContext, useEffect, useState, useCallback } from 'react';
-import { UserContext } from './UserContext';
-import * as subs from './graphql/subscriptions';
-import {
-  annotationsByAnnotationSetId,
-  getLocation,
-  locationSetsByProjectName,
-} from './graphql/queries';
+import { useContext, useCallback, useState, useEffect, useRef } from 'react';
+import { ProjectContext, GlobalContext } from './Context';
+import { fetchAllPaginatedResults } from './utils';
+import type { Identifiable } from './TaskBuffer';
 
-import { latestObservation, testLocations } from './gqlQueries';
-import { GraphQLResult } from '@aws-amplify/api';
-import { gqlClient, graphqlOperation } from './App';
+export default function useTesting() {
+  const { currentPM, project, categoriesHook } = useContext(ProjectContext)!;
+  const { client } = useContext(GlobalContext)!;
 
-interface LocationSet {
-  id: string;
-}
+  // Use ref for index to prevent race conditions when multiple fetcher calls happen concurrently
+  const iRef = useRef(0);
+  const [zoom, setZoom] = useState<number | undefined>(undefined);
+  const setupPromiseRef = useRef<Promise<void>>(Promise.resolve());
 
-interface Location {
-  id: string;
-}
-
-interface Observation {
-  createdAt: string;
-}
-
-interface UseTestingReturnType {
-  numAcks: number;
-}
-
-export function useTesting(
-  injectTestCase: (body: any) => void,
-  testFailed: (body: any) => void
-): UseTestingReturnType {
-  const userContext = useContext(UserContext);
-
-  // if (!userContext?.user || !userContext.currentProject) {
-  //   throw new Error("User or Project is missing from context.");
-  // }
-
-  const { user, currentProject } = userContext;
-  const [numAcks, setNumAcks] = useState<number>(0);
-
-  const incrementAcks = useCallback(() => setNumAcks((na) => na + 1), []);
-  const resetAcks = () => setNumAcks(0);
-
-  const getTestLocation = async (): Promise<string | undefined> => {
-    let nextToken: string | null = null;
-    const candidateLocations: Record<string, string> = {};
-
-    do {
-      let locationSets: LocationSet[] = [];
-      const locationSetResult = (await gqlClient.graphql(
-        graphqlOperation(locationSetsByProjectName, {
-          projectName: currentProject,
-          nextToken,
-        })
-      )) as GraphQLResult<{
-        locationSetsByProjectName: {
-          items: LocationSet[];
-          nextToken: string | null;
-        };
-      }>;
-
-      if (locationSetResult.data) {
-        locationSets = locationSetResult.data.locationSetsByProjectName.items;
-        nextToken = locationSetResult.data.locationSetsByProjectName.nextToken;
-      }
-
-      for (const locationSet of locationSets) {
-        let locationNextToken: string | null = null;
-
-        do {
-          let locations: Location[] = [];
-          const locationResult = (await gqlClient.graphql(
-            graphqlOperation(testLocations, {
-              setId: locationSet.id,
-              nextToken: locationNextToken,
-            })
-          )) as GraphQLResult<{
-            testLocations: { items: Location[]; nextToken: string | null };
-          }>;
-
-          if (locationResult.data) {
-            locations = locationResult.data.testLocations.items;
-            locationNextToken = locationResult.data.testLocations.nextToken;
-          }
-
-          for (const { id } of locations) {
-            const observationResult = (await gqlClient.graphql(
-              graphqlOperation(latestObservation, {
-                locationId: id,
-                owner: user.id,
-              })
-            )) as GraphQLResult<{
-              observationsByLocationIdAndOwnerAndCreatedAt: {
-                items: Observation[];
-              };
-            }>;
-
-            if (observationResult.data) {
-              const observations =
-                observationResult.data
-                  .observationsByLocationIdAndOwnerAndCreatedAt.items;
-              if (observations.length === 0) {
-                return id;
-              } else {
-                candidateLocations[observations[0].createdAt] = id;
-              }
-            }
-          }
-        } while (locationNextToken);
-      }
-    } while (nextToken);
-
-    const sortedKeys = Object.keys(candidateLocations).sort();
-    return candidateLocations[sortedKeys[0]];
-  };
-
-  const createTestCase = async (id: string) => {
-    const locationResult = (await gqlClient.graphql(
-      graphqlOperation(getLocation, { id })
-    )) as GraphQLResult<{ getLocation: any }>;
-
-    if (!locationResult.data) {
-      throw new Error('Failed to fetch location data.');
-    }
-
-    const body = locationResult.data.getLocation;
-    body.setId = crypto.randomUUID(); // Generate a random AnnotationSetId.
-    body.message_id = crypto.randomUUID();
-
-    body.ack = async () => {
-      const annotationResult = (await gqlClient.graphql(
-        graphqlOperation(annotationsByAnnotationSetId, {
-          annotationSetId: body.setId,
-        })
-      )) as GraphQLResult<{ annotationsByAnnotationSetId: { items: any[] } }>;
-
-      if (
-        annotationResult.data &&
-        annotationResult.data.annotationsByAnnotationSetId.items.length === 0
-      ) {
-        body.ack = undefined;
-        testFailed(body);
-      }
-    };
-
-    return body;
-  };
+  const primaryCandidates = useRef<
+    { locationId: string; annotationSetId: string; testPresetId: string }[]
+  >([]);
+  const currentLocation = useRef<{
+    locationId: string;
+    annotationSetId: string;
+    testPresetId: string;
+  } | null>(null);
 
   useEffect(() => {
-    if (numAcks > 100) {
-      getTestLocation().then((id) => {
-        if (id) {
-          createTestCase(id).then(injectTestCase);
+    async function setup() {
+      if (currentPM.queueId) {
+        client.models.Queue.get({ id: currentPM.queueId }).then(({ data }) => {
+          if (data?.zoom) setZoom(data.zoom);
+        });
+      }
+
+      const { data: config } = await client.models.ProjectTestConfig.get({
+        projectId: project.id,
+      });
+
+      if (!config) {
+        return;
+      }
+
+      const presets = await fetchAllPaginatedResults(
+        client.models.TestPresetProject.testPresetsByProjectId,
+        {
+          projectId: project.id,
+          selectionSet: ['testPresetId'],
         }
-      });
-      resetAcks();
+      );
+
+      await fetchPrimaryLocations(presets);
     }
-  }, [numAcks, injectTestCase]);
 
-  useEffect(() => {
-    if (user) {
-      const subCreates = gqlClient.graphql(
-        graphqlOperation(subs.onCreateAnnotation, {
-          filter: { owner: { contains: user.id } },
-        })
-      ) as any;
+    setupPromiseRef.current = setup();
+  }, [currentPM]);
 
-      const subAcks = gqlClient.graphql(
-        graphqlOperation(subs.onCreateObservation, {
-          filter: { owner: { contains: user.id } },
-        })
-      ) as any;
+  async function fetchPrimaryLocations(presets: { testPresetId: string }[]) {
+    const testedLocations = await fetchAllPaginatedResults(
+      client.models.TestResult.testResultsByUserId,
+      {
+        userId: currentPM.userId,
+        selectionSet: [
+          'locationId',
+          'createdAt',
+          'testPresetId',
+          'annotationSetId',
+        ] as const,
+      }
+    );
 
-      const subCreatesSubscription = subCreates.subscribe({
-        next: () => resetAcks(),
-      });
+    const seenLocations = testedLocations
+      .filter(
+        (l) =>
+          l !== null && presets.some((p) => p.testPresetId === l.testPresetId)
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt ?? 0).getTime() -
+          new Date(a.createdAt ?? 0).getTime()
+      )
+      .filter(
+        (location, index, self) =>
+          index === self.findIndex((t) => t.locationId === location.locationId)
+      )
+      .reverse();
 
-      const subAcksSubscription = subAcks.subscribe({
-        next: () => incrementAcks(),
-      });
+    const testLocations = [];
+    for (const preset of presets) {
+      const locations = await fetchAllPaginatedResults(
+        client.models.TestPresetLocation.locationsByTestPresetId,
+        {
+          testPresetId: preset.testPresetId,
+          selectionSet: ['locationId', 'createdAt', 'annotationSetId'] as const,
+        }
+      );
 
-      return () => {
-        subCreatesSubscription.unsubscribe();
-        subAcksSubscription.unsubscribe();
-      };
+      testLocations.push(
+        ...locations.map((l) => ({
+          locationId: l.locationId,
+          createdAt: l.createdAt,
+          annotationSetId: l.annotationSetId,
+          testPresetId: preset.testPresetId,
+        }))
+      );
     }
-  }, [user, incrementAcks]);
 
-  return { numAcks };
+    // Lookup of valid current test preset-location pairs
+    const testKeys = new Set(
+      testLocations.map((l) => `${l.testPresetId}:${l.locationId}`)
+    );
+
+    // newest test locations, that have not yet been seen, are first up in the array
+    const locations = testLocations
+      .filter(
+        (l) =>
+          l !== null &&
+          !seenLocations.some((sl) => sl.locationId === l.locationId)
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt ?? 0).getTime() -
+          new Date(a.createdAt ?? 0).getTime()
+      );
+
+    // add seen locations to the end of the array as backup (only if still part of current test presets)
+    for (const seenLocation of seenLocations) {
+      const key = `${seenLocation.testPresetId}:${seenLocation.locationId}`;
+      if (testKeys.has(key)) {
+        locations.push({
+          locationId: seenLocation.locationId,
+          createdAt: seenLocation.createdAt,
+          annotationSetId: seenLocation.annotationSetId,
+          testPresetId: seenLocation.testPresetId,
+        });
+      }
+    }
+
+    primaryCandidates.current = locations.map((l) => ({
+      locationId: l.locationId,
+      annotationSetId: l.annotationSetId,
+      testPresetId: l.testPresetId,
+    }));
+  }
+
+  async function getTestLocation() {
+    const candidateEntries = [...primaryCandidates.current];
+    if (candidateEntries.length === 0) {
+      throw new Error('No primary candidates available for testing');
+    }
+    console.log('candidates', candidateEntries);
+    const length = candidateEntries.length;
+
+    // Capture and immediately increment the index to prevent race conditions
+    // when multiple concurrent fetcher calls happen
+    const startIndex = iRef.current;
+    iRef.current = (startIndex + 1) % length;
+
+    // Try each candidate once, wrapping around if necessary
+    for (let attempt = 0; attempt < length; attempt++) {
+      const currentIndex = (startIndex + attempt) % length;
+      const entry = candidateEntries[currentIndex];
+      console.log(`entry ${currentIndex}`, entry);
+      const categoryCounts = await fetchAllPaginatedResults(
+        client.models.LocationAnnotationCount
+          .categoryCountsByLocationIdAndAnnotationSetId,
+        {
+          locationId: entry.locationId,
+          annotationSetId: { eq: entry.annotationSetId },
+          selectionSet: ['category.name'],
+        }
+      );
+      const testCategories = categoryCounts.map((c) =>
+        c.category.name.toLowerCase()
+      );
+      const surveyCategories = categoriesHook.data?.map((c) =>
+        c.name.toLowerCase()
+      );
+      const missingCategories = testCategories.filter(
+        (c) => !surveyCategories?.includes(c)
+      );
+      // Return the first valid test location
+      if (missingCategories.length === 0) {
+        // Update ref to skip past this entry for next call
+        iRef.current = (currentIndex + 1) % length;
+        return entry;
+      }
+    }
+    // If no valid candidate found, fallback to the next in sequence
+    const fallbackIndex = startIndex % length;
+    console.warn(
+      'No valid test location found, defaulting to candidate',
+      candidateEntries[fallbackIndex]
+    );
+    iRef.current = (fallbackIndex + 1) % length;
+    return candidateEntries[fallbackIndex];
+  }
+
+  const fetcher = useCallback(async (): Promise<Identifiable> => {
+    const location = await getTestLocation();
+
+    currentLocation.current = location;
+
+    if (!location) {
+      console.warn('No location found for testing');
+    }
+
+    const id = crypto.randomUUID();
+    const body = {
+      id: id,
+      message_id: id,
+      location: {
+        id: location.locationId,
+        annotationSetId: location.annotationSetId,
+      },
+      allowOutside: true,
+      taskTag: '',
+      skipLocationWithAnnotations: false,
+      zoom: zoom,
+      testPresetId: location.testPresetId,
+      ack: () => {
+        console.log('Ack successful for test');
+      },
+      isTest: true,
+    };
+    return body;
+  }, [primaryCandidates, zoom]);
+
+  const fetchWhenReady = useCallback(async (): Promise<Identifiable | null> => {
+    await setupPromiseRef.current;
+    if (primaryCandidates.current.length === 0) return null;
+    return fetcher();
+  }, [fetcher]);
+
+  return {
+    fetcher: fetchWhenReady,
+    fetchedLocation: currentLocation.current,
+  };
 }

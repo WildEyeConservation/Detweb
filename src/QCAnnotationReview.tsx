@@ -45,7 +45,7 @@ type AnnotationData = {
 };
 
 type QCReviewProps = {
-  // From SQS message body (spread by Preloader)
+  // From SQS message body (spread by TaskBuffer)
   annotation: AnnotationData;
   queueId: string;
   message_id: string;
@@ -53,7 +53,7 @@ type QCReviewProps = {
   next?: () => void;
   prev?: () => void;
   visible: boolean;
-  // Passed through by Preloader from QCReviewTask
+  // Passed through by TaskBuffer from QCReviewTask
   categories: CategoryOption[];
   setCategories: React.Dispatch<React.SetStateAction<CategoryOption[]>>;
   projectId?: string;

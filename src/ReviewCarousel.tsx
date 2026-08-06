@@ -1,7 +1,7 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { GlobalContext, ProjectContext } from './Context';
-import AnnotationImage from './AnnotationImage';
-import { PreloaderFactory } from './Preloader';
+import AnnotationWorkspace from './AnnotationWorkspace';
+import { TaskBuffer } from './TaskBuffer';
 import BufferSource from './BufferSource';
 import { Spinner } from 'react-bootstrap';
 import { useInfoTagData } from './useInfoTags';
@@ -301,8 +301,6 @@ export default function ReviewCarousel({
     }
   }, [filteredAnnotations]);
 
-  const Preloader = useMemo(() => PreloaderFactory(AnnotationImage), []);
-
   if (!selectedAnnotationSet) {
     return (
       <div className='d-flex flex-column align-items-center justify-content-center h-100 w-100'>
@@ -330,7 +328,7 @@ export default function ReviewCarousel({
         bufferSource &&
         (filteredAnnotations.length ? (
           <div className='d-flex flex-column align-items-center h-100 w-100 mt-3'>
-            <Preloader
+            <TaskBuffer
               key={
                 selectedAnnotationSet +
                 effectiveCategories.map((cat) => cat.value).join(',') +
@@ -342,9 +340,14 @@ export default function ReviewCarousel({
               fetcher={() => bufferSource.fetch()}
               preloadN={2}
               historyN={2}
-              hideZoomSetting={true}
-              // Tight fit around locations for review; 0.55 keeps a small margin
-              viewBoundsScale={0.55}
+              renderTask={(task) => (
+                <AnnotationWorkspace
+                  {...task}
+                  hideZoomSetting={true}
+                  // Tight fit around locations for review; 0.55 keeps a small margin
+                  viewBoundsScale={0.55}
+                />
+              )}
             />
             <div className='mt-2 w-100'>
               <input

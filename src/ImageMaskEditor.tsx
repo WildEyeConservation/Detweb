@@ -1,34 +1,44 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { MapContainer, ImageOverlay, FeatureGroup } from 'react-leaflet';
-import { CRS } from 'leaflet';
-import { EditControl } from 'react-leaflet-draw';
-import L from 'leaflet';
-import 'leaflet-draw/dist/leaflet.draw.css';
+import React, { useCallback, useRef, useState } from 'react';
 import FileInput from './FileInput';
-import { Form } from 'react-bootstrap';
+import { Button, Form } from 'react-bootstrap';
 
 interface ImageMaskEditorProps {
   setMasks: (masks: number[][][]) => void;
 }
 
+type Polygon = { id: string; vertices: [number, number][] }; // image px, y from top
+
+const MASK_COLOR = '#97009c';
+const CLOSE_DISTANCE = 15; // px in image space (scaled) to close on first vertex
+
+/*
+Polygon mask editor drawn as an SVG overlay on the sample image — click to
+add vertices, click the first vertex (or double-click) to close, drag
+vertices to adjust, right-click a polygon to remove it.
+
+Masks use the persisted coordinate convention: [x, y] with y measured from
+the image bottom.
+*/
 const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({ setMasks }) => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageDimensions, setImageDimensions] = useState<{
     width: number;
     height: number;
   } | null>(null);
-
-  const featureGroupRef = useRef<L.FeatureGroup>(null);
-  const mapRef = useRef<L.Map | null>(
+  const [polygons, setPolygons] = useState<Polygon[]>([]);
+  const [draft, setDraft] = useState<[number, number][]>([]);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const draggingRef = useRef<{ polygonId: string; vertexIndex: number } | null>(
     null
-  ) as React.MutableRefObject<L.Map | null>;
+  );
 
-  // Handle file input change
   const handleFileChange = (file: File[]) => {
     if (file && file[0]) {
       const url = URL.createObjectURL(file[0]);
       setImageUrl(url);
-      // Load image to get its dimensions
+      setPolygons([]);
+      setDraft([]);
+      setMasks([]);
       const img = new Image();
       img.onload = () => {
         setImageDimensions({
@@ -40,146 +50,115 @@ const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({ setMasks }) => {
     }
   };
 
-  // Update parent's masks state by extracting polygons from the FeatureGroup
-  const updateMasks = useCallback(() => {
-    if (!featureGroupRef.current || !imageDimensions) return;
-    const newMasks: number[][][] = [];
-    featureGroupRef.current.eachLayer((layer: any) => {
-      if (layer instanceof L.Polygon) {
-        const latlngs = layer.getLatLngs()[0] as L.LatLng[];
-        // Clamp each point to be within image boundaries
-        const clampedLatLngs = latlngs.map((coord) => {
-          const clampedLng = Math.min(
-            Math.max(coord.lng, 0),
-            imageDimensions.width
-          );
-          const clampedLat = Math.min(
-            Math.max(coord.lat, 0),
-            imageDimensions.height
-          );
-          return L.latLng(clampedLat, clampedLng);
-        });
-        // If any point was adjusted, update the polygon's geometry
-        const hasChanged = latlngs.some((coord, index) => {
-          return (
-            coord.lat !== clampedLatLngs[index].lat ||
-            coord.lng !== clampedLatLngs[index].lng
-          );
-        });
-        if (hasChanged) {
-          layer.setLatLngs([clampedLatLngs]);
-          const polyAny = layer as any;
-          // Attempt to force a visual update
-          if (typeof polyAny.redraw === 'function') {
-            polyAny.redraw();
-          }
-          if (typeof polyAny._updatePath === 'function') {
-            polyAny._updatePath();
-          }
-          if (
-            polyAny._renderer &&
-            typeof polyAny._renderer._updatePath === 'function'
-          ) {
-            polyAny._renderer._updatePath(layer);
-          }
-          if (polyAny.editing) {
-            if (typeof polyAny.editing.updateMarkers === 'function') {
-              polyAny.editing.updateMarkers();
-            } else if (
-              typeof polyAny.editing._updateMarkerPositions === 'function'
-            ) {
-              polyAny.editing._updateMarkerPositions();
+  const publishMasks = useCallback(
+    (polys: Polygon[]) => {
+      if (!imageDimensions) return;
+      setMasks(
+        polys.map((p) =>
+          p.vertices.map(([x, y]) => [
+            Math.min(Math.max(x, 0), imageDimensions.width),
+            // Preserve the legacy CRS.Simple convention: y from image bottom
+            imageDimensions.height -
+              Math.min(Math.max(y, 0), imageDimensions.height),
+          ])
+        )
+      );
+    },
+    [setMasks, imageDimensions]
+  );
+
+  const eventToImagePx = (
+    e: React.MouseEvent<SVGSVGElement>
+  ): [number, number] | null => {
+    const svg = svgRef.current;
+    if (!svg || !imageDimensions) return null;
+    const rect = svg.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * imageDimensions.width;
+    const y = ((e.clientY - rect.top) / rect.height) * imageDimensions.height;
+    return [
+      Math.min(Math.max(x, 0), imageDimensions.width),
+      Math.min(Math.max(y, 0), imageDimensions.height),
+    ];
+  };
+
+  const closeDraft = () => {
+    if (draft.length >= 3) {
+      const next = [
+        ...polygons,
+        { id: crypto.randomUUID(), vertices: draft },
+      ];
+      setPolygons(next);
+      publishMasks(next);
+    }
+    setDraft([]);
+  };
+
+  const handleClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (draggingRef.current) return;
+    const px = eventToImagePx(e);
+    if (!px) return;
+    // Clicking near the first draft vertex closes the polygon
+    if (draft.length >= 3) {
+      const [fx, fy] = draft[0];
+      const scale = imageDimensions!.width /
+        (svgRef.current?.getBoundingClientRect().width ?? 1);
+      if (Math.hypot(px[0] - fx, px[1] - fy) < CLOSE_DISTANCE * scale) {
+        closeDraft();
+        return;
+      }
+    }
+    setDraft((prev) => [...prev, px]);
+  };
+
+  const handleVertexPointerDown = (
+    polygonId: string,
+    vertexIndex: number,
+    e: React.PointerEvent
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    draggingRef.current = { polygonId, vertexIndex };
+    (e.target as Element).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    const dragging = draggingRef.current;
+    if (!dragging) return;
+    const px = eventToImagePx(e as any);
+    if (!px) return;
+    setPolygons((prev) =>
+      prev.map((p) =>
+        p.id === dragging.polygonId
+          ? {
+              ...p,
+              vertices: p.vertices.map((v, i) =>
+                i === dragging.vertexIndex ? px : v
+              ),
             }
-          }
-        }
-        // Create mask state array in [lng, lat] format
-        const mask = clampedLatLngs.map((coord) => [coord.lng, coord.lat]);
-        newMasks.push(mask);
-      }
-    });
+          : p
+      )
+    );
+  };
 
-    setMasks(newMasks);
-  }, [setMasks, imageDimensions]);
-
-  // Update handleCreated to replace out-of-bound polygons
-  const handleCreated = (e: any) => {
-    if (!imageDimensions || !featureGroupRef.current) return;
-    const layer = e.layer;
-    if (layer instanceof L.Polygon) {
-      const latlngs = layer.getLatLngs()[0] as L.LatLng[];
-      const clampedLatLngs = latlngs.map((coord) => {
-        const clampedLng = Math.min(
-          Math.max(coord.lng, 0),
-          imageDimensions.width
-        );
-        const clampedLat = Math.min(
-          Math.max(coord.lat, 0),
-          imageDimensions.height
-        );
-        return L.latLng(clampedLat, clampedLng);
+  const handlePointerUp = () => {
+    if (draggingRef.current) {
+      draggingRef.current = null;
+      // publish with the latest state
+      setPolygons((prev) => {
+        publishMasks(prev);
+        return prev;
       });
-      const hasChanged = latlngs.some((coord, index) => {
-        return (
-          coord.lat !== clampedLatLngs[index].lat ||
-          coord.lng !== clampedLatLngs[index].lng
-        );
-      });
-      if (hasChanged) {
-        featureGroupRef.current!.removeLayer(layer);
-        const newPoly = L.polygon(clampedLatLngs, { color: '#97009c' });
-        featureGroupRef.current!.addLayer(newPoly);
-      }
     }
-    updateMasks();
   };
 
-  // Update handleEdited to replace out-of-bound polygons after editing
-  const handleEdited = (e: any) => {
-    if (!imageDimensions || !featureGroupRef.current) return;
-    e.layers.eachLayer((layer: any) => {
-      if (layer instanceof L.Polygon) {
-        const latlngs = layer.getLatLngs()[0] as L.LatLng[];
-        const clampedLatLngs = latlngs.map((coord) => {
-          const clampedLng = Math.min(
-            Math.max(coord.lng, 0),
-            imageDimensions.width
-          );
-          const clampedLat = Math.min(
-            Math.max(coord.lat, 0),
-            imageDimensions.height
-          );
-          return L.latLng(clampedLat, clampedLng);
-        });
-        const hasChanged = latlngs.some((coord, index) => {
-          return (
-            coord.lat !== clampedLatLngs[index].lat ||
-            coord.lng !== clampedLatLngs[index].lng
-          );
-        });
-        if (hasChanged) {
-          featureGroupRef.current!.removeLayer(layer);
-          const newPoly = L.polygon(clampedLatLngs, { color: '#97009c' });
-          featureGroupRef.current!.addLayer(newPoly);
-        }
-      }
-    });
-    updateMasks();
+  const removePolygon = (id: string) => {
+    const next = polygons.filter((p) => p.id !== id);
+    setPolygons(next);
+    publishMasks(next);
   };
 
-  const handleDeleted = (_e: any) => {
-    updateMasks();
-  };
-
-  // When image dimensions are available, fit the map to show the whole image
-  useEffect(() => {
-    if (imageDimensions && mapRef.current) {
-      mapRef.current.invalidateSize();
-      mapRef.current.fitBounds([
-        [0, 0],
-        [imageDimensions.height, imageDimensions.width],
-      ]);
-    }
-  }, [imageDimensions, mapRef]);
+  const toPointsAttr = (vertices: [number, number][]) =>
+    vertices.map(([x, y]) => `${x},${y}`).join(' ');
 
   return (
     <Form.Group className='mt-3'>
@@ -191,55 +170,107 @@ const ImageMaskEditor: React.FC<ImageMaskEditorProps> = ({ setMasks }) => {
         style={{ fontSize: '12px' }}
       >
         Use this tool to create masks for your images. Masks are used to remove
-        static objects such as a wheel from your images when processing. Use the
-        drawing tool in the top-right corner of the map to draw a polygon.
+        static objects such as a wheel from your images when processing. Click
+        on the image to add polygon corners; click the first corner (or
+        double-click) to finish a polygon. Drag corners to adjust and
+        right-click a polygon to remove it.
       </Form.Text>
       {imageUrl && imageDimensions && (
         <div
           style={{
-            height: '600px',
-            width: '100%',
             position: 'relative',
             marginTop: '8px',
             marginBottom: '12px',
+            width: '100%',
           }}
         >
-          <MapContainer
-            key={imageUrl}
-            ref={mapRef}
-            style={{ height: '100%', width: '100%' }}
-            crs={CRS.Simple}
-            center={[imageDimensions.height / 2, imageDimensions.width / 2]}
-            zoom={-4}
-            minZoom={-5}
+          <img
+            src={imageUrl}
+            alt='Mask sample'
+            style={{ width: '100%', height: 'auto', display: 'block' }}
+          />
+          <svg
+            ref={svgRef}
+            viewBox={`0 0 ${imageDimensions.width} ${imageDimensions.height}`}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              cursor: 'crosshair',
+            }}
+            onClick={handleClick}
+            onDoubleClick={(e) => {
+              e.preventDefault();
+              closeDraft();
+            }}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onContextMenu={(e) => e.preventDefault()}
           >
-            <ImageOverlay
-              url={imageUrl}
-              bounds={[
-                [0, 0],
-                [imageDimensions.height, imageDimensions.width],
-              ]}
-            />
-            <FeatureGroup ref={featureGroupRef}>
-              <EditControl
-                position='topright'
-                onCreated={handleCreated}
-                onEdited={handleEdited}
-                onDeleted={handleDeleted}
-                draw={{
-                  polygon: {
-                    allowIntersection: false,
-                    shapeOptions: { color: '#97009c' },
-                  },
-                  rectangle: false,
-                  circle: false,
-                  circlemarker: false,
-                  marker: false,
-                  polyline: false,
-                }}
-              />
-            </FeatureGroup>
-          </MapContainer>
+            {polygons.map((p) => (
+              <g key={p.id}>
+                <polygon
+                  points={toPointsAttr(p.vertices)}
+                  fill={MASK_COLOR}
+                  fillOpacity={0.25}
+                  stroke={MASK_COLOR}
+                  strokeWidth={Math.max(2, imageDimensions.width / 500)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    removePolygon(p.id);
+                  }}
+                />
+                {p.vertices.map((v, i) => (
+                  <circle
+                    key={i}
+                    cx={v[0]}
+                    cy={v[1]}
+                    r={Math.max(4, imageDimensions.width / 250)}
+                    fill='#ffffff'
+                    stroke={MASK_COLOR}
+                    strokeWidth={Math.max(1.5, imageDimensions.width / 800)}
+                    style={{ cursor: 'move' }}
+                    onPointerDown={(e) => handleVertexPointerDown(p.id, i, e)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ))}
+              </g>
+            ))}
+            {draft.length > 0 && (
+              <g>
+                <polyline
+                  points={toPointsAttr(draft)}
+                  fill='none'
+                  stroke={MASK_COLOR}
+                  strokeDasharray='6,4'
+                  strokeWidth={Math.max(2, imageDimensions.width / 500)}
+                />
+                {draft.map((v, i) => (
+                  <circle
+                    key={i}
+                    cx={v[0]}
+                    cy={v[1]}
+                    r={Math.max(4, imageDimensions.width / 250)}
+                    fill={i === 0 ? MASK_COLOR : '#ffffff'}
+                    stroke={MASK_COLOR}
+                    strokeWidth={Math.max(1.5, imageDimensions.width / 800)}
+                  />
+                ))}
+              </g>
+            )}
+          </svg>
+          {draft.length > 0 && (
+            <Button
+              size='sm'
+              variant='secondary'
+              style={{ position: 'absolute', top: 8, right: 8 }}
+              onClick={() => setDraft([])}
+            >
+              Cancel polygon
+            </Button>
+          )}
         </div>
       )}
       <FileInput

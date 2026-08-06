@@ -25,7 +25,10 @@ export function Project({
   currentPM: Schema['UserProjectMembership']['type'];
 }) {
   const { client } = useContext(GlobalContext)!;
-  const [expandLegend, setExpandLegend] = useState<boolean>(true);
+  const [expandLegend, setExpandLegend] = useState<boolean>(
+    () =>
+      localStorage.getItem(`legendCollapsed-${currentPM.projectId}`) !== 'true'
+  );
   const { myMembershipHook } = useContext(UserContext)!;
   const subscriptionFilter = useMemo(
     () => ({
@@ -67,6 +70,12 @@ export function Project({
   const currentProject = projectQuery.data?.data;
 
   useEffect(() => {
+    setExpandLegend(
+      localStorage.getItem(`legendCollapsed-${currentPM.projectId}`) !== 'true'
+    );
+  }, [currentPM.projectId]);
+
+  useEffect(() => {
     if (!currentCategory) {
       setCurrentCategory(categoriesHook.data?.[0]);
     }
@@ -105,7 +114,6 @@ export function User({
   const [jobsCompleted, setJobsCompleted] = useState<number>(0);
   const [unannotatedJobs, setUnannotatedJobs] = useState<number>(0);
   const [currentTaskTag, setCurrentTaskTag] = useState<string>('');
-  const [isRegistering, setIsRegistering] = useState<boolean>(false);
   const [currentAnnoCount, setCurrentAnnoCount] = useState<{
     [key: string]: { x: number; y: number }[];
   }>({});
@@ -233,8 +241,6 @@ export function User({
         setCurrentTaskTag,
         currentAnnoCount,
         setCurrentAnnoCount,
-        isRegistering,
-        setIsRegistering,
         myMembershipHook: myMembershipHook as unknown as UserContextType['myMembershipHook'],
         myOrganizationHook: myOrganizationHook as unknown as UserContextType['myOrganizationHook'],
         isOrganizationAdmin,

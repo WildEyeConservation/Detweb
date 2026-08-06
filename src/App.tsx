@@ -4,7 +4,6 @@ export function graphqlOperation(query: string, variables: any) {
 
 import { useEffect, useState } from 'react';
 import './App.css';
-import 'leaflet/dist/leaflet.css';
 import { configure } from 'react-hotkeys';
 // import { withAuthenticator } from "@aws-amplify/ui-react";
 import '@aws-amplify/ui-react/styles.css';

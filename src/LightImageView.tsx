@@ -1,13 +1,14 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { GlobalContext } from './Context';
-import { MapContainer, LayersControl, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import { StorageLayer } from './StorageLayer';
 import { fetchAllPaginatedResults } from './utils';
-import { CircleMarker, Popup, LayerGroup } from 'react-leaflet';
 import { Spinner } from 'react-bootstrap';
+import MapLibreLightViewer, {
+  LightAnnotation,
+} from './annotator/MapLibreLightViewer';
 import { useImageInfoTags } from './useInfoTags';
 import { formatInfoTagsForDisplay } from './infoTags';
+import { buildAnnotationFeatureProperties } from './annotator/annotationFeatures';
+import type { ExtendedAnnotationType } from './schemaTypes';
 
 type AnnotationItem = {
   id: string;
@@ -15,6 +16,9 @@ type AnnotationItem = {
   y: number;
   setId: string;
   objectId: string;
+  categoryId: string;
+  source?: string | null;
+  obscured?: boolean | null;
   category: { id: string; name: string } | null;
 };
 
@@ -77,6 +81,9 @@ export default function LightImageView({
             'y',
             'setId',
             'objectId',
+            'categoryId',
+            'source',
+            'obscured',
             'category.id',
             'category.name',
           ] as const,
@@ -91,16 +98,6 @@ export default function LightImageView({
       cancelled = true;
     };
   }, [client, imageId, annotationSetId]);
-
-  const scale = useMemo(() => {
-    if (!imageMeta) return 1;
-    return Math.pow(
-      2,
-      Math.ceil(Math.log2(Math.max(imageMeta.width, imageMeta.height))) - 8
-    );
-  }, [imageMeta?.width, imageMeta?.height]);
-
-  const xy2latLng = (x: number, y: number) => L.latLng(-y / scale, x / scale);
 
   // Filter annotations to only show those IN the categoryIds array (the labels)
   const filteredAnnotations = useMemo(() => {
@@ -144,36 +141,32 @@ export default function LightImageView({
     return categoryColorMap;
   }, [filteredAnnotations]);
 
-  const bounds = useMemo(() => {
-    if (!imageMeta) return undefined;
-    const sw = xy2latLng(0, imageMeta.height);
-    const ne = xy2latLng(imageMeta.width, 0);
-    return L.latLngBounds(sw, ne);
-  }, [imageMeta?.width, imageMeta?.height, scale]);
+  const lightAnnotations = useMemo<LightAnnotation[]>(
+    () =>
+      filteredAnnotations.map((a) => {
+        const categoryId = a.category?.id || 'Unknown';
+        const isPrimary = a.id === a.objectId;
+        const infoTags = infoTagsByAnnotation.get(a.id);
+        return {
+          ...buildAnnotationFeatureProperties(
+            a as ExtendedAnnotationType,
+            () => categoryColors.get(categoryId) || '#999999'
+          ),
+          x: a.x,
+          y: a.y,
+          popupLines: [
+            `Label: ${a.category?.name || 'Unknown'}`,
+            `Sighting: ${isPrimary ? 'Primary' : 'Secondary'}`,
+            ...(infoTags?.length
+              ? [`Info tags: ${formatInfoTagsForDisplay(infoTags)}`]
+              : []),
+          ],
+        };
+      }),
+    [filteredAnnotations, categoryColors, infoTagsByAnnotation]
+  );
 
-  // Component to handle map zoom events
-  const MapZoomHandler: React.FC = () => {
-    const map = useMap();
-
-    const zoomToAnnotation = (latLng: L.LatLng) => {
-      map.flyTo(latLng, Math.max(map.getZoom() + 2, 8), {
-        duration: 0.5,
-        easeLinearity: 0.1,
-      });
-    };
-
-    // Expose zoom function globally for CircleMarker onClick handlers
-    useEffect(() => {
-      (window as any).__zoomToAnnotation = zoomToAnnotation;
-      return () => {
-        delete (window as any).__zoomToAnnotation;
-      };
-    }, [map]);
-
-    return null;
-  };
-
-  if (!imageMeta || !sourceKey || !bounds || !annotationsLoaded)
+  if (!imageMeta || !sourceKey || !annotationsLoaded)
     return (
       <div className='w-100 h-100 d-flex align-items-center justify-content-center'>
         <Spinner size='sm' />
@@ -182,77 +175,11 @@ export default function LightImageView({
     );
 
   return (
-    <MapContainer
-      style={{ width: '100%', height: '100%' }}
-      crs={L.CRS.Simple}
-      bounds={bounds}
-      zoomSnap={1}
-      zoomDelta={1}
-      keyboardPanDelta={0}
-    >
-      <MapZoomHandler />
-      <LayersControl position='topright'>
-        <LayersControl.BaseLayer name='Image' checked>
-          {/* StorageLayer understands sourceKey as the tile root identifier */}
-          <StorageLayer
-            source={sourceKey}
-            bounds={bounds as any}
-            maxNativeZoom={5}
-            noWrap={true}
-          />
-        </LayersControl.BaseLayer>
-        <LayersControl.Overlay name='Annotations' checked>
-          <LayerGroup>
-            {filteredAnnotations.map((a) => {
-              const categoryId = a.category?.id || 'Unknown';
-              const color = categoryColors.get(categoryId) || '#999999';
-              const isPrimary = a.id === a.objectId;
-              const sightingType = isPrimary ? 'Primary' : 'Secondary';
-
-              return (
-                <CircleMarker
-                  key={a.id}
-                  center={xy2latLng(a.x as any, a.y as any)}
-                  radius={7}
-                  pathOptions={{
-                    color: color,
-                    fillColor: color,
-                    weight: 2,
-                    fillOpacity: isPrimary ? 0.8 : 0,
-                  }}
-                  eventHandlers={{
-                    click: () => {
-                      const latLng = xy2latLng(a.x as any, a.y as any);
-                      if ((window as any).__zoomToAnnotation) {
-                        (window as any).__zoomToAnnotation(latLng);
-                      }
-                    },
-                  }}
-                >
-                  <Popup>
-                    <div>
-                      <div>
-                        <strong>Label:</strong> {a.category?.name || 'Unknown'}
-                      </div>
-                      <div>
-                        <strong>Sighting:</strong> {sightingType}
-                      </div>
-                      {infoTagsByAnnotation.has(a.id) && (
-                        <div>
-                          <strong>Info tags:</strong>{' '}
-                          {formatInfoTagsForDisplay(
-                            infoTagsByAnnotation.get(a.id)!
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </Popup>
-                </CircleMarker>
-              );
-            })}
-          </LayerGroup>
-        </LayersControl.Overlay>
-      </LayersControl>
-    </MapContainer>
+    <MapLibreLightViewer
+      image={imageMeta}
+      sourceKey={sourceKey}
+      annotations={lightAnnotations}
+      zoomInOnAnnotationClick
+    />
   );
 }

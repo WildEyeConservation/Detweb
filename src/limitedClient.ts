@@ -28,17 +28,22 @@ export const runWithClientLimit = async <T>(fn: () => Promise<T>): Promise<T> =>
   limit(fn);
 
 // Custom error class for GraphQL errors
-class GraphQLError extends Error {
-  constructor(message: string) {
-    super(message);
+export class GraphQLError extends Error {
+  readonly errors: unknown;
+
+  constructor(errors: unknown) {
+    super(JSON.stringify(errors));
     this.name = 'GraphQLError';
+    this.errors = errors;
   }
 }
 
 // Function to check for GraphQL errors
-function checkForErrors(result: any) {
-  if (result && result.errors) {
-    throw new GraphQLError(JSON.stringify(result.errors));
+export function checkForErrors<T>(result: T): T {
+  const errors = (result as { errors?: unknown } | null)?.errors;
+  const hasErrors = Array.isArray(errors) ? errors.length > 0 : Boolean(errors);
+  if (hasErrors) {
+    throw new GraphQLError(errors);
   }
   return result;
 }
@@ -55,13 +60,14 @@ async function executeWithRetry<T>(
     try {
       const result = await operation();
 
-      // Handle GraphQL-style responses that might contain errors
-      if (result && (result as any).errors) {
-        throw new Error('Operation returned errors');
+      return checkForErrors(result);
+    } catch (error) {
+      // GraphQL validation and resolver errors are deterministic responses.
+      // Retrying the same operation only delays surfacing the real error.
+      if (error instanceof GraphQLError) {
+        throw error;
       }
 
-      return result;
-    } catch (error) {
       retryCount++;
       if (retryCount === maxRetries) {
         console.error(`Operation failed after ${maxRetries} attempts:`, error);
@@ -112,11 +118,11 @@ declare module '../amplify/shared/data-schema.generated' {
 }
 
 // Recursive function to wrap client methods with retry logic
-function wrapClientMethods(obj: any): any {
+function wrapClientMethods(obj: unknown): unknown {
   if (typeof obj !== 'object' || obj === null) {
     return obj;
   }
-  const wrappedObj: any = {};
+  const wrappedObj: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (typeof value === 'function') {
       if (key.startsWith('on') || key.startsWith('observe')) {
@@ -125,14 +131,14 @@ function wrapClientMethods(obj: any): any {
         // the return type, but that info is not available at runtime without invoking the method.
         wrappedObj[key] = value;
       } else {
-        wrappedObj[key] = async (...args: any[]) => {
+        wrappedObj[key] = async (...args: unknown[]) => {
           // Check if the last argument is a ClientCallOptions object
           const lastArg = args[args.length - 1];
           const hasOptions =
-            lastArg &&
-            typeof lastArg === 'object' &&
-            'retry' in lastArg;
-          const options: ClientCallOptions = hasOptions ? args.pop() : {};
+            lastArg && typeof lastArg === 'object' && 'retry' in lastArg;
+          const options: ClientCallOptions = hasOptions
+            ? (args.pop() as ClientCallOptions)
+            : {};
           const shouldRetry = options.retry !== false;
 
           const execute = () => limit(() => value(...args));
