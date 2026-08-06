@@ -15,7 +15,7 @@ export type FetcherType<T extends TaskPayload = TaskPayload> = () => Promise<T>;
 
 export type BeforeNextDecision<T extends TaskPayload> =
   | { kind: 'insert'; task: T }
-  | { kind: 'promote-standby' }
+  | { kind: 'promote-standby'; overrides?: Partial<T> }
   | null
   | undefined;
 
@@ -204,7 +204,8 @@ export function TaskBuffer<T extends TaskPayload>({
                             promoteStandbyTaskAfter(
                               currentBuffer,
                               index,
-                              currentHotStandby
+                              currentHotStandby,
+                              decision.overrides
                             )
                           );
                           setStandbyBuffer((current) => current.slice(1));

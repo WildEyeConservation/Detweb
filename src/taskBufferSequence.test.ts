@@ -40,3 +40,15 @@ test('a promoted standby keeps its identity and stable render id', () => {
     ['normal-1', 'test-hot', 'normal-2']
   );
 });
+
+test('a promoted standby can inherit slot metadata without changing its id', () => {
+  const buffer = [{ id: 'normal-1', taskTag: 'flow_1' }];
+  const standby = { id: 'test-hot', taskTag: '' };
+
+  const next = promoteStandbyTaskAfter(buffer, 0, standby, {
+    taskTag: buffer[0].taskTag,
+  });
+
+  assert.equal(next[1].id, 'test-hot');
+  assert.equal(next[1].taskTag, 'flow_1');
+});

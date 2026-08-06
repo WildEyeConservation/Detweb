@@ -74,6 +74,7 @@ export default function useAnnotationTaskQueue() {
   const {
     jobsCompleted,
     currentAnnoCount,
+    currentTaskTag,
     setCurrentAnnoCount,
     unannotatedJobs,
     setUnannotatedJobs,
@@ -363,7 +364,12 @@ export default function useAnnotationTaskQueue() {
       if (standbyReady) {
         maxCadenceIndexRef.current = completedIndex;
         setUnannotatedJobs(0);
-        return { kind: 'promote-standby' };
+        return {
+          kind: 'promote-standby',
+          overrides: {
+            taskTag: completedTask.taskTag || currentTaskTag,
+          },
+        };
       }
 
       // The threshold remains reached if warming has not finished. Navigation
@@ -374,6 +380,7 @@ export default function useAnnotationTaskQueue() {
     },
     [
       currentAnnoCount,
+      currentTaskTag,
       jobsCompleted,
       setCurrentAnnoCount,
       setUnannotatedJobs,

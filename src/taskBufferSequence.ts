@@ -14,15 +14,19 @@ export function insertBufferedTaskAfter<T extends object>(
   ];
 }
 
-/** Move an already-mounted standby entry into the active sequence unchanged. */
+/** Move an already-mounted standby entry into the active sequence. */
 export function promoteStandbyTaskAfter<T extends object>(
   buffer: BufferedEntry<T>[],
   index: number,
-  standby: BufferedEntry<T>
+  standby: BufferedEntry<T>,
+  overrides?: Partial<T>
 ): BufferedEntry<T>[] {
+  const promoted = overrides
+    ? { ...standby, ...overrides, id: standby.id }
+    : standby;
   return [
     ...buffer.slice(0, index + 1),
-    standby,
+    promoted,
     ...buffer.slice(index + 1),
   ];
 }
