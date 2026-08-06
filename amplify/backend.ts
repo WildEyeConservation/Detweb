@@ -132,8 +132,28 @@ userPoolClient.tokenValidityUnits = {
 };
 
 const observationTable = backend.data.resources.tables['Observation'];
-const policy = new Policy(
-  Stack.of(observationTable),
+const statsDataStack = Stack.of(observationTable);
+const statsFunction = backend.updateUserStats.resources.lambda;
+const statsFunctionStack = Stack.of(statsFunction);
+const statsReceiptTable = new dynamodb.Table(
+  statsFunctionStack,
+  'StatsEventReceiptTable',
+  {
+    partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+    billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+    encryption: dynamodb.TableEncryption.AWS_MANAGED,
+    timeToLiveAttribute: 'expiresAt',
+    pointInTimeRecovery: true,
+    removalPolicy: RemovalPolicy.RETAIN,
+  }
+);
+backend.updateUserStats.addEnvironment(
+  'STATS_RECEIPT_TABLE',
+  statsReceiptTable.tableName
+);
+
+const streamPolicy = new Policy(
+  statsDataStack,
   'MyDynamoDBFunctionStreamingPolicy',
   {
     statements: [
@@ -150,18 +170,51 @@ const policy = new Policy(
     ],
   }
 );
-backend.updateUserStats.resources.lambda.role?.attachInlinePolicy(policy);
+statsFunction.role?.attachInlinePolicy(streamPolicy);
+
+const userStatsTableArn = statsFunctionStack.formatArn({
+  service: 'dynamodb',
+  resource: 'table',
+  resourceName: 'UserStats-*',
+});
+const queueTableArn = statsFunctionStack.formatArn({
+  service: 'dynamodb',
+  resource: 'table',
+  resourceName: 'Queue-*',
+});
+const statsWritePolicy = new Policy(
+  statsFunctionStack,
+  'UpdateUserStatsDynamoDBPolicy',
+  {
+    statements: [
+      new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: [
+          'dynamodb:GetItem',
+          'dynamodb:PutItem',
+          'dynamodb:UpdateItem',
+        ],
+        resources: [
+          statsReceiptTable.tableArn,
+          userStatsTableArn,
+          queueTableArn,
+        ],
+      }),
+    ],
+  }
+);
+statsFunction.role?.attachInlinePolicy(statsWritePolicy);
 
 const mapping1 = new EventSourceMapping(
-  Stack.of(observationTable),
+  statsDataStack,
   'ObservationEventStreamMapping',
   {
-    target: backend.updateUserStats.resources.lambda,
+    target: statsFunction,
     eventSourceArn: observationTable.tableStreamArn,
     startingPosition: StartingPosition.LATEST,
   }
 );
-mapping1.node.addDependency(policy);
+mapping1.node.addDependency(streamPolicy);
 
 const backfillStack = backend.createStack('BackfillLocationGroup');
 const locationTable = backend.data.resources.tables['Location'];
