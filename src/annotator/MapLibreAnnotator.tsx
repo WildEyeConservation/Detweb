@@ -13,8 +13,8 @@ import {
   makeProjection,
   createImageMap,
   addImageTiles,
-  leafletZoom2MapZoom,
-  mapZoom2LeafletZoom,
+  storedZoomToMapZoom,
+  mapZoomToStoredZoom,
 } from './imageTiles';
 import { ImageContext, ManagementContext, ProjectContext } from '../Context';
 import useImageMenuItems from '../useImageMenuItems';
@@ -48,9 +48,8 @@ import {
 } from './annotationMarkerLayers';
 
 /*
-MapLibre-based replacement for the Leaflet stack in the species-labelling
-workflow (BaseImage + StorageLayer + ShowMarkers/DetwebMarker + Location +
-CreateAnnotationOnClick/OnHotkeys + ZoomTracker + MapLegend).
+MapLibre-based image viewer for the species-labelling workflow, including
+image tiles, annotations, location bounds, hotkeys, zoom tracking and legend.
 
 Tiling: the image is mapped onto the full mercator world square, so the
 existing slippy pyramid (slippymaps/{key}/{z}/{row}/{col}.png) aligns exactly
@@ -58,10 +57,9 @@ with MapLibre's native tile grid. A custom `detweb://` protocol feeds tiles
 from getTileBlob (S3 + on-demand Lambda generation + localforage cache), and
 MapLibre handles fading, retention and overzoom natively.
 
-Zoom parity: Leaflet CRS.Simple displayed pyramid level z natively at map
-zoom z; MapLibre (256px tiles over a 512px world) displays level z natively
-at map zoom z-1. Stored default zooms (Queue.zoom, localStorage) remain on
-the Leaflet scale, so we convert on the way in (zoom - 1) and out (zoom + 1).
+Stored zoom parity: saved default zooms use the image pyramid's level
+numbering. MapLibre's native zoom is one level lower, so convert on the way in
+(zoom - 1) and out (zoom + 1).
 */
 
 const SOURCE_ANNOTATIONS = 'annotations';
@@ -77,7 +75,7 @@ export interface MapLibreAnnotatorProps {
   image: AnnotationImage;
   location: AnnotationLocation;
   visible: boolean;
-  /** Default zoom on the Leaflet scale (as stored in Queue.zoom / localStorage). */
+  /** Default zoom using the persisted image-pyramid scale. */
   zoom?: number;
   viewBoundsScale?: number;
   next?: () => void;
@@ -302,8 +300,8 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
     });
 
     map.on('zoomend', () => {
-      // Report on the Leaflet scale for parity with stored default zooms
-      setZoom(mapZoom2LeafletZoom(map.getZoom()));
+      // Report using the persisted scale so existing default zooms stay stable.
+      setZoom(mapZoomToStoredZoom(map.getZoom()));
     });
 
     return () => {
@@ -328,7 +326,7 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
           location?.x ?? image.width / 2,
           location?.y ?? image.height / 2
         ),
-        zoom: leafletZoom2MapZoom(zoom),
+        zoom: storedZoomToMapZoom(zoom),
       });
     } else {
       const scale = viewBoundsScale ?? 1.5;
