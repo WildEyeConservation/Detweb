@@ -158,11 +158,27 @@ export function TaskBuffer<T extends TaskPayload>({
       {renderedEntries.map(({ entry, subsetIndex, isStandby }) => {
         const isCurrent =
           !isStandby && subsetIndex === index - subsetStart;
+        /*
+        `inert` rather than aria-hidden. Clicking "Next Location" leaves DOM
+        focus on that button, and a browser refuses to apply aria-hidden to an
+        ancestor of the focused element — it logs "Blocked aria-hidden on an
+        element because its descendant retained focus" and ignores the
+        attribute, so the off-screen tasks stayed exposed to assistive
+        technology anyway. inert hides the subtree *and* pulls focus out of it,
+        which is what a buffered task that is no longer on screen wants.
+
+        It has to be omitted rather than set to false: inert is a boolean
+        attribute, so inert="false" would still make the subtree inert. React 18
+        has no typing for it either, hence the cast.
+        */
+        const inertProps = (
+          isCurrent ? {} : { inert: '' }
+        ) as React.HTMLAttributes<HTMLDivElement>;
         return (
           <div
             key={entry.id}
             className='d-flex justify-content-center w-100 h-100'
-            aria-hidden={!isCurrent}
+            {...inertProps}
             style={{
               visibility: isCurrent ? 'visible' : 'hidden',
               position: 'absolute',
