@@ -19,6 +19,10 @@ import {
 import { ImageContext, ManagementContext, ProjectContext } from '../Context';
 import useImageMenuItems from '../useImageMenuItems';
 import { isWithinLocationBounds, resolveCategoryIdForSet } from '../utils';
+import {
+  canonicalHotkeyFromParsed,
+  normalizeShortcutKey,
+} from '../utils/hotkeys';
 import { NavButtons } from '../NavButtons';
 import ChangeCategoryModal from '../ChangeCategoryModal';
 import type { CategoryType, ExtendedAnnotationType } from '../schemaTypes';
@@ -643,14 +647,26 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
     () => (categories ?? []).filter((c) => c.shortcutKey),
     [categories]
   );
+  const categoryByHotkey = useMemo(() => {
+    const map = new Map<string, CategoryType>();
+    for (const category of hotkeyCategories) {
+      const key = normalizeShortcutKey(category.shortcutKey);
+      // First one wins, matching the previous find() semantics on duplicates.
+      if (key && !map.has(key)) map.set(key, category);
+    }
+    return map;
+  }, [hotkeyCategories]);
   const hotkeys = hotkeyCategories.map((c) => c.shortcutKey!).join(',');
   useHotkeys(
     hotkeys || 'f24',
-    (event) => {
+    (event, hotkeysEvent) => {
       if (event.repeat) return;
       if (!mouseOverMapRef.current) return;
-      const category = hotkeyCategories.find(
-        (c) => c.shortcutKey!.toLowerCase() === event.key?.toLowerCase()
+      // Resolve from the hotkey that actually matched rather than event.key:
+      // event.key cannot represent a combo ('ctrl+h'), does not match recorded
+      // physical key names ('period'), and diverges from them on non-US layouts.
+      const category = categoryByHotkey.get(
+        canonicalHotkeyFromParsed(hotkeysEvent)
       );
       if (!category) return;
       event.preventDefault();
@@ -672,7 +688,7 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
       setCurrentCategory(category);
     },
     { keydown: true, keyup: false, enabled: visible && hotkeys.length > 0 },
-    [hotkeyCategories, annotationsHook, setId, image.id, source, project]
+    [categoryByHotkey, annotationsHook, setId, image.id, source, project]
   );
 
   return (
