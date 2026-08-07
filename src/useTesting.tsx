@@ -139,12 +139,11 @@ export default function useTesting() {
     }));
   }
 
-  async function getTestLocation() {
+  const getTestLocation = useCallback(async () => {
     const candidateEntries = [...primaryCandidates.current];
     if (candidateEntries.length === 0) {
       throw new Error('No primary candidates available for testing');
     }
-    console.log('candidates', candidateEntries);
     const length = candidateEntries.length;
 
     // Capture and immediately increment the index to prevent race conditions
@@ -156,7 +155,6 @@ export default function useTesting() {
     for (let attempt = 0; attempt < length; attempt++) {
       const currentIndex = (startIndex + attempt) % length;
       const entry = candidateEntries[currentIndex];
-      console.log(`entry ${currentIndex}`, entry);
       const categoryCounts = await fetchAllPaginatedResults(
         client.models.LocationAnnotationCount
           .categoryCountsByLocationIdAndAnnotationSetId,
@@ -190,7 +188,7 @@ export default function useTesting() {
     );
     iRef.current = (fallbackIndex + 1) % length;
     return candidateEntries[fallbackIndex];
-  }
+  }, [client, categoriesHook.data]);
 
   const fetcher = useCallback(async (): Promise<Identifiable> => {
     const location = await getTestLocation();
@@ -220,13 +218,27 @@ export default function useTesting() {
       isTest: true,
     };
     return body;
-  }, [primaryCandidates, zoom]);
+  }, [getTestLocation, zoom]);
 
   const fetchWhenReady = useCallback(async (): Promise<Identifiable | null> => {
     await setupPromiseRef.current;
     if (primaryCandidates.current.length === 0) return null;
+    /*
+    The survey's categories load asynchronously and read as an empty array until
+    they arrive (useOptimisticUpdates returns `data ?? []`). getTestLocation
+    rejects any candidate using a category the survey does not have, so against
+    an empty list *every* candidate fails and the fallback serves a test that may
+    use labels the annotator has no way to pick.
+
+    Defer instead. Returning null simply leaves the standby slot unfilled, and
+    because this callback depends on categoriesHook.data, its identity changes
+    once the categories land — which re-runs TaskBuffer's standby effect and
+    resolves a test location properly. It also avoids a round of per-candidate
+    LocationAnnotationCount queries whose outcome is a foregone conclusion.
+    */
+    if (categoriesHook.data.length === 0) return null;
     return fetcher();
-  }, [fetcher]);
+  }, [fetcher, categoriesHook.data]);
 
   return {
     fetcher: fetchWhenReady,

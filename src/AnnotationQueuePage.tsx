@@ -3,6 +3,7 @@ import { JobsRemaining } from './JobsRemaining';
 import AnnotationWorkspace from './AnnotationWorkspace';
 import { TaskBuffer } from './TaskBuffer';
 import useAnnotationTaskQueue from './useAnnotationTaskQueue';
+import useUnsavedWorkGuard from './useUnsavedWorkGuard';
 
 /*
 The annotation route: obtains fully hydrated annotation tasks, keeps nearby
@@ -12,6 +13,7 @@ export default function AnnotationQueuePage() {
   const [index, setIndex] = useState(0);
   const { fetcher, standbyTestFetcher, beforeNext } =
     useAnnotationTaskQueue();
+  useUnsavedWorkGuard();
 
   return (
     <div
