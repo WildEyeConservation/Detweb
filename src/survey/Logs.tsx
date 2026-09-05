@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Button, Form, Card, Spinner } from 'react-bootstrap';
 import { client } from '../stores/appClient';
-import { showModalAction as showModal } from '../stores/modalStore';
 import { Schema } from '../amplify/client-schema';
 import { fetchAllPaginatedResults } from '../utils';
 import { Download } from 'lucide-react';
@@ -10,7 +9,7 @@ import { useUsers } from '../apiInterface';
 import MyTable from '../Table';
 import { Footer } from '../Modal';
 
-export default function Logs({ projectId }: { projectId: string }) {
+export default function Logs({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   const { users } = useUsers();
   const [logs, setLogs] = useState<Schema['AdminActionLog']['type'][]>([]);
   const [loading, setLoading] = useState(false);
@@ -242,7 +241,7 @@ export default function Logs({ projectId }: { projectId: string }) {
         </Card.Body>
       </Card>
       <Footer>
-        <Button variant='dark' onClick={() => showModal(null)}>
+        <Button variant='dark' onClick={() => onClose()}>
           Close
         </Button>
       </Footer>

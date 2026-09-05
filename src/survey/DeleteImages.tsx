@@ -6,7 +6,6 @@ import {
   useMemo,
 } from 'react';
 import { client } from '../stores/appClient';
-import { showModalAction as showModal } from '../stores/modalStore';
 import { Footer } from '../Modal';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -260,7 +259,7 @@ async function runPool<T>(
   await Promise.all(runners);
 }
 
-export default function DeleteImages({ projectId }: { projectId: string }) {
+export default function DeleteImages({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   const [images, setImages] = useState<ImageData[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -1566,7 +1565,7 @@ This action cannot be undone.`;
         </Button>
         <Button
           variant='dark'
-          onClick={() => showModal(null)}
+          onClick={() => onClose()}
           disabled={deleting}
         >
           Close

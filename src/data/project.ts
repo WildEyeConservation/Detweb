@@ -31,6 +31,7 @@ export function useCategories(projectId: string | undefined) {
         { projectId: projectId ?? '' },
         { nextToken, limit: 10000 }
       ),
-    subscriptionFilter
+    subscriptionFilter,
+    { enabled: Boolean(projectId), subscribe: false }
   );
 }

@@ -15,7 +15,6 @@ interface EditAnnotationSetModalProps {
   setSelectedSets?: (sets: string[]) => void;
   project: Schema['Project']['type'];
   categories: { name: string }[];
-  setEditSurveyTab: (tab: number) => void;
 }
 
 const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({

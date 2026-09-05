@@ -42,10 +42,11 @@ const { data, create, update, delete } = useOptimisticUpdates(
     'OrganizationMembership', listMemberships, subscriptionFilter, { compositeKey }
 );
 */
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient, hashKey } from '@tanstack/react-query';
+import { useEffect, useMemo, useCallback, useRef } from 'react';
 import type { DataModels, SubscriptionOptions } from '../amplify/shared/data-schema.generated';
 import { client } from './stores/appClient';
+import { acquireSubscriptions } from './utils/sharedSubscriptions';
 import {
   isMissingRow,
   withRowReinstated,
@@ -57,35 +58,11 @@ import {
 // Options interface to optionally pass a composite key resolver and subscription auth mode
 export interface OptimisticOptions<T> {
   compositeKey?: (item: T) => string;
+  enabled?: boolean;
+  /** Keep live events only for data that must change while the screen is open. */
+  subscribe?: boolean;
+  staleTime?: number;
   authMode?: 'apiKey' | 'userPool' | 'iam' | 'identityPool' | 'lambda' | 'none';
-}
-
-type SharedSubscription = { unsubscribe(): void };
-
-interface SharedSubscriptionEntry {
-  count: number;
-  subscriptions: SharedSubscription[];
-}
-
-const sharedSubscriptions = new Map<string, SharedSubscriptionEntry>();
-
-function stableSerialize(value: unknown): string {
-  return JSON.stringify(value, (_key, nestedValue: unknown) => {
-    if (
-      nestedValue !== null &&
-      typeof nestedValue === 'object' &&
-      !Array.isArray(nestedValue)
-    ) {
-      const objectValue = nestedValue as Record<string, unknown>;
-      return Object.keys(objectValue)
-        .sort()
-        .reduce<Record<string, unknown>>((sorted, key) => {
-          sorted[key] = objectValue[key];
-          return sorted;
-        }, {});
-    }
-    return nestedValue;
-  });
 }
 
 export function useOptimisticUpdates<
@@ -101,13 +78,21 @@ export function useOptimisticUpdates<
   updateFunction?: (progress: number) => Promise<void>
 ) {
   const queryClient = useQueryClient();
-  const queryKey = [modelKey, subscriptionFilter];
+  const enabled = options?.enabled ?? true;
+  const subscribe = options?.subscribe ?? true;
+  // Equivalent inline filters must not tear down and reopen subscriptions.
+  const queryHash = hashKey([modelKey, subscriptionFilter]);
+  const queryKey = useMemo(() => JSON.parse(queryHash), [queryHash]);
+  const authMode = options?.authMode;
+  const compositeKey = options?.compositeKey;
+  const compositeKeyRef = useRef(compositeKey);
+  compositeKeyRef.current = compositeKey;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const model = client.models[modelKey] as any;
 
   // Use the compositeKey function from options if provided, otherwise use id
-  const getKey = (item: any) =>
-    options && options.compositeKey ? options.compositeKey(item) : item.id;
+  const getKey = useCallback((item: any) =>
+    compositeKeyRef.current ? compositeKeyRef.current(item) : item.id, []);
 
   const effectiveListFunction = useCallback(
     (nextToken?: string) => {
@@ -120,6 +105,9 @@ export function useOptimisticUpdates<
 
   const { data, ...queryResult } = useQuery({
     queryKey,
+    enabled,
+    // A remounted screen must eventually catch changes missed while absent.
+    staleTime: options?.staleTime ?? 30_000,
     queryFn: async () => {
       let nextToken: string | undefined = undefined;
       const allResults: T[] = [];
@@ -137,77 +125,47 @@ export function useOptimisticUpdates<
   const stableData = useMemo(() => data ?? [], [data]);
 
   useEffect(() => {
-    const subOptions = options?.authMode
-      ? ({ ...(subscriptionFilter ?? {}), authMode: options.authMode } as typeof subscriptionFilter)
-      : subscriptionFilter;
-    const subscriptionKey = `${String(modelKey)}:${stableSerialize(subOptions ?? {})}`;
-    const existingEntry = sharedSubscriptions.get(subscriptionKey);
+    if (!enabled || !subscribe) return;
+    const filter = queryKey[1];
+    const subOptions = authMode ? { ...(filter ?? {}), authMode } : filter;
+    const subscriptionKey = hashKey([queryKey, authMode]);
+    return acquireSubscriptions(queryClient, subscriptionKey, () => {
+      const createSub = model.onCreate(subOptions).subscribe({
+        next: (data: T) => {
+          if (data == null) return;
+          queryClient.setQueryData<T[]>(queryKey, (old = []) => [
+            ...old.filter((item) => getKey(item) !== getKey(data)),
+            data,
+          ]);
+        },
+        error: (error: unknown) => console.warn(error),
+      });
 
-    if (existingEntry) {
-      existingEntry.count += 1;
-      return () => {
-        existingEntry.count -= 1;
-        if (existingEntry.count === 0) {
-          existingEntry.subscriptions.forEach((subscription) =>
-            subscription.unsubscribe()
+      const updateSub = model.onUpdate(subOptions).subscribe({
+        next: (data: T) => {
+          if (data == null) return;
+          queryClient.setQueryData<T[]>(queryKey, (old = []) =>
+            old.map((item) =>
+              getKey(item) === getKey(data) ? { ...item, ...data } : item
+            )
           );
-          sharedSubscriptions.delete(subscriptionKey);
-        }
-      };
-    }
+        },
+        error: (error: unknown) => console.warn(error),
+      });
 
-    // Sharers must use equivalent compositeKey functions; the first callbacks
-    // own getKey and update the common queryKey for every hook instance.
-    const createSub = model.onCreate(subOptions).subscribe({
-      next: (data: T) => {
-        if (data == null) return;
-        queryClient.setQueryData<T[]>(queryKey, (old = []) => [
-          ...old.filter((item) => getKey(item) !== getKey(data)),
-          data,
-        ]);
-      },
-      error: (error: unknown) => console.warn(error),
+      const deleteSub = model.onDelete(subOptions).subscribe({
+        next: (data: T) => {
+          if (data == null) return;
+          queryClient.setQueryData<T[]>(queryKey, (old = []) =>
+            old.filter((item) => getKey(item) !== getKey(data))
+          );
+        },
+        error: (error: unknown) => console.warn(error),
+      });
+
+      return [createSub, updateSub, deleteSub];
     });
-
-    const updateSub = model.onUpdate(subOptions).subscribe({
-      next: (data: T) => {
-        if (data == null) return;
-        queryClient.setQueryData<T[]>(queryKey, (old = []) =>
-          old.map((item) =>
-            getKey(item) === getKey(data) ? { ...item, ...data } : item
-          )
-        );
-      },
-      error: (error: unknown) => console.warn(error),
-    });
-
-    const deleteSub = model.onDelete(subOptions).subscribe({
-      next: (data: T) => {
-        if (data == null) return;
-        queryClient.setQueryData<T[]>(queryKey, (old = []) =>
-          old.filter((item) => getKey(item) !== getKey(data))
-        );
-      },
-      error: (error: unknown) => console.warn(error),
-    });
-
-    const entry: SharedSubscriptionEntry = {
-      count: 1,
-      subscriptions: [createSub, updateSub, deleteSub],
-    };
-    sharedSubscriptions.set(subscriptionKey, entry);
-
-    return () => {
-      entry.count -= 1;
-      if (entry.count === 0) {
-        entry.subscriptions.forEach((subscription) =>
-          subscription.unsubscribe()
-        );
-        sharedSubscriptions.delete(subscriptionKey);
-      }
-    };
-    //eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subscriptionFilter]);
+  }, [enabled, subscribe, model, queryClient, queryKey, authMode, getKey]);
 
   /*
   Rollbacks go through the pure transforms in utils/optimisticCache so a failed
@@ -240,7 +198,13 @@ export function useOptimisticUpdates<
       return { previousItems };
     },
     onSuccess: (result: unknown, newItem: T) => {
-      if (!isMissingRow(result)) return;
+      if (!isMissingRow(result)) {
+        const saved = (result as { data: T }).data;
+        queryClient.setQueryData<T[]>(queryKey, (old = []) =>
+          old.map((item) => getKey(item) === getKey(saved) ? { ...item, ...saved } : item)
+        );
+        return;
+      }
       console.error(
         `${String(modelKey)}.create returned no row — the write was rejected. Rolling back.`,
         newItem
@@ -268,7 +232,13 @@ export function useOptimisticUpdates<
       return { previousItems };
     },
     onSuccess: (result: unknown, updatedItem: T, context) => {
-      if (!isMissingRow(result)) return;
+      if (!isMissingRow(result)) {
+        const saved = (result as { data: T }).data;
+        queryClient.setQueryData<T[]>(queryKey, (old = []) =>
+          old.map((item) => getKey(item) === getKey(saved) ? { ...item, ...saved } : item)
+        );
+        return;
+      }
       console.error(
         `${String(modelKey)}.update returned no row — the write was rejected. Rolling back.`,
         updatedItem

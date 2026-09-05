@@ -4,10 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { fetchAllPaginatedResults } from './utils.tsx';
 import exportFromJSON from 'export-from-json';
 import { client } from './stores/appClient';
-import { showModalAction as showModal } from './stores/modalStore';
 import { useState, useEffect, useMemo } from 'react';
 import { useUsers } from './apiInterface';
-import GenerateJollyResults from './GenerateJollyResults.tsx';
 import { Spinner } from 'react-bootstrap';
 import {
   fetchAllInfoTagsForSet,
@@ -19,9 +17,11 @@ export default function AnnotationSetResults({
   onClose,
   surveyId,
   annotationSet,
+  onGenerateResults,
 }: {
   show: boolean;
   onClose: () => void;
+  onGenerateResults: () => void;
   surveyId: string;
   annotationSet: { id: string; name: string };
 }) {
@@ -185,12 +185,6 @@ export default function AnnotationSetResults({
     setExportStatus('');
   }
 
-  async function generateSurveyResults() {
-    setLoading(true);
-    showModal('generateJollyResults');
-    setLoading(false);
-  }
-
   async function viewSurveyResults(annotationSetId: string) {
     onClose();
     navigate(`/jolly/${surveyId}/${annotationSetId}`);
@@ -277,7 +271,7 @@ export default function AnnotationSetResults({
                     ) {
                       return;
                     }
-                    generateSurveyResults();
+                    onGenerateResults();
                   }}
                 >
                   Generate Results
@@ -302,10 +296,6 @@ export default function AnnotationSetResults({
           </Button>
         </Footer>
       </Modal>
-      <GenerateJollyResults
-        surveyId={surveyId}
-        annotationSetId={annotationSet.id}
-      />
     </>
   );
 }

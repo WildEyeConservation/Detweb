@@ -2,12 +2,11 @@ import { Button, Form } from 'react-bootstrap';
 import { Footer } from '../Modal';
 import { useEffect, useState } from 'react';
 import { client } from '../stores/appClient';
-import { showModalAction as showModal } from '../stores/modalStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { fetchAllPaginatedResults } from '../utils';
 import SurveyStructure, { Camera } from './SurveyStructure';
 
-export default function EditInformation({ projectId }: { projectId: string }) {
+export default function EditInformation({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   const [oldProjectName, setOldProjectName] = useState('');
   const [newProjectName, setNewProjectName] = useState('');
   const [fetching, setFetching] = useState(false);
@@ -198,7 +197,7 @@ export default function EditInformation({ projectId }: { projectId: string }) {
         </Button>
         <Button
           variant='dark'
-          onClick={() => showModal(null)}
+          onClick={() => onClose()}
           disabled={disabled}
         >
           Close

@@ -8,7 +8,6 @@ import Container from 'react-bootstrap/Container';
 import Notifications from './user/Notifications.tsx';
 import { useSession } from './session';
 import {
-  useIsOrganizationAdmin,
   useMyMemberships,
   useMyOrganizations,
 } from './data/memberships';
@@ -26,7 +25,7 @@ import { useQueryClient } from '@tanstack/react-query';
 export default function MainNavigation({ signOut }: { signOut: () => void }) {
   const { cognitoGroups, user } = useSession();
   const myOrganizationHook = useMyOrganizations();
-  const isOrganizationAdmin = useIsOrganizationAdmin();
+  const isOrganizationAdmin = myOrganizationHook.data.some((membership) => membership.isAdmin);
   const myProjectsHook = useMyMemberships();
   // Route-driven flag lives in taskStore so unrelated consumers do not
   // re-render when navigation changes.

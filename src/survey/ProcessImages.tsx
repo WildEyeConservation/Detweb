@@ -2,10 +2,9 @@ import { Form, Spinner, Button } from 'react-bootstrap';
 import { Footer } from '../Modal';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { client, backendOutputs as backend } from '../stores/appClient';
-import { showModalAction as showModal } from '../stores/modalStore';
 import Select from 'react-select';
 
-export default function ProcessImages({ projectId, organizationId }: { projectId: string; organizationId: string }) {
+export default function ProcessImages({ projectId, organizationId, onClose }: { projectId: string; organizationId: string; onClose: () => void }) {
   const [model, setModel] = useState<{ label: string; value: string } | null>(
     null
   );
@@ -251,7 +250,7 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
     setLoading(false);
     setDisabled(false);
 
-    showModal(null);
+    onClose();
   };
 
   return (
@@ -302,7 +301,7 @@ export default function ProcessImages({ projectId, organizationId }: { projectId
         </Button>
         <Button
           variant='dark'
-          onClick={() => showModal(null)}
+          onClick={() => onClose()}
           disabled={disabled}
         >
           Close

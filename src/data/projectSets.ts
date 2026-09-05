@@ -19,7 +19,8 @@ export function useProjectMemberships(projectId: string | undefined) {
         { projectId: projectId ?? '' },
         { nextToken }
       ),
-    subscriptionFilter
+    subscriptionFilter,
+    { enabled: Boolean(projectId), subscribe: true }
   );
 }
 
@@ -36,7 +37,8 @@ export function useImageSets(projectId: string | undefined) {
         { projectId: projectId ?? '' },
         { nextToken }
       ),
-    subscriptionFilter
+    subscriptionFilter,
+    { enabled: Boolean(projectId), subscribe: false }
   );
 }
 
@@ -53,7 +55,8 @@ export function useLocationSets(projectId: string | undefined) {
         { projectId: projectId ?? '' },
         { nextToken }
       ),
-    subscriptionFilter
+    subscriptionFilter,
+    { enabled: Boolean(projectId), subscribe: false }
   );
 }
 
@@ -73,7 +76,8 @@ export function useAnnotationSets(projectId: string | undefined) {
         { projectId: projectId ?? '' },
         { nextToken }
       ),
-    subscriptionFilter
+    subscriptionFilter,
+    { enabled: Boolean(projectId), subscribe: false }
   );
 }
 
@@ -92,7 +96,8 @@ export function useQueues(projectId: string | undefined) {
         { projectId: projectId ?? '' },
         { nextToken }
       ),
-    subscriptionFilter
+    subscriptionFilter,
+    { enabled: Boolean(projectId), subscribe: true }
   );
   const remove = ({ id }: { id: string }) => {
     client.mutations.deleteQueueMutation({ queueId: id }).catch((error) =>

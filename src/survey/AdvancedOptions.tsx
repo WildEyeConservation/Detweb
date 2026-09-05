@@ -2,7 +2,6 @@ import { useState, useCallback, useMemo } from 'react';
 import { Button } from 'react-bootstrap';
 import { Footer } from '../Modal';
 import { client } from '../stores/appClient';
-import { showModalAction as showModal } from '../stores/modalStore';
 import type {
   Feature as GeoJSONFeature,
   Polygon as GeoJSONPolygon,
@@ -23,7 +22,7 @@ type NeighbourGeoJSON = {
   geojson: GeoJSONFeature<GeoJSONPolygon> | null;
 };
 
-export default function AdvancedOptions({ projectId }: { projectId: string }) {
+export default function AdvancedOptions({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   const [loading, setLoading] = useState(false);
   const [, setError] = useState<string | null>(null);
   const [loadingStatus, setLoadingStatus] = useState<string>('');
@@ -374,7 +373,7 @@ export default function AdvancedOptions({ projectId }: { projectId: string }) {
         </div>
       </div>
       <Footer>
-        <Button variant='dark' onClick={() => showModal(null)}>
+        <Button variant='dark' onClick={() => onClose()}>
           Close
         </Button>
       </Footer>

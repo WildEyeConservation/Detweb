@@ -138,9 +138,12 @@ export default function MapLibreAnnotator(props: MapLibreAnnotatorProps) {
   const { users: allUsers } = useAllUsers();
   const project = useCurrentProject();
   const projectId = useProjectId();
-  const currentCategory = useCurrentCategory();
+  const selectedCategory = useCurrentCategory();
   const setCurrentCategory = setCurrentCategoryAction;
   const { data: projectCategories } = useCategories(projectId);
+  // Category defaults belong to the annotator, not every project route.
+  // Tests may deliberately select a category from a different project.
+  const currentCategory = selectedCategory ?? projectCategories[0];
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);

@@ -2,7 +2,6 @@ import { Form, Alert, Button } from 'react-bootstrap';
 import { useState, useEffect } from 'react';
 import { Footer } from '../Modal';
 import { client } from '../stores/appClient';
-import { showModalAction as showModal } from '../stores/modalStore';
 import { Schema } from '../amplify/client-schema';
 
 interface CameraFormData {
@@ -15,7 +14,7 @@ interface CameraFormDataMap {
   [cameraId: string]: CameraFormData;
 }
 
-export default function EditCameras({ projectId, organizationId }: { projectId: string; organizationId: string }) {
+export default function EditCameras({ projectId, organizationId, onClose }: { projectId: string; organizationId: string; onClose: () => void }) {
   const [cameras, setCameras] = useState<Schema['Camera']['type'][]>([]);
   const [cameraFormDataMap, setCameraFormDataMap] = useState<CameraFormDataMap>(
     {}
@@ -351,7 +350,7 @@ export default function EditCameras({ projectId, organizationId }: { projectId: 
         </Button>
         <Button
           variant='dark'
-          onClick={() => showModal(null)}
+          onClick={() => onClose()}
           disabled={disabled}
         >
           Close

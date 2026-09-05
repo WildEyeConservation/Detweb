@@ -3,43 +3,10 @@ import AppWithAuthenticator from './App.tsx';
 import './index.css';
 import { QueryClient } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { Progress } from './progress';
-import AnnotationQueuePage from './AnnotationQueuePage';
-import UserStats from './UserStats';
-import WorkflowStatistics from './WorkflowStatistics';
-import { LocationLoader } from './LocationLoader';
-import { ImageLoader } from './ImageLoader';
-import { Review } from './Review';
-import RegisterOrganization from './RegisterOrganization';
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import ErrorPage from './error-page';
-import ProjectView from './ProjectView';
-import Jobs from './user/Jobs.tsx';
-import Surveys from './survey/Surveys.tsx';
-import Permissions from './Permissions.tsx';
-import Testing from './Testing/Testing';
-import { IndividualIdPairTaskPage, IndividualIdTaskPage } from './individual-id';
-import {
-  ChainReviewTaskPage,
-  ChainViewerPage,
-  SharedChainViewerPage,
-} from './chain-viewer';
-import HomographyTask from './homography/HomographyTask';
-import HomographyViewer from './homography/HomographyViewer';
-import HomographyEditPage from './homography/HomographyEditPage';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
-import Admin from './Admin';
-import JollyResults from './JollyResults';
-import SharedResults from './SharedResults.tsx';
-import SharedChains from './SharedChains.tsx';
-import ChainShareAdminLayout from './chain-viewer/admin/ChainShareAdminLayout.tsx';
-import ManageShares from './chain-viewer/admin/ManageShares.tsx';
-import ChainShareResults from './chain-viewer/admin/ChainShareResults.tsx';
-import DisagreementExplorer from './chain-viewer/admin/DisagreementExplorer.tsx';
-import ImageNeighbourViewer from './ImageNeighbourViewer';
-import QCReviewTask from './QCReviewTask';
-import InfoTagTask from './InfoTagTask';
 import { lazy, Suspense } from 'react';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -69,160 +36,165 @@ const router = createBrowserRouter([
   {
     path: '/',
     element: (
-      <Progress>
-        {/* The provider restores the persisted cache before children mount, so
-            queries do not start fetching ahead of hydration on reload. */}
-        <PersistQueryClientProvider
-          client={queryClient}
-          persistOptions={{ persister }}
-        >
-          <ReactQueryDevtools initialIsOpen={false} />
-          <AppWithAuthenticator />
-        </PersistQueryClientProvider>
-      </Progress>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{ persister }}
+      >
+        <ReactQueryDevtools initialIsOpen={false} />
+        <AppWithAuthenticator />
+      </PersistQueryClientProvider>
     ),
     errorElement: <ErrorPage />,
     children: [
       {
         path: 'jobs',
-        element: <Jobs />,
+        lazy: async () => ({ Component: (await import('./user/Jobs')).default }),
       },
       {
         path: 'jolly/:surveyId/:annotationSetId',
-        element: <JollyResults />,
+        lazy: async () => ({ Component: (await import('./JollyResults')).default }),
       },
       {
         path: 'shared-results',
-        element: <SharedResults />,
+        lazy: async () => ({ Component: (await import('./SharedResults')).default }),
       },
       {
         path: 'shared-chains',
-        element: <SharedChains />,
+        lazy: async () => ({ Component: (await import('./SharedChains')).default }),
       },
       {
         path: 'shared-chains/:shareId',
-        element: <SharedChainViewerPage />,
+        lazy: async () => ({ Component: (await import('./chain-viewer/shared/SharedChainViewerPage')).SharedChainViewerPage }),
       },
       {
         path: 'chain-share-admin',
-        element: <ChainShareAdminLayout />,
+        lazy: async () => ({ Component: (await import('./chain-viewer/admin/ChainShareAdminLayout')).default }),
         children: [
           { index: true, element: <Navigate to='shares' replace /> },
-          { path: 'shares', element: <ManageShares /> },
-          { path: 'results', element: <ChainShareResults /> },
-          { path: 'disagreements', element: <DisagreementExplorer /> },
+          { path: 'shares', lazy: async () => ({ Component: (await import('./chain-viewer/admin/ManageShares')).default }) },
+          { path: 'results', lazy: async () => ({ Component: (await import('./chain-viewer/admin/ChainShareResults')).default }) },
+          { path: 'disagreements', lazy: async () => ({ Component: (await import('./chain-viewer/admin/DisagreementExplorer')).default }) },
         ],
       },
       {
         path: 'image-neighbour-viewer',
-        element: <ImageNeighbourViewer />,
+        lazy: async () => ({ Component: (await import('./ImageNeighbourViewer')).default }),
       },
       {
         path: 'homography-viewer',
-        element: <HomographyViewer />,
+        lazy: async () => ({ Component: (await import('./homography/HomographyViewer')).default }),
       },
       {
         path: 'surveys/:surveyId',
-        element: <ProjectView />,
+        lazy: async () => ({ Component: (await import('./ProjectView')).default }),
         children: [
           {
             path: 'annotate',
-            element: <AnnotationQueuePage />,
+            lazy: async () => ({ Component: (await import('./AnnotationQueuePage')).default }),
           },
           {
             path: 'review',
-            element: <Review />,
+            lazy: async () => ({ Component: (await import('./Review')).Review }),
           },
           {
             // Transect/category are claimed on the Jobs page and passed via
             // navigation state (not the URL). Direct navigation bounces to
             // /jobs.
             path: 'individual-id',
-            element: <IndividualIdTaskPage />,
+            lazy: async () => ({ Component: (await import('./individual-id/IndividualIdTaskPage')).IndividualIdTaskPage }),
           },
           {
             // Single-pair workspace driven entirely by query params
             // (image1Id, image2Id, categoryId, annotationSetId, optional
             // prevHref/nextHref). Bookmarkable / shareable.
             path: 'individual-id-pair',
-            element: <IndividualIdPairTaskPage />,
+            lazy: async () => ({ Component: (await import('./individual-id/IndividualIdPairTaskPage')).IndividualIdPairTaskPage }),
           },
           {
             path: 'homography/:queueId',
-            element: <HomographyTask />,
+            lazy: async () => ({ Component: (await import('./homography/HomographyTask')).default }),
           },
           {
             // Standalone single-pair homography editor. Required query params
             // (image1Id, image2Id); optional annotationSetId, backHref.
             // Linked from the Individual-ID toolbar for ad-hoc fixes.
             path: 'homography-edit',
-            element: <HomographyEditPage />,
+            lazy: async () => ({ Component: (await import('./homography/HomographyEditPage')).default }),
           },
           {
             path: 'location/:locationId/:annotationSetId',
-            element: <LocationLoader />,
+            lazy: async () => ({ Component: (await import('./LocationLoader')).LocationLoader }),
           },
           {
             path: 'image/:imageId/:annotationSetId',
-            element: <ImageLoader />,
+            lazy: async () => ({ Component: (await import('./ImageLoader')).ImageLoader }),
           },
           {
             path: 'qc-review/:queueId',
-            element: <QCReviewTask />,
+            lazy: async () => ({ Component: (await import('./QCReviewTask')).default }),
           },
           {
             path: 'info-tags/:queueId',
-            element: <InfoTagTask />,
+            lazy: async () => ({ Component: (await import('./InfoTagTask')).default }),
           },
         ],
       },
       {
         path: 'surveys/:surveyId/set/:annotationSetId',
-        element: <ProjectView />,
+        lazy: async () => ({ Component: (await import('./ProjectView')).default }),
         children: [
           {
             path: 'review',
-            element: <Review showAnnotationSetDropdown={false} />,
+            lazy: async () => {
+              const { Review } = await import('./Review');
+              return { Component: () => <Review showAnnotationSetDropdown={false} /> };
+            },
           },
           {
             path: 'chain-viewer',
-            element: <ChainViewerPage />,
+            lazy: async () => ({ Component: (await import('./chain-viewer/ChainViewerPage')).ChainViewerPage }),
           },
           {
             path: 'chain-review/:primaryId',
-            element: <ChainReviewTaskPage />,
+            lazy: async () => ({ Component: (await import('./chain-viewer/ChainReviewTaskPage')).ChainReviewTaskPage }),
           },
         ],
       },
       {
         path: 'surveys',
-        element: <Surveys />,
+        lazy: async () => ({ Component: (await import('./survey/Surveys')).default }),
+        children: [
+          {
+            path: ':surveyId/edit/:tab?',
+            lazy: async () => ({ Component: (await import('./survey/SurveyEditorRoute')).default }),
+          },
+        ],
       },
       {
         path: 'SSRegisterOrganization',
-        element: <RegisterOrganization />,
+        lazy: async () => ({ Component: (await import('./RegisterOrganization')).default }),
       },
       {
         path: 'permissions',
-        element: <Permissions />,
+        lazy: async () => ({ Component: (await import('./Permissions')).default }),
       },
       {
         path: 'annotation-statistics',
-        element: <UserStats />,
+        lazy: async () => ({ Component: (await import('./UserStats')).default }),
       },
       {
         // The screen itself also checks the sysadmin group, so reaching this
         // path directly shows a notice rather than an empty report.
         path: 'workflow-statistics',
-        element: <WorkflowStatistics />,
+        lazy: async () => ({ Component: (await import('./WorkflowStatistics')).default }),
       },
       {
         path: 'SSAdmin',
-        element: <Admin />,
+        lazy: async () => ({ Component: (await import('./Admin')).default }),
       },
       {
         path: 'testing',
-        element: <Testing />,
+        lazy: async () => ({ Component: (await import('./Testing/Testing')).default }),
       },
       ...(DevActions
         ? [

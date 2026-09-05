@@ -6,7 +6,6 @@ import {
   useCallback,
 } from 'react';
 import { client } from '../stores/appClient';
-import { showModalAction as showModal } from '../stores/modalStore';
 import { fetchAllPaginatedResults } from '../utils';
 import { Form, Spinner, Button } from 'react-bootstrap';
 import { Footer } from '../Modal';
@@ -332,9 +331,11 @@ function mergeSmallSegmentsByBoundary(
 export default function DefineTransects({
   projectId,
   organizationId,
+  onClose,
 }: {
   projectId: string;
   organizationId: string;
+  onClose: () => void;
 }) {
   const [images, setImages] = useState<any[]>([]);
   const [partsLoading, setPartsLoading] = useState<null | number>(0);
@@ -1959,7 +1960,7 @@ export default function DefineTransects({
         </Button>
         <Button
           variant='dark'
-          onClick={() => showModal(null)}
+          onClick={() => onClose()}
           disabled={disabledClose}
         >
           Close

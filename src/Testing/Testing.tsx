@@ -29,7 +29,8 @@ export default function Testing() {
       }),
     {
       filter: { organizationId: { eq: organization.id } },
-    }
+    },
+    { enabled: Boolean(organization.id), subscribe: false }
   );
 
   const { data: testPresets } = useOptimisticUpdates<
@@ -44,7 +45,8 @@ export default function Testing() {
       ),
     {
       filter: { organizationId: { eq: organization.id } },
-    }
+    },
+    { enabled: Boolean(organization.id), subscribe: false }
   );
 
   const membershipsHook = useOptimisticUpdates<
@@ -61,6 +63,7 @@ export default function Testing() {
       filter: { organizationId: { eq: organization.id } },
     },
     {
+      enabled: Boolean(organization.id),
       compositeKey: (membership) =>
         `${membership.organizationId}:${membership.userId}`,
     }

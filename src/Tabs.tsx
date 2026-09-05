@@ -22,6 +22,7 @@ interface TabsProps {
     | ReactElement<TabProps>
     | (ReactElement<TabProps> | false | null | undefined)[];
   defaultTab?: number;
+  activeTab?: number;
   onTabChange?: (tab: number) => void;
   className?: string;
   sharedChild?: React.ReactNode;
@@ -55,12 +56,14 @@ export const Tab: React.FC<TabProps> = ({ children, className }) => {
 export const Tabs: React.FC<TabsProps> = ({
   children,
   defaultTab = 0,
+  activeTab: controlledTab,
   onTabChange,
   className,
   sharedChild,
   disableSwitching = false,
 }) => {
-  const [activeTab, setActiveTab] = useState(defaultTab);
+  const [localTab, setActiveTab] = useState(defaultTab);
+  const activeTab = controlledTab ?? localTab;
   const childrenArray = React.Children.toArray(
     children
   ) as ReactElement<TabProps>[];

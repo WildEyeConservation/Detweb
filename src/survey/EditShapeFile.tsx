@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { client } from '../stores/appClient';
-import { showModalAction as showModal } from '../stores/modalStore';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
@@ -96,9 +95,11 @@ function polygonFeatureToLatLngs(feature: any): LatLng[] {
 export default function EditShapeFile({
   projectId,
   organizationId,
+  onClose,
 }: {
   projectId: string;
   organizationId: string;
+  onClose: () => void;
 }) {
   const [polygonCoords, setPolygonCoords] = useState<LatLng[] | null>(null);
   const [shapefileBuffer, setShapefileBuffer] = useState<ArrayBuffer>();
@@ -696,7 +697,7 @@ export default function EditShapeFile({
         </Button>
         <Button
           variant='dark'
-          onClick={() => showModal(null)}
+          onClick={() => onClose()}
           disabled={disabledClose}
         >
           Close

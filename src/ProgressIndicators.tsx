@@ -3,8 +3,7 @@ import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
 import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
 import Tooltip from 'react-bootstrap/Tooltip';
-import { useContext } from 'react';
-import { ProgressContext } from './progress';
+import { useProgress } from './stores/progressStore';
 
 interface CircularProgressWithLabelProps extends CircularProgressProps {
   value?: number;
@@ -51,7 +50,7 @@ function CircularProgressWithLabel(props: CircularProgressWithLabelProps) {
 }
 
 export function ProgressIndicators() {
-  const { progress } = useContext(ProgressContext)!;
+  const progress = useProgress();
   if (!progress) return null;
   return (
     <>

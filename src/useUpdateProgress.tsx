@@ -1,5 +1,4 @@
 import {
-  useContext,
   useState,
   useEffect,
   Dispatch,
@@ -7,7 +6,7 @@ import {
 } from 'react';
 import { DateTime } from 'luxon';
 import humanizeDuration from 'humanize-duration';
-import { ProgressContext } from './progress';
+import { setProgress } from './stores/progressStore';
 
 interface UseUpdateProgressParams {
   taskId: string;
@@ -25,8 +24,6 @@ export function useUpdateProgress({
   Dispatch<SetStateAction<number>>,
   Dispatch<SetStateAction<number>>
 ] {
-  // Use context with type checking
-  const { setProgress } = useContext(ProgressContext)!;
   const [stepsCompleted, setStepsCompleted] = useState(0);
   const [totalSteps, setTotalSteps] = useState(0);
   const [startTime, setStartTime] = useState<number | null>(null);
@@ -37,7 +34,7 @@ export function useUpdateProgress({
       setStartTime(Date.now());
     }
   }, [totalSteps]);
-  // Whenever the user adjusts stepsCompleted or totalSteps, we may need to adjust the output that goes to ProgressContext.
+  // Publish changes without subscribing this task to other tasks' progress.
   // This effect handles that update
   useEffect(() => {
     console.log('totalSteps', totalSteps);

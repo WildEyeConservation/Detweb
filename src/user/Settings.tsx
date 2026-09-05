@@ -1,9 +1,8 @@
 import { UserIcon } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { useSession } from '../session';
 import { client } from '../stores/appClient';
-import { useUsers } from '../apiInterface';
 import { Button, Form, Badge, Spinner, Alert } from 'react-bootstrap';
 import { Modal, Header, Title, Body, Footer } from '../Modal';
 import { Tabs, Tab } from '../Tabs';
@@ -17,8 +16,27 @@ interface MembershipInfo {
 
 export default function Settings({ signOut }: { signOut: () => void }) {
   const [show, setShow] = useState(false);
+  return (
+    <>
+      <button
+        className='text-muted px-2 d-flex align-items-center justify-content-center'
+        style={{
+          backgroundColor: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+        }}
+        onClick={() => setShow(true)}
+      >
+        <UserIcon className='d-none d-lg-block' />
+        <span className='d-block d-lg-none'>User</span>
+      </button>
+      {show && <SettingsDialog signOut={signOut} onClose={() => setShow(false)} />}
+    </>
+  );
+}
+
+function SettingsDialog({ signOut, onClose }: { signOut: () => void; onClose: () => void }) {
   const { user, cognitoGroups } = useSession();
-  const { users } = useUsers();
 
   const [userAttributes, setUserAttributes] = useState<{ name?: string; email?: string }>({});
 
@@ -28,8 +46,8 @@ export default function Settings({ signOut }: { signOut: () => void }) {
     });
   }, []);
 
-  const username = users?.find((u) => u.id === user.username)?.name ?? userAttributes.name;
-  const email = users?.find((u) => u.id === user.username)?.email ?? userAttributes.email;
+  const username = userAttributes.name ?? user.username;
+  const email = userAttributes.email;
 
   // Active Organisations tab state
   const [memberships, setMemberships] = useState<MembershipInfo[]>([]);
@@ -40,8 +58,9 @@ export default function Settings({ signOut }: { signOut: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
 
-  const currentCognitoGroupOrgIds = cognitoGroups.filter(
-    (g) => g !== 'sysadmin' && g !== 'orgadmin'
+  const currentCognitoGroupOrgIds = useMemo(
+    () => cognitoGroups.filter((g) => g !== 'sysadmin' && g !== 'orgadmin'),
+    [cognitoGroups]
   );
 
   const fetchMemberships = useCallback(async () => {
@@ -67,13 +86,11 @@ export default function Settings({ signOut }: { signOut: () => void }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentCognitoGroupOrgIds]);
 
   useEffect(() => {
-    if (show) {
-      fetchMemberships();
-    }
-  }, [show]);
+    fetchMemberships();
+  }, [fetchMemberships]);
 
   const allAutoActivated = memberships.length <= maxActive;
 
@@ -171,22 +188,9 @@ export default function Settings({ signOut }: { signOut: () => void }) {
 
   return (
     <>
-      <button
-        className='text-muted px-2 d-flex align-items-center justify-content-center'
-        style={{
-          backgroundColor: 'transparent',
-          border: 'none',
-          cursor: 'pointer',
-        }}
-        onClick={() => setShow(true)}
-      >
-        <UserIcon className='d-none d-lg-block' />
-        <span className='d-block d-lg-none'>User</span>
-      </button>
-
       <Modal
-        show={show}
-        onHide={() => setShow(false)}
+        show
+        onHide={onClose}
         size='lg'
         centered
       >
@@ -279,7 +283,7 @@ export default function Settings({ signOut }: { signOut: () => void }) {
           </Tabs>
         </Body>
         <Footer>
-          <Button variant='dark' onClick={() => setShow(false)}>
+          <Button variant='dark' onClick={onClose}>
             Close
           </Button>
           {hasChanges && !allAutoActivated && (

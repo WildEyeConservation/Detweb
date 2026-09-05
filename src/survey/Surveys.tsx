@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useSession } from '../session';
 import {
@@ -6,6 +6,7 @@ import {
   useMyMemberships,
 } from '../data/memberships';
 import { client } from '../stores/appClient';
+import { surveyDetailsKey as projectQueryKey, surveyDetailsQuery } from '../data/surveyDetails';
 import { showModalAction, useModalToShow } from '../stores/modalStore';
 import {
   setSurveysCompactMode,
@@ -26,16 +27,8 @@ import {
 import { Schema } from '../amplify/client-schema.ts';
 import { Card, Button, Form } from 'react-bootstrap';
 import MyTable from '../Table.tsx';
-import NewSurveyModal from './NewSurveyModal.tsx';
-import { useNavigate } from 'react-router-dom';
-import FilesUploadComponent from '../FilesUploadComponent.tsx';
+import { Outlet, useNavigate } from 'react-router-dom';
 import ConfirmationModal from '../ConfirmationModal.tsx';
-import AnnotationSetResults from '../AnnotationSetResults.tsx';
-import AnnotationCountModal from '../AnnotationCountModal.tsx';
-import EditAnnotationSetModal from '../EditAnnotationSet.tsx';
-import AddAnnotationSetModal from './AddAnnotationSetModal.tsx';
-import LaunchAnnotationSetModal from './LaunchAnnotationSetModal.tsx';
-import EditSurveyModal from './editSurveyModal.tsx';
 import { SquareArrowOutUpRight, X, Play, Trash, Minimize2, Maximize2 } from 'lucide-react';
 import { Badge } from 'react-bootstrap';
 import localforage from 'localforage';
@@ -44,33 +37,14 @@ import IndividualIdProgress from '../individual-id/IndividualIdProgress.tsx';
 import { logAdminAction } from '../utils/adminActionLogger.ts';
 import { deleteInfoTagDataForSet } from '../infoTags.ts';
 
-const PROJECT_SELECTION_SET = [
-  'id',
-  'name',
-  'organizationId',
-  'organization.name',
-  'status',
-  'updatedAt',
-  'createdAt',
-  'tiledLocationSetId',
-  'annotationSets.id',
-  'annotationSets.name',
-  'queues.id',
-  'queues.url',
-  'queues.name',
-  'queues.tag',
-  'queues.batchSize',
-  'queues.totalBatches',
-  'queues.launchedCount',
-  'queues.observedCount',
-  'queues.requeuesCompleted',
-  'queues.emptyQueueTimestamp',
-  'individualIdJobs.id',
-  'individualIdJobs.status',
-  'imageSets.imageCount',
-] as const;
-
-const projectQueryKey = (id: string) => ['surveys-project-details', id] as const;
+const NewSurveyModal = lazy(() => import('./NewSurveyModal.tsx'));
+const FilesUploadComponent = lazy(() => import('../FilesUploadComponent.tsx'));
+const GenerateJollyResults = lazy(() => import('../GenerateJollyResults'));
+const AnnotationSetResults = lazy(() => import('../AnnotationSetResults.tsx'));
+const AnnotationCountModal = lazy(() => import('../AnnotationCountModal.tsx'));
+const EditAnnotationSetModal = lazy(() => import('../EditAnnotationSet.tsx'));
+const AddAnnotationSetModal = lazy(() => import('./AddAnnotationSetModal.tsx'));
+const LaunchAnnotationSetModal = lazy(() => import('./LaunchAnnotationSetModal.tsx'));
 
 const fileStoreUploaded = localforage.createInstance({
   name: 'fileStoreUploaded',
@@ -88,11 +62,15 @@ export default function Surveys() {
   const uploadActive = activeUploadProjectId !== null;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState(0);
   const [selectedProject, setSelectedProject] = useState<
     Schema['Project']['type'] | null
   >(null);
   const [fromStaleUpload, setFromStaleUpload] = useState(false);
+  // Once opened, keep the job owner alive so closing/reopening resumes polling.
+  const [jollyDialog, setJollyDialog] = useState<{
+    surveyId: string;
+    annotationSetId: string;
+  } | null>(null);
   const [selectedAnnotationSet, setSelectedAnnotationSet] = useState<
     Schema['AnnotationSet']['type'] | null
   >(null);
@@ -176,14 +154,7 @@ export default function Surveys() {
 
   const projectQueries = useQueries({
     queries: adminProjectIds.map((id) => ({
-      queryKey: projectQueryKey(id),
-      queryFn: async () => {
-        const { data } = await client.models.Project.get(
-          { id },
-          { selectionSet: PROJECT_SELECTION_SET as unknown as string[] }
-        );
-        return data;
-      },
+      ...surveyDetailsQuery(id),
       // Poll every 60s while a project is uploading so other viewers see the uploader's heartbeat
       refetchInterval: (query: { state: { data?: Schema['Project']['type'] | null } }) =>
         query.state.data?.status === 'uploading' ? 60000 : false,
@@ -604,8 +575,7 @@ export default function Surveys() {
               size={size}
               variant='primary'
               onClick={() => {
-                setSelectedProject(project);
-                showModal('editSurvey');
+                navigate(`/surveys/${encodeURIComponent(project.id)}/edit`);
               }}
               disabled={
                 process.env.NODE_ENV !== 'development' && (disabled || hasJobs)
@@ -1139,185 +1109,186 @@ export default function Surveys() {
         </Card>
         {/* {process.env.NODE_ENV === 'development' && <UploadIntegrityChecker />} */}
       </div>
-      <NewSurveyModal
-        show={modalToShow === 'newSurvey'}
-        projects={projects.map((project) => project.name.toLowerCase())}
-      />
-      <ConfirmationModal
-        show={modalToShow === 'deleteSurvey'}
-        onClose={() => {
-          showModal(null);
-          setSelectedProject(null);
-        }}
-        onConfirm={() => deleteProject(selectedProject!.id)}
-        title='Delete Survey'
-        body={
-          <p className='mb-0'>
-            Are you sure you want to delete {selectedProject?.name}?
-            <br />
-            This action cannot be undone.
-          </p>
-        }
-      />
-      <ConfirmationModal
-        show={modalToShow === 'deleteAnnotationSet'}
-        onClose={() => {
-          showModal(null);
-          setSelectedProject(null);
-          setSelectedAnnotationSet(null);
-        }}
-        onConfirm={() =>
-          deleteAnnotationSet(selectedProject!.id, selectedAnnotationSet!.id)
-        }
-        title='Delete Annotation Set'
-        body={
-          <p className='mb-0'>
-            Are you sure you want to delete {selectedAnnotationSet?.name}?
-            <br />
-            This action cannot be undone.
-          </p>
-        }
-      />
-      <ConfirmationModal
-        show={modalToShow === 'deleteJob'}
-        title='Cancel Associated Job'
-        body={
-          <p className='mb-0'>
-            Are you sure you want to cancel the job associated with{' '}
-            {selectedProject?.name}?
-            <br />
-            You can re-launch the job later.
-          </p>
-        }
-        onConfirm={() => handleCancelJob()}
-        onClose={() => {
-          showModal(null);
-          setSelectedProject(null);
-        }}
-      />
-      {selectedProject && (
-        <FilesUploadComponent
-          show={modalToShow === 'addFiles'}
-          fromStaleUpload={fromStaleUpload}
-          handleClose={() => {
+      <Suspense fallback={<div role='status'>Loading dialog...</div>}>
+        {modalToShow === 'newSurvey' && <NewSurveyModal
+          show={modalToShow === 'newSurvey'}
+          projects={projects.map((project) => project.name.toLowerCase())}
+        />}
+        <ConfirmationModal
+          show={modalToShow === 'deleteSurvey'}
+          onClose={() => {
             showModal(null);
             setSelectedProject(null);
-            setFromStaleUpload(false);
           }}
-          project={{ id: selectedProject.id, name: selectedProject.name }}
+          onConfirm={() => deleteProject(selectedProject!.id)}
+          title='Delete Survey'
+          body={
+            <p className='mb-0'>
+              Are you sure you want to delete {selectedProject?.name}?
+              <br />
+              This action cannot be undone.
+            </p>
+          }
         />
-      )}
-      {selectedProject && selectedAnnotationSet && (
-        <AnnotationSetResults
-          show={modalToShow === 'annotationSetResults'}
+        <ConfirmationModal
+          show={modalToShow === 'deleteAnnotationSet'}
           onClose={() => {
             showModal(null);
             setSelectedProject(null);
             setSelectedAnnotationSet(null);
           }}
-          annotationSet={selectedAnnotationSet}
-          surveyId={selectedProject.id}
+          onConfirm={() =>
+            deleteAnnotationSet(selectedProject!.id, selectedAnnotationSet!.id)
+          }
+          title='Delete Annotation Set'
+          body={
+            <p className='mb-0'>
+              Are you sure you want to delete {selectedAnnotationSet?.name}?
+              <br />
+              This action cannot be undone.
+            </p>
+          }
         />
-      )}
-      {selectedAnnotationSet && (
-        <AnnotationCountModal
-          setId={selectedAnnotationSet.id}
-          show={modalToShow === 'annotationCount'}
-          handleClose={() => {
-            showModal(null);
-            setSelectedAnnotationSet(null);
-          }}
-        />
-      )}
-      {selectedAnnotationSet && selectedProject && (
-        <EditAnnotationSetModal
-          show={modalToShow === 'editAnnotationSet'}
-          handleClose={() => {
-            showModal(null);
-            setSelectedProject(null);
-            setSelectedAnnotationSet(null);
-          }}
-          project={selectedProject}
-          categories={selectedProject.categories}
-          annotationSet={selectedAnnotationSet}
-          setAnnotationSet={(annotationSet) => {
-            if (!selectedProject) return;
-            updateProjectInCache(selectedProject.id, (prev) =>
-              prev
-                ? {
-                    ...prev,
-                    annotationSets: prev.annotationSets.map((set: { id: string }) =>
-                      set.id === annotationSet.id ? annotationSet : set
-                    ),
-                  }
-                : prev
-            );
-          }}
-          setEditSurveyTab={setTab}
-        />
-      )}
-      {selectedProject && (
-        <AddAnnotationSetModal
-          show={modalToShow === 'addAnnotationSet'}
+        <ConfirmationModal
+          show={modalToShow === 'deleteJob'}
+          title='Cancel Associated Job'
+          body={
+            <p className='mb-0'>
+              Are you sure you want to cancel the job associated with{' '}
+              {selectedProject?.name}?
+              <br />
+              You can re-launch the job later.
+            </p>
+          }
+          onConfirm={() => handleCancelJob()}
           onClose={() => {
             showModal(null);
             setSelectedProject(null);
           }}
-          project={selectedProject}
-          allProjects={projects}
-          addAnnotationSet={(annotationSet) => {
-            if (!selectedProject) return;
-            updateProjectInCache(selectedProject.id, (prev) =>
-              prev
-                ? {
-                    ...prev,
-                    annotationSets: [
-                      ...prev.annotationSets,
-                      {
-                        id: annotationSet.id,
-                        name: annotationSet.name,
-                      } as (typeof prev.annotationSets)[number],
-                    ],
-                  }
-                : prev
-            );
-            // Log asynchronously without blocking
-            logAdminAction(
-              client,
-              user.userId,
-              `Added annotation set "${annotationSet.name}" to project "${selectedProject?.name}"`,
-              selectedProject?.id || '',
-              selectedProject?.organizationId || ''
-            ).catch(console.error);
-          }}
         />
-      )}
-      {selectedProject && selectedAnnotationSet && (
-        <LaunchAnnotationSetModal
-          show={modalToShow === 'launchAnnotationSet'}
-          annotationSet={selectedAnnotationSet}
-          project={selectedProject}
-          onOptimisticStatus={(projectId, status) => {
-            updateProjectInCache(projectId, (prev) =>
-              prev ? { ...prev, status } : prev
-            );
-            setSelectedProject((prev) =>
-              prev && prev.id === projectId ? { ...prev, status } : prev
-            );
-          }}
-        />
-      )}
-      {selectedProject && (
-        <EditSurveyModal
-          show={modalToShow === 'editSurvey'}
-          onClose={() => {
-            showModal(null);
-            // setSelectedProject(null);
-          }}
-          project={selectedProject}
-          openTab={tab}
-        />
-      )}
+        {modalToShow === 'addFiles' && selectedProject && (
+          <FilesUploadComponent
+            show={modalToShow === 'addFiles'}
+            fromStaleUpload={fromStaleUpload}
+            handleClose={() => {
+              showModal(null);
+              setSelectedProject(null);
+              setFromStaleUpload(false);
+            }}
+            project={{ id: selectedProject.id, name: selectedProject.name }}
+          />
+        )}
+        {modalToShow === 'annotationSetResults' && selectedProject && selectedAnnotationSet && (
+          <AnnotationSetResults
+            show={modalToShow === 'annotationSetResults'}
+            onGenerateResults={() => {
+              setJollyDialog({ surveyId: selectedProject.id, annotationSetId: selectedAnnotationSet.id });
+              showModal('generateJollyResults');
+            }}
+            onClose={() => {
+              showModal(null);
+              setSelectedProject(null);
+              setSelectedAnnotationSet(null);
+            }}
+            annotationSet={selectedAnnotationSet}
+            surveyId={selectedProject.id}
+          />
+        )}
+        {modalToShow === 'annotationCount' && selectedAnnotationSet && (
+          <AnnotationCountModal
+            setId={selectedAnnotationSet.id}
+            show={modalToShow === 'annotationCount'}
+            handleClose={() => {
+              showModal(null);
+              setSelectedAnnotationSet(null);
+            }}
+          />
+        )}
+        {modalToShow === 'editAnnotationSet' && selectedAnnotationSet && selectedProject && (
+          <EditAnnotationSetModal
+            show={modalToShow === 'editAnnotationSet'}
+            handleClose={() => {
+              showModal(null);
+              setSelectedProject(null);
+              setSelectedAnnotationSet(null);
+            }}
+            project={selectedProject}
+            categories={selectedProject.categories}
+            annotationSet={selectedAnnotationSet}
+            setAnnotationSet={(annotationSet) => {
+              if (!selectedProject) return;
+              updateProjectInCache(selectedProject.id, (prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      annotationSets: prev.annotationSets.map((set: { id: string }) =>
+                        set.id === annotationSet.id ? annotationSet : set
+                      ),
+                    }
+                  : prev
+              );
+            }}
+          />
+        )}
+        {modalToShow === 'addAnnotationSet' && selectedProject && (
+          <AddAnnotationSetModal
+            show={modalToShow === 'addAnnotationSet'}
+            onClose={() => {
+              showModal(null);
+              setSelectedProject(null);
+            }}
+            project={selectedProject}
+            allProjects={projects}
+            addAnnotationSet={(annotationSet) => {
+              if (!selectedProject) return;
+              updateProjectInCache(selectedProject.id, (prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      annotationSets: [
+                        ...prev.annotationSets,
+                        {
+                          id: annotationSet.id,
+                          name: annotationSet.name,
+                        } as (typeof prev.annotationSets)[number],
+                      ],
+                    }
+                  : prev
+              );
+              // Log asynchronously without blocking
+              logAdminAction(
+                client,
+                user.userId,
+                `Added annotation set "${annotationSet.name}" to project "${selectedProject?.name}"`,
+                selectedProject?.id || '',
+                selectedProject?.organizationId || ''
+              ).catch(console.error);
+            }}
+          />
+        )}
+        {modalToShow === 'launchAnnotationSet' && selectedProject && selectedAnnotationSet && (
+          <LaunchAnnotationSetModal
+            show={modalToShow === 'launchAnnotationSet'}
+            annotationSet={selectedAnnotationSet}
+            project={selectedProject}
+            onOptimisticStatus={(projectId, status) => {
+              updateProjectInCache(projectId, (prev) =>
+                prev ? { ...prev, status } : prev
+              );
+              setSelectedProject((prev) =>
+                prev && prev.id === projectId ? { ...prev, status } : prev
+              );
+            }}
+          />
+        )}
+        {jollyDialog && (
+          <GenerateJollyResults
+            key={`${jollyDialog.surveyId}:${jollyDialog.annotationSetId}`}
+            {...jollyDialog}
+          />
+        )}
+      </Suspense>
+      <Outlet />
     </>
   );
 }

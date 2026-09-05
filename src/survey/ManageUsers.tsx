@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Modal } from 'react-bootstrap';
 import { client } from '../stores/appClient';
-import { showModalAction as showModal } from '../stores/modalStore';
 import { useUsers } from '../apiInterface';
 import { fetchAllPaginatedResults } from '../utils';
 import MyTable from '../Table';
@@ -21,9 +20,11 @@ type UserPermission = {
 export default function ManageUsers({
   projectId,
   organizationId,
+  onClose,
 }: {
   projectId: string;
   organizationId: string;
+  onClose: () => void;
 }) {
   const { users } = useUsers();
 
@@ -173,19 +174,19 @@ export default function ManageUsers({
     if (hasChanges) {
       setShowUnsavedPrompt(true);
     } else {
-      showModal(null);
+      onClose();
     }
   };
 
   const handleSaveAndClose = async () => {
     setShowUnsavedPrompt(false);
     await handleSave();
-    showModal(null);
+    onClose();
   };
 
   const handleDiscardAndClose = () => {
     setShowUnsavedPrompt(false);
-    showModal(null);
+    onClose();
   };
 
   const tableData = permissions.map((permission) => ({

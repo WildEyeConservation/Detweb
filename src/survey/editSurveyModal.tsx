@@ -1,27 +1,32 @@
+import { lazy, Suspense } from 'react';
+import { surveyEditorTabs } from './surveyEditorTabs';
 import { Modal, Header, Title, Body } from '../Modal';
 import { Schema } from '../amplify/client-schema';
 import { Tabs, Tab } from '../Tabs';
-import ProcessImages from './ProcessImages';
-import EditShapeFile from './EditShapeFile';
-import DefineTransects from './DefineTransects';
-import EditInformation from './EditInformation';
-import EditCameras from './EditCameras';
-import AdvancedOptions from './AdvancedOptions';
-import DeleteImages from './DeleteImages';
-import Logs from './Logs';
-import ManageTiles from './ManageTiles';
-import ManageUsers from './ManageUsers';
+
+const ProcessImages = lazy(() => import('./ProcessImages'));
+const EditShapeFile = lazy(() => import('./EditShapeFile'));
+const DefineTransects = lazy(() => import('./DefineTransects'));
+const EditInformation = lazy(() => import('./EditInformation'));
+const EditCameras = lazy(() => import('./EditCameras'));
+const AdvancedOptions = lazy(() => import('./AdvancedOptions'));
+const DeleteImages = lazy(() => import('./DeleteImages'));
+const Logs = lazy(() => import('./Logs'));
+const ManageTiles = lazy(() => import('./ManageTiles'));
+const ManageUsers = lazy(() => import('./ManageUsers'));
 
 export default function EditSurveyModal({
   show,
   onClose,
   project,
   openTab,
+  onTabChange,
 }: {
   show: boolean;
   onClose: () => void;
   project: Schema['Project']['type'];
   openTab?: number;
+  onTabChange?: (index: number) => void;
 }) {
   return (
     <Modal show={show} onHide={onClose} strict={true}>
@@ -29,38 +34,40 @@ export default function EditSurveyModal({
         <Title>Edit Survey: {project.name}</Title>
       </Header>
       <Body>
-        <Tabs defaultTab={openTab || 0}>
-          <Tab label='Information'>
-            <EditInformation key={project.id} projectId={project.id} />
-          </Tab>
-          <Tab label='Edit Cameras'>
-            <EditCameras key={project.id} projectId={project.id} organizationId={project.organizationId} />
-          </Tab>
-          <Tab label='Edit Shape File'>
-            <EditShapeFile key={project.id} projectId={project.id} organizationId={project.organizationId} />
-          </Tab>
-          <Tab label='Define Transects & Strata'>
-            <DefineTransects key={project.id} projectId={project.id} organizationId={project.organizationId} />
-          </Tab>
-          <Tab label='Manage Tiles'>
-            <ManageTiles key={project.id} project={project} />
-          </Tab>
-          <Tab label='Process Images'>
-            <ProcessImages key={project.id} projectId={project.id} organizationId={project.organizationId} />
-          </Tab>
-          <Tab label='Manage Users'>
-            <ManageUsers key={project.id} projectId={project.id} organizationId={project.organizationId} />
-          </Tab>
-          <Tab label='Delete Images'>
-            <DeleteImages key={project.id} projectId={project.id} />
-          </Tab>
-          <Tab label='Advanced Options'>
-            <AdvancedOptions key={project.id} projectId={project.id} />
-          </Tab>
-          <Tab label='Logs'>
-            <Logs key={project.id} projectId={project.id} />
-          </Tab>
-        </Tabs>
+        <Suspense fallback={<p className='p-3' role='status'>Loading editor...</p>}>
+          <Tabs defaultTab={openTab ?? 0} activeTab={onTabChange ? openTab : undefined} onTabChange={onTabChange}>
+            <Tab label={surveyEditorTabs[0].label}>
+              <EditInformation onClose={onClose} key={project.id} projectId={project.id} />
+            </Tab>
+            <Tab label={surveyEditorTabs[1].label}>
+              <EditCameras onClose={onClose} key={project.id} projectId={project.id} organizationId={project.organizationId} />
+            </Tab>
+            <Tab label={surveyEditorTabs[2].label}>
+              <EditShapeFile onClose={onClose} key={project.id} projectId={project.id} organizationId={project.organizationId} />
+            </Tab>
+            <Tab label={surveyEditorTabs[3].label}>
+              <DefineTransects onClose={onClose} key={project.id} projectId={project.id} organizationId={project.organizationId} />
+            </Tab>
+            <Tab label={surveyEditorTabs[4].label}>
+              <ManageTiles onClose={onClose} key={project.id} project={project} />
+            </Tab>
+            <Tab label={surveyEditorTabs[5].label}>
+              <ProcessImages onClose={onClose} key={project.id} projectId={project.id} organizationId={project.organizationId} />
+            </Tab>
+            <Tab label={surveyEditorTabs[6].label}>
+              <ManageUsers onClose={onClose} key={project.id} projectId={project.id} organizationId={project.organizationId} />
+            </Tab>
+            <Tab label={surveyEditorTabs[7].label}>
+              <DeleteImages onClose={onClose} key={project.id} projectId={project.id} />
+            </Tab>
+            <Tab label={surveyEditorTabs[8].label}>
+              <AdvancedOptions onClose={onClose} key={project.id} projectId={project.id} />
+            </Tab>
+            <Tab label={surveyEditorTabs[9].label}>
+              <Logs onClose={onClose} key={project.id} projectId={project.id} />
+            </Tab>
+          </Tabs>
+        </Suspense>
       </Body>
     </Modal>
   );

@@ -2,7 +2,6 @@ import { Form, Button, Spinner, Alert, ProgressBar } from 'react-bootstrap';
 import { Footer } from '../Modal';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { client } from '../stores/appClient';
-import { showModalAction as showModal } from '../stores/modalStore';
 import { Schema } from '../amplify/client-schema';
 import TileConfiguration from '../TileConfiguration';
 import type { TiledLaunchRequest } from '../types/LaunchTask';
@@ -15,8 +14,10 @@ type TilingTaskStatus = 'idle' | 'processing' | 'completed' | 'failed';
 
 export default function ManageTiles({
   project,
+  onClose,
 }: {
   project: Schema['Project']['type'];
+  onClose: () => void;
 }) {
 
   const [launchDisabled, setLaunchDisabled] = useState(false);
@@ -553,7 +554,7 @@ export default function ManageTiles({
         </Button>
         <Button
           variant='dark'
-          onClick={() => showModal(null)}
+          onClick={() => onClose()}
           disabled={processing}
         >
           Close
