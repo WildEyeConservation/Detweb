@@ -1,3 +1,4 @@
+import { useDialogGuard } from '../routing/useDialogGuard';
 import { Form, Button, Spinner } from 'react-bootstrap';
 import { Modal, Body, Header, Footer, Title } from '../Modal';
 import { Schema } from '../amplify/client-schema';
@@ -18,9 +19,15 @@ export default function AddAnnotationSetModal({
   addAnnotationSet: (annotationSet: Schema['AnnotationSet']['type']) => void;
   allProjects: Schema['Project']['type'][];
 }) {
+  const [dirty, setDirty] = useState(false);
   const [name, setName] = useState('');
   const [saveLabels, setSaveLabels] = useState<
-    ((annotationSetId: string, projectId: string, group: string) => Promise<void>) | null
+    | ((
+        annotationSetId: string,
+        projectId: string,
+        group: string
+      ) => Promise<void>)
+    | null
   >(null);
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [selectedAnnotationSet, setSelectedAnnotationSet] =
@@ -32,41 +39,60 @@ export default function AddAnnotationSetModal({
   >([]);
   const [loadingLabels, setLoadingLabels] = useState(false);
 
+  const finishNavigation = useDialogGuard({
+    busy: busy,
+    dirty: dirty || Boolean(name || selectedAnnotationSet),
+  });
+
   async function handleSave() {
     if (!name) {
       alert('Please enter a name for the annotation set');
       return;
     }
 
-    setBusy(true);
-    setStatusMessage('Creating annotation set...');
+    try {
+      setBusy(true);
+      setStatusMessage('Creating annotation set...');
 
-    await client.models.Project.update({
-      id: project.id,
-      status: 'updating',
-    });
+      await client.models.Project.update({
+        id: project.id,
+        status: 'updating',
+      });
 
-    await client.mutations.updateProjectMemberships({
-      projectId: project.id,
-    });
+      await client.mutations.updateProjectMemberships({
+        projectId: project.id,
+      });
 
-    const { data: annotationSet } = await client.models.AnnotationSet.create({
-      name,
-      projectId: project.id,
-      group: project.organizationId,
-    });
+      const { data: annotationSet } = await client.models.AnnotationSet.create({
+        name,
+        projectId: project.id,
+        group: project.organizationId,
+      });
 
-    if (annotationSet) {
-      addAnnotationSet(annotationSet);
+      if (annotationSet) {
+        addAnnotationSet(annotationSet);
 
-      if (saveLabels) {
-        await saveLabels(annotationSet.id, project.id, project.organizationId);
+        if (saveLabels) {
+          await saveLabels(
+            annotationSet.id,
+            project.id,
+            project.organizationId
+          );
+        }
       }
-    }
 
-    onClose();
-    setStatusMessage('');
-    setBusy(false);
+      finishNavigation(onClose);
+      setStatusMessage('');
+      setBusy(false);
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Unable to save. Please try again.'
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleAnnotationSetChange(
@@ -98,7 +124,10 @@ export default function AddAnnotationSetModal({
         <Title>Add Annotation Set</Title>
       </Header>
       <Body>
-        <Form className='d-flex flex-column gap-2 p-3'>
+        <Form
+          onChangeCapture={() => setDirty(true)}
+          className='d-flex flex-column gap-2 p-3'
+        >
           <Form.Group>
             <Form.Label className='mb-0'>Name</Form.Label>
             <span
@@ -162,12 +191,16 @@ export default function AddAnnotationSetModal({
             ]}
             importLabels={importedLabels as any}
             setHandleSave={setSaveLabels}
+            onDirtyChange={setDirty}
             onStatusChange={setStatusMessage}
           />
         </Form>
         <Footer>
           {statusMessage && (
-            <span className='text-muted me-auto d-flex align-items-center gap-2' style={{ fontSize: 12 }}>
+            <span
+              className='text-muted me-auto d-flex align-items-center gap-2'
+              style={{ fontSize: 12 }}
+            >
               <Spinner size='sm' />
               {statusMessage}
             </span>

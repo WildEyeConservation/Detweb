@@ -1,13 +1,14 @@
 import { Button } from 'react-bootstrap';
 import MyTable from '../Table';
 import { Schema } from '../amplify/client-schema';
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { useSession } from '../session';
 import { client } from '../stores/appClient';
-import { showModalAction as showModal, useModalToShow } from '../stores/modalStore';
+import { useDialogRoute } from '../routing/useDialogRoute';
+import DialogNotice from '../routing/DialogNotice';
 import { useUsers } from '../apiInterface';
-import InviteUserModal from './InviteUserModal';
-import ExceptionsModal from './ExceptionsModal';
+const InviteUserModal = lazy(() => import('./InviteUserModal'));
+const ExceptionsModal = lazy(() => import('./ExceptionsModal'));
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
 import ConfirmationModal from '../ConfirmationModal';
 import { Minimize2, Maximize2, RefreshCw } from 'lucide-react';
@@ -20,9 +21,11 @@ export default function Users({
   setOnClick,
 }: {
   organization: { id: string; name: string };
-  setOnClick: (onClick: { name: string; function: () => void }) => void;
+  setOnClick: (onClick: { name: string; function: () => void } | null) => void;
 }) {
-  const modalToShow = useModalToShow();
+  const dialog = useDialogRoute();
+  const openDialog = dialog.open;
+  const [removingUser, setRemovingUser] = useState(false);
   const { user: authUser } = useSession();
   const { users } = useUsers();
 
@@ -129,12 +132,7 @@ export default function Users({
               }
               variant={'info'}
               onClick={() => {
-                setUserToEdit({
-                  id: user?.id || '',
-                  name: user?.name || '',
-                  organizationName: organization.name,
-                });
-                showModal('exceptions');
+                dialog.open('exceptions', { user: membership.userId });
               }}
             >
               Edit
@@ -152,7 +150,7 @@ export default function Users({
                   name: user?.name || '',
                   organizationName: organization.name,
                 });
-                showModal('removeUser');
+                setRemovingUser(true);
               }}
             >
               Remove user
@@ -187,9 +185,10 @@ export default function Users({
   useEffect(() => {
     setOnClick({
       name: 'Invite User',
-      function: () => showModal('inviteUser'),
+      function: () => openDialog('inviteUser'),
     });
-  }, []);
+    return () => setOnClick(null);
+  }, [openDialog, setOnClick]);
 
   async function handleRemoveUser() {
     setIsMutating(true);
@@ -254,25 +253,17 @@ export default function Users({
           emptyMessage={isLoading ? 'Loading users...' : 'No users found'}
         />
       </div>
-      <InviteUserModal
-        organization={organization}
-        show={modalToShow === 'inviteUser'}
-      />
-      {userToEdit && (
-        <ExceptionsModal
-          show={modalToShow === 'exceptions'}
-          onClose={() => {
-            showModal(null);
-            setUserToEdit(null);
-          }}
-          user={userToEdit}
-          organization={organization}
-        />
-      )}
+      <Suspense fallback={<DialogNotice message='Loading dialog...' onClose={dialog.close} />}>
+        {dialog.name === 'inviteUser' && <InviteUserModal organization={organization} show onClose={dialog.close} />}
+        {dialog.name === 'exceptions' && (memberships?.some((row) => row.userId === dialog.get('user')) ? (
+          <ExceptionsModal key={dialog.get('user')} show onClose={dialog.close}
+            user={{ id: dialog.get('user')!, name: users.find((row) => row.id === dialog.get('user'))?.name ?? dialog.get('user')! }} organization={organization} />
+        ) : <DialogNotice message={membershipsLoading ? 'Loading membership...' : 'This user is not a member of the selected organization.'} onClose={dialog.close} />)}
+      </Suspense>
       <ConfirmationModal
-        show={modalToShow === 'removeUser'}
+        show={removingUser}
         onClose={() => {
-          showModal(null);
+          setRemovingUser(false);
           setUserToEdit(null);
         }}
         onConfirm={handleRemoveUser}

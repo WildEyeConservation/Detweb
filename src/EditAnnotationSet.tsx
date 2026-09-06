@@ -1,3 +1,4 @@
+import { useDialogGuard } from './routing/useDialogGuard';
 import React, { useEffect, useState } from 'react';
 import { Button, Form, Spinner } from 'react-bootstrap';
 import { Modal, Body, Header, Footer, Title } from './Modal';
@@ -14,7 +15,6 @@ interface EditAnnotationSetModalProps {
   setAnnotationSet?: (annotationSet: { id: string; name: string }) => void;
   setSelectedSets?: (sets: string[]) => void;
   project: Schema['Project']['type'];
-  categories: { name: string }[];
 }
 
 const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
@@ -25,9 +25,12 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
   setAnnotationSet,
   project,
 }) => {
-  const [newName, setNewName] = useState<string>('');
+  const [newName, setNewName] = useState<string>(annotationSet.name);
   const [statusMessage, setStatusMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [dirty, setDirty] = useState(false);
+  const [labelsDirty, setLabelsDirty] = useState(false);
+  const [infoTagsDirty, setInfoTagsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveLabels, setSaveLabels] = useState<
     ((
@@ -68,6 +71,8 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
     },
   });
 
+  const finishNavigation = useDialogGuard({ busy: isSaving, dirty: dirty || labelsDirty || infoTagsDirty || newName !== annotationSet.name });
+
   const handleSave = async () => {
     if (!annotationSet || newName.trim() === '') return;
 
@@ -97,7 +102,7 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
       }
       setStatusMessage('');
       setSelectedSets?.([]);
-      handleClose();
+      finishNavigation(handleClose);
     } catch (err) {
       console.error('Failed to save annotation set edits', err);
       setErrorMessage(
@@ -120,7 +125,7 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
       <Body>
         <Tabs>
           <Tab label='Labels'>
-            <Form className='d-flex flex-column gap-2 p-3'>
+            <Form className='d-flex flex-column gap-2 p-3' onChangeCapture={() => setDirty(true)}>
               <Form.Group controlId='annotationSetName'>
                 <Form.Label>Name</Form.Label>
                 <Form.Control
@@ -146,13 +151,14 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
                   }))}
                   isEditing
                   setHandleSave={setSaveLabels}
+                  onDirtyChange={setLabelsDirty}
                   onStatusChange={setStatusMessage}
                 />
               )}
             </Form>
           </Tab>
           <Tab label='Info Tags'>
-            <Form className='d-flex flex-column gap-2 p-3'>
+            <Form className='d-flex flex-column gap-2 p-3' onChangeCapture={() => setDirty(true)}>
               {infoTagsLoading || !fetchedInfoTags ? (
                 <div className='d-flex align-items-center gap-2 py-3'>
                   <Spinner size='sm' />
@@ -172,6 +178,7 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
                   title='Info Tags'
                   description='Define optional informational tags that can be toggled on annotations.'
                   setHandleSave={setSaveInfoTags}
+                  onDirtyChange={setInfoTagsDirty}
                   onStatusChange={setStatusMessage}
                 />
               )}

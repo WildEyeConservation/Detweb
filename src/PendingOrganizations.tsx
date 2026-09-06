@@ -1,20 +1,17 @@
 import MyTable from './Table';
-import { useState } from 'react';
+import { lazy, Suspense } from 'react';
 import { client } from './stores/appClient';
-import { showModalAction as showModal, useModalToShow } from './stores/modalStore';
+import { useDialogRoute } from './routing/useDialogRoute';
+import DialogNotice from './routing/DialogNotice';
 import { useOptimisticUpdates } from './useOptimisticUpdates';
 import type { Schema } from './amplify/client-schema';
 import { useUsers } from './apiInterface';
 import { Button } from 'react-bootstrap';
-import CreateOrganization from './organization/CreateOrganization';
+const CreateOrganization = lazy(() => import('./organization/CreateOrganization'));
 
 export default function PendingOrganizations() {
-  const modalToShow = useModalToShow();
+  const dialog = useDialogRoute();
   const { users } = useUsers();
-
-  const [selectedRequest, setSelectedRequest] = useState<
-    (Schema['OrganizationRegistration']['type'] & { requestedByEmail: string }) | null
-  >(null);
 
   const { data: requests } = useOptimisticUpdates<
     Schema['OrganizationRegistration']['type'],
@@ -24,6 +21,10 @@ export default function PendingOrganizations() {
       nextToken,
     })
   );
+
+  const requestId = dialog.get('request');
+  const request = requests.find((row) => row.id === requestId);
+  const selectedRequest = request ? { ...request, requestedByEmail: users.find((user) => user.id === request.requestedBy)?.email ?? '' } : undefined;
 
   const tableData = requests
     .filter((request) => request.status === 'pending')
@@ -42,11 +43,7 @@ export default function PendingOrganizations() {
           <Button
             variant='primary'
             onClick={() => {
-              setSelectedRequest({
-                ...request,
-                requestedByEmail: requestedBy?.email || '',
-              });
-              showModal('createOrganization');
+              dialog.open('createOrganization', { request: request.id });
             }}
           >
             Review
@@ -76,19 +73,16 @@ export default function PendingOrganizations() {
       <div className='d-flex justify-content-center align-items-center border-top pt-3 border-dark mt-3'>
         <Button
           variant='primary'
-          onClick={() => showModal('createOrganization')}
+          onClick={() => dialog.open('createOrganization')}
         >
           Create Organisation
         </Button>
       </div>
-      <CreateOrganization
-        show={modalToShow === 'createOrganization'}
-        onHide={() => {
-          showModal(null);
-          setSelectedRequest(null);
-        }}
-        request={selectedRequest ?? undefined}
-      />
+      <Suspense fallback={<DialogNotice message='Loading dialog...' onClose={dialog.close} />}>
+        {dialog.name === 'createOrganization' && (requestId && !selectedRequest
+          ? <DialogNotice message='Loading the registration, or it is no longer available.' onClose={dialog.close} />
+          : <CreateOrganization key={requestId ?? 'new'} show onHide={dialog.close} request={selectedRequest} />)}
+      </Suspense>
     </div>
   );
 }

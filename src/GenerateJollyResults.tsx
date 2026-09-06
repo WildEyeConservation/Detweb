@@ -7,8 +7,10 @@ import {
   Spinner,
 } from 'react-bootstrap';
 import { client } from './stores/appClient';
-import { showModalAction as showModal, useModalToShow } from './stores/modalStore';
-import { useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSession } from './session';
+import { useDialogGuard } from './routing/useDialogGuard';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Select from 'react-select';
 import { fetchAllPaginatedResults } from './utils.tsx';
 import { useNavigate } from 'react-router-dom';
@@ -56,11 +58,15 @@ function parseLaunchResponse(value: unknown): LaunchResponse {
 export default function GenerateJollyResults({
   surveyId,
   annotationSetId,
+  onClose,
 }: {
+  onClose: () => void;
   surveyId: string;
   annotationSetId: string;
 }) {
-  const modalToShow = useModalToShow();
+  const cache = useQueryClient();
+  const { user } = useSession();
+  const jobKey = useMemo(() => ['jolly-active-job', user.userId, surveyId, annotationSetId], [user.userId, surveyId, annotationSetId]);
   const navigate = useNavigate();
   const [categoryOptions, setCategoryOptions] = useState<
     { label: string; value: string }[]
@@ -69,13 +75,23 @@ export default function GenerateJollyResults({
     { label: string; value: string }[]
   >([]);
   const [launching, setLaunching] = useState(false);
-  const [activeJob, setActiveJob] =
-    useState<LaunchResponse | null>(null);
+  // A job survives route unmount/reload. Only its visible dialog polls it.
+  const { data: activeJob = null } = useQuery<LaunchResponse | null>({
+    queryKey: jobKey,
+    queryFn: async () => null,
+    initialData: null,
+    enabled: false,
+    gcTime: 24 * 60 * 60 * 1000,
+  });
+  const setActiveJob = useCallback((job: LaunchResponse | null) => {
+    cache.setQueryData(jobKey, job);
+  }, [cache, jobKey]);
   const [jobStatus, setJobStatus] =
     useState<JollyJobStatus | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [pollWarning, setPollWarning] = useState('');
-  const isOpen = modalToShow === 'generateJollyResults';
+  const isOpen = true;
+  useDialogGuard({ busy: launching });
 
   useEffect(() => {
     let mounted = true;
@@ -140,7 +156,6 @@ export default function GenerateJollyResults({
 
         setActiveJob(null);
         if (status.status === 'COMPLETED') {
-          showModal(null);
           navigate(`/jolly/${surveyId}/${annotationSetId}`);
         } else {
           setErrorMessage(
@@ -176,6 +191,7 @@ export default function GenerateJollyResults({
     annotationSetId,
     navigate,
     surveyId,
+    setActiveJob,
   ]);
 
   const progressText = useMemo(() => {
@@ -229,8 +245,8 @@ export default function GenerateJollyResults({
 
   return (
     <Modal
-      show={modalToShow === 'generateJollyResults'}
-      onHide={() => showModal(null)}
+      show
+      onHide={onClose}
       size='lg'
       backdrop='static'
     >
@@ -300,7 +316,7 @@ export default function GenerateJollyResults({
         </Button>
         <Button
           variant='dark'
-          onClick={() => showModal(null)}
+          onClick={onClose}
         >
           Close
         </Button>

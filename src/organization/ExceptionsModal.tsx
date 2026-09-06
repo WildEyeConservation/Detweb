@@ -1,3 +1,4 @@
+import { useDialogGuard } from '../routing/useDialogGuard';
 import { Modal, Body, Header, Footer, Title } from '../Modal';
 import MyTable from '../Table';
 import { useEffect, useState } from 'react';
@@ -5,6 +6,11 @@ import { client } from '../stores/appClient';
 import { fetchAllPaginatedResults } from '../utils';
 import Button from 'react-bootstrap/Button';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
+
+function checkMutation(result: { errors?: readonly { message: string }[] }) {
+  if (result.errors?.length)
+    throw new Error(result.errors.map((error) => error.message).join('; '));
+}
 
 type Permission = {
   membershipId: string | null;
@@ -25,13 +31,17 @@ export default function ExceptionsModal({
   user: { id: string; name: string };
   organization: { id: string; name: string };
 }) {
-
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [originalPermissions, setOriginalPermissions] = useState<Permission[]>(
     []
   );
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  useDialogGuard({
+    busy: isSaving,
+    dirty: JSON.stringify(permissions) !== JSON.stringify(originalPermissions),
+  });
 
   useEffect(() => {
     async function fetchProjects() {
@@ -88,7 +98,7 @@ export default function ExceptionsModal({
       setPermissions([]);
       setOriginalPermissions([]);
     }
-  }, [show]);
+  }, [show, organization.id, user.id]);
 
   const tableData = permissions.map((permission) => ({
     id: permission.projectId,
@@ -136,57 +146,75 @@ export default function ExceptionsModal({
   const handleSave = async () => {
     setIsSaving(true);
 
-    const permissionsToUpdate = permissions.filter(
-      (p) =>
-        !originalPermissions.some(
-          (op) =>
-            op.projectId === p.projectId &&
-            op.annotationAccess === p.annotationAccess &&
-            op.isAdmin === p.isAdmin
-        )
-    );
+    try {
+      const permissionsToUpdate = permissions.filter(
+        (p) =>
+          !originalPermissions.some(
+            (op) =>
+              op.projectId === p.projectId &&
+              op.annotationAccess === p.annotationAccess &&
+              op.isAdmin === p.isAdmin
+          )
+      );
 
-    for (const permission of permissionsToUpdate) {
-      if (permission.membershipId) {
-        if (!permission.isAdmin && !permission.annotationAccess) {
-          await client.models.UserProjectMembership.delete({
-            id: permission.membershipId,
-          });
-        } else {
-          await client.models.UserProjectMembership.update({
-            id: permission.membershipId,
-            isAdmin: permission.isAdmin,
-          });
-        }
-      } else {
-        const { data: existingRows } =
-          await client.models.UserProjectMembership.userProjectMembershipsByUserId(
-            { userId: user.id },
-            { filter: { projectId: { eq: permission.projectId } } }
-          );
-
-        if (existingRows && existingRows.length > 0) {
-          if (existingRows.length > 1) {
-            console.warn(
-              `Found ${existingRows.length} memberships for user ${user.id} in project ${permission.projectId}`
+      for (const permission of permissionsToUpdate) {
+        if (permission.membershipId) {
+          if (!permission.isAdmin && !permission.annotationAccess) {
+            checkMutation(
+              await client.models.UserProjectMembership.delete({
+                id: permission.membershipId,
+              })
+            );
+          } else {
+            checkMutation(
+              await client.models.UserProjectMembership.update({
+                id: permission.membershipId,
+                isAdmin: permission.isAdmin,
+              })
             );
           }
-          await client.models.UserProjectMembership.update({
-            id: existingRows[0].id,
-            isAdmin: permission.isAdmin,
-          });
         } else {
-          await client.models.UserProjectMembership.create({
-            userId: user.id,
-            projectId: permission.projectId,
-            isAdmin: permission.isAdmin,
-            group: organization.id,
-          });
+          const { data: existingRows } =
+            await client.models.UserProjectMembership.userProjectMembershipsByUserId(
+              { userId: user.id },
+              { filter: { projectId: { eq: permission.projectId } } }
+            );
+
+          if (existingRows && existingRows.length > 0) {
+            if (existingRows.length > 1) {
+              console.warn(
+                `Found ${existingRows.length} memberships for user ${user.id} in project ${permission.projectId}`
+              );
+            }
+            checkMutation(
+              await client.models.UserProjectMembership.update({
+                id: existingRows[0].id,
+                isAdmin: permission.isAdmin,
+              })
+            );
+          } else {
+            checkMutation(
+              await client.models.UserProjectMembership.create({
+                userId: user.id,
+                projectId: permission.projectId,
+                isAdmin: permission.isAdmin,
+                group: organization.id,
+              })
+            );
+          }
         }
       }
-    }
 
-    setIsSaving(false);
+      setOriginalPermissions(permissions);
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Unable to save permission exceptions.'
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useSession } from '../session';
 import {
@@ -7,7 +7,7 @@ import {
 } from '../data/memberships';
 import { client } from '../stores/appClient';
 import { surveyDetailsKey as projectQueryKey, surveyDetailsQuery } from '../data/surveyDetails';
-import { showModalAction, useModalToShow } from '../stores/modalStore';
+import { surveyDialogHref } from './surveyDialogRoutes';
 import {
   setSurveysCompactMode,
   setSurveysOrganizationFilter,
@@ -37,14 +37,6 @@ import IndividualIdProgress from '../individual-id/IndividualIdProgress.tsx';
 import { logAdminAction } from '../utils/adminActionLogger.ts';
 import { deleteInfoTagDataForSet } from '../infoTags.ts';
 
-const NewSurveyModal = lazy(() => import('./NewSurveyModal.tsx'));
-const FilesUploadComponent = lazy(() => import('../FilesUploadComponent.tsx'));
-const GenerateJollyResults = lazy(() => import('../GenerateJollyResults'));
-const AnnotationSetResults = lazy(() => import('../AnnotationSetResults.tsx'));
-const AnnotationCountModal = lazy(() => import('../AnnotationCountModal.tsx'));
-const EditAnnotationSetModal = lazy(() => import('../EditAnnotationSet.tsx'));
-const AddAnnotationSetModal = lazy(() => import('./AddAnnotationSetModal.tsx'));
-const LaunchAnnotationSetModal = lazy(() => import('./LaunchAnnotationSetModal.tsx'));
 
 const fileStoreUploaded = localforage.createInstance({
   name: 'fileStoreUploaded',
@@ -52,8 +44,7 @@ const fileStoreUploaded = localforage.createInstance({
 });
 
 export default function Surveys() {
-  const modalToShow = useModalToShow();
-  const showModal = showModalAction;
+  const [modalToShow, showModal] = useState<string | null>(null);
   const myProjectsHook = useMyMemberships();
   const isOrganizationAdmin = useIsOrganizationAdmin();
   const { user } = useSession();
@@ -65,12 +56,6 @@ export default function Surveys() {
   const [selectedProject, setSelectedProject] = useState<
     Schema['Project']['type'] | null
   >(null);
-  const [fromStaleUpload, setFromStaleUpload] = useState(false);
-  // Once opened, keep the job owner alive so closing/reopening resumes polling.
-  const [jollyDialog, setJollyDialog] = useState<{
-    surveyId: string;
-    annotationSetId: string;
-  } | null>(null);
   const [selectedAnnotationSet, setSelectedAnnotationSet] = useState<
     Schema['AnnotationSet']['type'] | null
   >(null);
@@ -442,10 +427,7 @@ export default function Surveys() {
         <Button
           size={size}
           variant='primary'
-          onClick={() => {
-            setSelectedAnnotationSet(annotationSet);
-            showModal('annotationCount');
-          }}
+          onClick={() => navigate(surveyDialogHref('annotationCount', project.id, annotationSet.id))}
           disabled={disabled || hasJobs}
         >
           Details
@@ -453,11 +435,7 @@ export default function Surveys() {
         <Button
           size={size}
           variant='primary'
-          onClick={() => {
-            setSelectedProject(project);
-            setSelectedAnnotationSet(annotationSet);
-            showModal('launchAnnotationSet');
-          }}
+          onClick={() => navigate(surveyDialogHref('launchAnnotationSet', project.id, annotationSet.id))}
           disabled={disabled || hasJobs}
         >
           Launch
@@ -465,11 +443,7 @@ export default function Surveys() {
         <Button
           size={size}
           variant='primary'
-          onClick={() => {
-            setSelectedProject(project);
-            setSelectedAnnotationSet(annotationSet);
-            showModal('editAnnotationSet');
-          }}
+          onClick={() => navigate(surveyDialogHref('editAnnotationSet', project.id, annotationSet.id))}
           disabled={disabled || hasJobs}
         >
           Edit
@@ -477,11 +451,7 @@ export default function Surveys() {
         <Button
           size={size}
           variant='primary'
-          onClick={() => {
-            setSelectedProject(project);
-            setSelectedAnnotationSet({ id: annotationSet.id, name: annotationSet.name } as Schema['AnnotationSet']['type']);
-            showModal('annotationSetResults');
-          }}
+          onClick={() => navigate(surveyDialogHref('annotationSetResults', project.id, annotationSet.id))}
           disabled={disabled || hasJobs}
         >
           Results
@@ -586,10 +556,7 @@ export default function Surveys() {
             <Button
               size={size}
               variant='primary'
-              onClick={() => {
-                setSelectedProject(project);
-                showModal('addFiles');
-              }}
+              onClick={() => navigate(surveyDialogHref('addFiles', project.id))}
               disabled={
                 process.env.NODE_ENV !== 'development' && (disabled || hasJobs)
               }
@@ -599,10 +566,7 @@ export default function Surveys() {
             <Button
               size={size}
               variant='primary'
-              onClick={() => {
-                setSelectedProject(project);
-                showModal('addAnnotationSet');
-              }}
+              onClick={() => navigate(surveyDialogHref('addAnnotationSet', project.id))}
               disabled={disabled || hasJobs}
             >
               Add Annotation Set
@@ -630,10 +594,7 @@ export default function Surveys() {
                     requestResume({ id: project.id, name: project.name });
                     return;
                   }
-
-                  setFromStaleUpload(true);
-                  setSelectedProject(project);
-                  showModal('addFiles');
+                  navigate(surveyDialogHref('addFiles', project.id) + '?resume=stale');
                 }}
               >
                 <Play />
@@ -981,7 +942,7 @@ export default function Surveys() {
   const emptyMessage = 'You are not an admin of any surveys.';
 
   if (projects.length === 0 && !isOrganizationAdmin) {
-    return <div>You are not authorized to access this page.</div>;
+    return <><div>{myProjectsHook.meta.isPending ? "Loading surveys..." : "You are not authorized to access this page."}</div><Outlet /></>;
   }
 
   return (
@@ -1099,7 +1060,7 @@ export default function Surveys() {
           {isOrganizationAdmin && (
             <Card.Footer className='d-flex justify-content-center'>
               <div className='d-inline-block'>
-                <Button variant='primary' onClick={() => showModal('newSurvey')}
+                <Button variant='primary' onClick={() => navigate(surveyDialogHref('newSurvey'))}
                 >
                   New Survey
                 </Button>
@@ -1109,11 +1070,6 @@ export default function Surveys() {
         </Card>
         {/* {process.env.NODE_ENV === 'development' && <UploadIntegrityChecker />} */}
       </div>
-      <Suspense fallback={<div role='status'>Loading dialog...</div>}>
-        {modalToShow === 'newSurvey' && <NewSurveyModal
-          show={modalToShow === 'newSurvey'}
-          projects={projects.map((project) => project.name.toLowerCase())}
-        />}
         <ConfirmationModal
           show={modalToShow === 'deleteSurvey'}
           onClose={() => {
@@ -1166,128 +1122,6 @@ export default function Surveys() {
             setSelectedProject(null);
           }}
         />
-        {modalToShow === 'addFiles' && selectedProject && (
-          <FilesUploadComponent
-            show={modalToShow === 'addFiles'}
-            fromStaleUpload={fromStaleUpload}
-            handleClose={() => {
-              showModal(null);
-              setSelectedProject(null);
-              setFromStaleUpload(false);
-            }}
-            project={{ id: selectedProject.id, name: selectedProject.name }}
-          />
-        )}
-        {modalToShow === 'annotationSetResults' && selectedProject && selectedAnnotationSet && (
-          <AnnotationSetResults
-            show={modalToShow === 'annotationSetResults'}
-            onGenerateResults={() => {
-              setJollyDialog({ surveyId: selectedProject.id, annotationSetId: selectedAnnotationSet.id });
-              showModal('generateJollyResults');
-            }}
-            onClose={() => {
-              showModal(null);
-              setSelectedProject(null);
-              setSelectedAnnotationSet(null);
-            }}
-            annotationSet={selectedAnnotationSet}
-            surveyId={selectedProject.id}
-          />
-        )}
-        {modalToShow === 'annotationCount' && selectedAnnotationSet && (
-          <AnnotationCountModal
-            setId={selectedAnnotationSet.id}
-            show={modalToShow === 'annotationCount'}
-            handleClose={() => {
-              showModal(null);
-              setSelectedAnnotationSet(null);
-            }}
-          />
-        )}
-        {modalToShow === 'editAnnotationSet' && selectedAnnotationSet && selectedProject && (
-          <EditAnnotationSetModal
-            show={modalToShow === 'editAnnotationSet'}
-            handleClose={() => {
-              showModal(null);
-              setSelectedProject(null);
-              setSelectedAnnotationSet(null);
-            }}
-            project={selectedProject}
-            categories={selectedProject.categories}
-            annotationSet={selectedAnnotationSet}
-            setAnnotationSet={(annotationSet) => {
-              if (!selectedProject) return;
-              updateProjectInCache(selectedProject.id, (prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      annotationSets: prev.annotationSets.map((set: { id: string }) =>
-                        set.id === annotationSet.id ? annotationSet : set
-                      ),
-                    }
-                  : prev
-              );
-            }}
-          />
-        )}
-        {modalToShow === 'addAnnotationSet' && selectedProject && (
-          <AddAnnotationSetModal
-            show={modalToShow === 'addAnnotationSet'}
-            onClose={() => {
-              showModal(null);
-              setSelectedProject(null);
-            }}
-            project={selectedProject}
-            allProjects={projects}
-            addAnnotationSet={(annotationSet) => {
-              if (!selectedProject) return;
-              updateProjectInCache(selectedProject.id, (prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      annotationSets: [
-                        ...prev.annotationSets,
-                        {
-                          id: annotationSet.id,
-                          name: annotationSet.name,
-                        } as (typeof prev.annotationSets)[number],
-                      ],
-                    }
-                  : prev
-              );
-              // Log asynchronously without blocking
-              logAdminAction(
-                client,
-                user.userId,
-                `Added annotation set "${annotationSet.name}" to project "${selectedProject?.name}"`,
-                selectedProject?.id || '',
-                selectedProject?.organizationId || ''
-              ).catch(console.error);
-            }}
-          />
-        )}
-        {modalToShow === 'launchAnnotationSet' && selectedProject && selectedAnnotationSet && (
-          <LaunchAnnotationSetModal
-            show={modalToShow === 'launchAnnotationSet'}
-            annotationSet={selectedAnnotationSet}
-            project={selectedProject}
-            onOptimisticStatus={(projectId, status) => {
-              updateProjectInCache(projectId, (prev) =>
-                prev ? { ...prev, status } : prev
-              );
-              setSelectedProject((prev) =>
-                prev && prev.id === projectId ? { ...prev, status } : prev
-              );
-            }}
-          />
-        )}
-        {jollyDialog && (
-          <GenerateJollyResults
-            key={`${jollyDialog.surveyId}:${jollyDialog.annotationSetId}`}
-            {...jollyDialog}
-          />
-        )}
-      </Suspense>
       <Outlet />
     </>
   );

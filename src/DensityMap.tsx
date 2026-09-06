@@ -1,11 +1,13 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef, useMemo } from 'react';
 import maplibregl, { type StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useQueries } from '@tanstack/react-query';
 import { fetchAllPaginatedResults } from './utils';
 import { client } from './stores/appClient';
-import ImageViewerModal from './ImageViewerModal';
-import AnnotationViewerModal from './AnnotationViewerModal';
+import { useDialogRoute } from './routing/useDialogRoute';
+import { dialogIds } from './routing/dialogValues';
+import DialogNotice from './routing/DialogNotice';
+const MapViewerRoute = lazy(() => import('./routing/MapViewerRoute'));
 import {
   uniqueNamesGenerator,
   adjectives,
@@ -214,9 +216,10 @@ export default function DensityMap({
   const [showStrata, setShowStrata] = useState(true);
 
   // Viewer modal state
-  const [viewerImageId, setViewerImageId] = useState<string | null>(null);
-  const [viewerSetId, setViewerSetId] = useState<string>(primarySetId);
-  const [viewerOpen, setViewerOpen] = useState(false);
+  const dialog = useDialogRoute();
+  const viewerImageId = dialog.get('image');
+  const viewerSetId = dialog.get('set');
+  const viewerOpen = dialog.name === 'mapViewer';
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -551,9 +554,7 @@ export default function DensityMap({
   // -----------------------------------------------------------------------
   const openViewer = (imageId: string, setId?: string) => {
     if (document.fullscreenElement) document.exitFullscreen?.();
-    setViewerImageId(imageId);
-    setViewerSetId(setId || primarySetId);
-    setViewerOpen(true);
+    dialog.open('mapViewer', { image: imageId, set: setId || primarySetId, categories: dialog.get('categories') ?? JSON.stringify(categoryIds ?? []) });
   };
   const openViewerRef = useRef(openViewer);
   openViewerRef.current = openViewer;
@@ -954,25 +955,16 @@ export default function DensityMap({
         </div>
       )}
 
-      {editable ? (
-        <AnnotationViewerModal
-          show={viewerOpen}
-          onClose={() => setViewerOpen(false)}
-          imageId={viewerImageId}
-          imageIds={orderedImageIds}
-          annotationSetId={viewerSetId || primarySetId}
-          onNavigate={(id) => openViewer(id, viewerSetId)}
-        />
-      ) : (
-        <ImageViewerModal
-          show={viewerOpen}
-          onClose={() => setViewerOpen(false)}
-          imageId={viewerImageId}
-          imageIds={orderedImageIds}
-          annotationSetId={viewerSetId || primarySetId}
-          onNavigate={(id) => openViewer(id, viewerSetId)}
-          categoryIds={categoryIds}
-        />
+      {viewerOpen && (
+        <Suspense fallback={<DialogNotice message='Loading viewer...' onClose={dialog.close} />}>
+          <MapViewerRoute
+            editable={editable} onClose={dialog.close}
+            imageId={viewerImageId} imageIds={orderedImageIds}
+            annotationSetId={viewerSetId ?? ''}
+            onNavigate={(id) => openViewer(id, viewerSetId ?? undefined)}
+            categoryIds={dialogIds(dialog.get('categories'))}
+          />
+        </Suspense>
       )}
     </div>
   );

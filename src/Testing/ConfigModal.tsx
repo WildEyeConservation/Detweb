@@ -1,8 +1,8 @@
+import { useDialogGuard } from '../routing/useDialogGuard';
 import { Button, Form } from 'react-bootstrap';
 import { Modal, Header, Title, Body, Footer } from '../Modal';
 import { useState, useEffect } from 'react';
 import { client } from '../stores/appClient';
-import { showModalAction as showModal } from '../stores/modalStore';
 import Tooltip from 'react-bootstrap/Tooltip';
 import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
 
@@ -10,9 +10,11 @@ type TestType = 'random' | 'interval';
 
 export default function ConfigModal({
   show,
+  onClose,
   survey,
 }: {
   show: boolean;
+  onClose: () => void;
   survey: { id: string; name: string };
 }) {
   const [testInterval, setTestInterval] = useState<number>(0);
@@ -21,6 +23,8 @@ export default function ConfigModal({
   const [deadzone, setDeadzone] = useState<number>(0);
   const [confirmation, setConfirmation] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
+  const [dirty, setDirty] = useState(false);
+  const finishNavigation = useDialogGuard({ busy: saving, dirty });
   useEffect(() => {
     const fetchTestConfig = async () => {
       const { data: config } = await client.models.ProjectTestConfig.get({
@@ -50,7 +54,7 @@ export default function ConfigModal({
       setTestChance(0);
       setConfirmation(false);
     }
-  }, [show]);
+  }, [show, survey.id]);
 
   async function handleSave() {
     if (testType === 'interval' && testInterval < 10) {
@@ -71,17 +75,28 @@ export default function ConfigModal({
 
     setSaving(true);
 
-    await client.models.ProjectTestConfig.update({
-      projectId: survey.id,
-      testType: testType,
-      random: testType === 'random' ? testChance : undefined,
-      deadzone: testType === 'random' ? deadzone : undefined,
-      interval: testType === 'interval' ? testInterval : undefined,
-      postTestConfirmation: confirmation,
-    });
+    try {
+      const { errors } = await client.models.ProjectTestConfig.update({
+        projectId: survey.id,
+        testType: testType,
+        random: testType === 'random' ? testChance : undefined,
+        deadzone: testType === 'random' ? deadzone : undefined,
+        interval: testType === 'interval' ? testInterval : undefined,
+        postTestConfirmation: confirmation,
+      });
 
-    setSaving(false);
-    showModal(null);
+      if (errors?.length)
+        throw new Error(errors.map((error) => error.message).join('; '));
+      finishNavigation(onClose);
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Unable to save test configuration.'
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -90,7 +105,7 @@ export default function ConfigModal({
         <Title>Configure {survey.name} Tests</Title>
       </Header>
       <Body>
-        <Form className='p-3'>
+        <Form className='p-3' onChangeCapture={() => setDirty(true)}>
           <Form.Group className='mb-2'>
             <Form.Label>Test type</Form.Label>
             <Form.Select
@@ -166,7 +181,7 @@ export default function ConfigModal({
         <Button variant='primary' onClick={handleSave} disabled={saving}>
           Save
         </Button>
-        <Button variant='dark' onClick={() => showModal(null)}>
+        <Button variant='dark' onClick={() => onClose()}>
           Cancel
         </Button>
       </Footer>

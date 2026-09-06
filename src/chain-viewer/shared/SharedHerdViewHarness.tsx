@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Spinner } from 'react-bootstrap';
 import Select, { type SingleValue } from 'react-select';
@@ -8,7 +8,7 @@ import { buildHerdRuns } from '../utils/herdRuns';
 import { buildHerdDisplayPairs } from '../utils/herdPairs';
 import { CHAIN_LOCATION_SOURCES, HerdMapPair } from '../HerdMapPair';
 import { HerdNavBar } from '../HerdNavBar';
-import { ChainTilesModal } from '../components/ChainTilesModal';
+const ChainTilesModal = lazy(() => import('../components/ChainTilesModal').then((module) => ({ default: module.ChainTilesModal })));
 import ChangeCategoryModal from '../../ChangeCategoryModal';
 import { CommentModal } from './CommentModal';
 import type { CategoryType } from '../../schemaTypes';
@@ -31,7 +31,7 @@ export function SharedHerdViewHarness({ shareId }: Props) {
   const { data, isLoading, isError, error } = useSharedChainData(shareId);
   const { overlay, setObscured, setRelabel, setComment } =
     useChainReviewFeedback(shareId);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const chainParam = searchParams.get('chain');
 
   // Snapshot annotations overlaid with this reviewer's recorded opinions.
@@ -295,17 +295,22 @@ export function SharedHerdViewHarness({ shareId }: Props) {
   );
 
   // ---- Chain-tiles modal ----
-  const [tilesChainId, setTilesChainId] = useState<string | null>(null);
+  const tilesChainId = chainParam;
+  const setTilesChainId = useCallback((id: string | null) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (id) next.set('chain', id);
+      else next.delete('chain');
+      return next;
+    });
+  }, [setSearchParams]);
   const onViewChainTiles = useCallback(
     (annotationId: string) => {
       const a = annotations.find((x) => x.id === annotationId);
       if (a) setTilesChainId(a.objectId ?? a.id);
     },
-    [annotations]
+    [annotations, setTilesChainId]
   );
-  useEffect(() => {
-    if (chainParam) setTilesChainId(chainParam);
-  }, [chainParam]);
 
   useEffect(() => {
     if (!chainParam) return;
@@ -425,6 +430,7 @@ export function SharedHerdViewHarness({ shareId }: Props) {
         </>
       )}
 
+      {tilesChainId && <Suspense fallback={null}>
       <ChainTilesModal
         show={tilesChainId !== null}
         onHide={() => setTilesChainId(null)}
@@ -436,6 +442,7 @@ export function SharedHerdViewHarness({ shareId }: Props) {
         metaByAnnotationId={tileMetaMap}
         metaLoading={isLoading}
       />
+      </Suspense>}
       <ChangeCategoryModal
         show={labelChange !== null}
         onClose={() => setLabelChange(null)}

@@ -1,117 +1,73 @@
+import { useOrganizationRoute } from '../routing/useOrganizationRoute';
 import { Card } from 'react-bootstrap';
 import OrganizationSelector from '../OrganizationSelector';
-import { useState } from 'react';
 import { Tab, Tabs } from '../Tabs';
-import Surveys from './Surveys';
-import { TestingContext } from './testingContext';
-import { client } from '../stores/appClient';
-import { Schema } from '../amplify/client-schema';
-import { useOptimisticUpdates } from '../useOptimisticUpdates';
-import Users from './Users';
-import Results from './Results';
+import { lazy, Suspense } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { dialogSearch } from '../routing/dialogSearch';
+const Surveys = lazy(() => import('./Surveys'));
+const Users = lazy(() => import('./Users'));
+const Results = lazy(() => import('./Results'));
 
 export default function Testing() {
-
-  const [organization, setOrganization] = useState<{
-    id: string;
-    name: string;
-  }>({ id: '', name: '' });
-
-  const { data: projects } = useOptimisticUpdates<
-    Schema['Project']['type'],
-    'Project'
-  >(
-    'Project',
-    async (nextToken) =>
-      client.models.Project.list({
-        nextToken,
-        filter: { organizationId: { eq: organization.id } },
-      }),
-    {
-      filter: { organizationId: { eq: organization.id } },
-    },
-    { enabled: Boolean(organization.id), subscribe: false }
+  const [params, setParams] = useSearchParams();
+  const tabNames = ['surveys', 'users', 'results'];
+  const activeTab = Math.max(
+    0,
+    tabNames.indexOf(params.get('tab') ?? 'surveys')
   );
+  const { organization, setOrganization, allowAutoSelect, notice } =
+    useOrganizationRoute();
 
-  const { data: testPresets } = useOptimisticUpdates<
-    Schema['TestPreset']['type'],
-    'TestPreset'
-  >(
-    'TestPreset',
-    async (nextToken) =>
-      client.models.TestPreset.testPresetsByOrganizationId(
-        { organizationId: organization.id },
-        { nextToken }
-      ),
-    {
-      filter: { organizationId: { eq: organization.id } },
-    },
-    { enabled: Boolean(organization.id), subscribe: false }
-  );
-
-  const membershipsHook = useOptimisticUpdates<
-    Schema['OrganizationMembership']['type'],
-    'OrganizationMembership'
-  >(
-    'OrganizationMembership',
-    async (nextToken) =>
-      client.models.OrganizationMembership.membershipsByOrganizationId(
-        { organizationId: organization.id },
-        { nextToken }
-      ),
-    {
-      filter: { organizationId: { eq: organization.id } },
-    },
-    {
-      enabled: Boolean(organization.id),
-      compositeKey: (membership) =>
-        `${membership.organizationId}:${membership.userId}`,
-    }
-  );
   return (
-    <TestingContext.Provider
-      value={{
-        organizationId: organization.id,
-        organizationProjects: projects,
-        organizationTestPresets: testPresets,
-        organizationMembershipsHook: membershipsHook,
+    <div
+      style={{
+        width: '100%',
+        maxWidth: '1555px',
+        marginTop: '16px',
+        marginBottom: '16px',
       }}
     >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '1555px',
-          marginTop: '16px',
-          marginBottom: '16px',
-        }}
-      >
-        <Card>
-          <Card.Header className='d-flex justify-content-between mb-0'>
-            <Card.Title className='mb-0'>
-              <h4 className='mb-0'>User Testing</h4>
-            </Card.Title>
-            <OrganizationSelector
-              organization={organization}
-              setOrganization={setOrganization}
-            />
-          </Card.Header>
-          <Card.Body>
-            {organization.id && (
-              <Tabs defaultTab={0}>
+      <Card>
+        <Card.Header className='d-flex justify-content-between mb-0'>
+          <Card.Title className='mb-0'>
+            <h4 className='mb-0'>User Testing</h4>
+          </Card.Title>
+          <OrganizationSelector
+            organization={organization}
+            setOrganization={setOrganization}
+            allowAutoSelect={allowAutoSelect}
+          />
+        </Card.Header>
+        <Card.Body>
+          {notice && <div role='alert'>{notice}</div>}
+          {organization.id && (
+            <Suspense fallback={<div>Loading testing...</div>}>
+              <Tabs
+                key={organization.id}
+                activeTab={activeTab}
+                onTabChange={(tab) =>
+                  setParams((previous) => {
+                    const next = dialogSearch(previous, null);
+                    next.set('tab', tabNames[tab]);
+                    return next;
+                  })
+                }
+              >
                 <Tab label='Surveys'>
-                  <Surveys />
+                  <Surveys organizationId={organization.id} />
                 </Tab>
                 <Tab label='Users'>
-                  <Users />
+                  <Users organizationId={organization.id} />
                 </Tab>
                 <Tab label='Results'>
-                  <Results />
+                  <Results organizationId={organization.id} />
                 </Tab>
               </Tabs>
-            )}
-          </Card.Body>
-        </Card>
-      </div>
-    </TestingContext.Provider>
+            </Suspense>
+          )}
+        </Card.Body>
+      </Card>
+    </div>
   );
 }

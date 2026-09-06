@@ -1,3 +1,5 @@
+import { useSearchParams } from 'react-router-dom';
+import { dialogSearch } from './routing/dialogSearch';
 import { useSession } from './session';
 import { Tabs, Tab } from './Tabs';
 import { Card } from 'react-bootstrap';
@@ -9,6 +11,12 @@ import AdminSurveys from './AdminSurveys';
 
 export default function Admin() {
   const { cognitoGroups } = useSession();
+  const [params, setParams] = useSearchParams();
+  const tabs = ['organizations', 'logs', 'statistics', 'surveys', 'health'];
+  const activeTab = Math.max(
+    0,
+    tabs.indexOf(params.get('tab') ?? 'organizations')
+  );
 
   if (!cognitoGroups.includes('sysadmin')) {
     return <div>You are not authorized to access this page.</div>;
@@ -29,7 +37,16 @@ export default function Admin() {
           </Card.Title>
         </Card.Header>
         <Card.Body>
-          <Tabs>
+          <Tabs
+            activeTab={activeTab}
+            onTabChange={(tab) =>
+              setParams((previous) => {
+                const next = dialogSearch(previous, null);
+                next.set('tab', tabs[tab]);
+                return next;
+              })
+            }
+          >
             <Tab label='Pending Organisations'>
               <PendingOrganizations />
             </Tab>

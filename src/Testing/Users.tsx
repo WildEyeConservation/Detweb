@@ -1,12 +1,10 @@
 import MyTable from '../Table';
-import { TestingContext } from './testingContext';
-import { useContext } from 'react';
+import { useTestingMemberships } from '../data/testing';
 import { useUsers } from '../apiInterface';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
 
-export default function Users() {
-  const { organizationMembershipsHook: hook, organizationId } =
-    useContext(TestingContext)!;
+export default function Users({ organizationId }: { organizationId: string }) {
+  const hook = useTestingMemberships(organizationId);
   const { users } = useUsers();
 
   const tableData = hook.data.map((membership) => {

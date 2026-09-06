@@ -1,29 +1,42 @@
 import MyTable from '../Table';
-import { useState, useContext, useEffect, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import Select from 'react-select';
-import { TestingContext } from './testingContext';
+import { useTestingProjects, useTestingPresets } from '../data/testing';
 import { client } from '../stores/appClient';
-import { showModalAction as showModal, useModalToShow } from '../stores/modalStore';
+import { useDialogRoute } from '../routing/useDialogRoute';
+import DialogNotice from '../routing/DialogNotice';
 import { Button } from 'react-bootstrap';
 import { Plus, Settings2, Eye } from 'lucide-react';
-import ConfigModal from './ConfigModal';
-import EditLocationsModal from './EditLocationsModal';
-import AddLocationsModal from './AddLocationsModal';
+const ConfigModal = lazy(() => import('./ConfigModal'));
+const EditLocationsModal = lazy(() => import('./EditLocationsModal'));
+const AddLocationsModal = lazy(() => import('./AddLocationsModal'));
 
 interface Option {
   label: string;
   value: string;
 }
 
-export default function Surveys() {
-  const {
-    organizationId,
-    organizationProjects: surveys,
-    organizationTestPresets: locationPools,
-  } = useContext(TestingContext)!;
-  const modalToShow = useModalToShow();
+export default function Surveys({
+  organizationId,
+}: {
+  organizationId: string;
+}) {
+  const surveys = useTestingProjects(organizationId);
+  const locationPools = useTestingPresets(organizationId);
+  const dialog = useDialogRoute();
+  const modalToShow = dialog.name;
 
-  const [selectedSurvey, setSelectedSurvey] = useState<Option | null>(null);
+  const selectedSurvey = surveys.find(
+    (survey) => survey.id === dialog.get('survey')
+  );
+  const selectedPreset = locationPools.find(
+    (pool) => pool.id === dialog.get('preset')
+  );
+  const knownDialog = [
+    'addLocationsToPoolModal',
+    'editLocationPoolModal',
+    'configModal',
+  ].includes(modalToShow ?? '');
   const [selectedLocationPools, setSelectedLocationPools] = useState<{
     [surveyId: string]: Option[];
   }>({});
@@ -122,11 +135,11 @@ export default function Surveys() {
             variant='success'
             className='w-100'
             onClick={() => {
-              setSelectedSurvey({
-                label: survey.name,
-                value: survey.id,
+              dialog.open('addLocationsToPoolModal', {
+                survey: survey.id,
+                preset: locationPools.find((pool) => pool.name === survey.name)
+                  ?.id,
               });
-              showModal('addLocationsToPoolModal');
             }}
             disabled={isDisabled}
           >
@@ -136,11 +149,11 @@ export default function Surveys() {
             variant='info'
             className='w-100'
             onClick={() => {
-              setSelectedSurvey({
-                label: survey.name,
-                value: survey.id,
+              dialog.open('editLocationPoolModal', {
+                survey: survey.id,
+                preset: locationPools.find((pool) => pool.name === survey.name)
+                  ?.id,
               });
-              showModal('editLocationPoolModal');
             }}
             disabled={isDisabled}
           >
@@ -150,11 +163,11 @@ export default function Surveys() {
             variant='primary'
             className='w-100'
             onClick={() => {
-              setSelectedSurvey({
-                label: survey.name,
-                value: survey.id,
+              dialog.open('configModal', {
+                survey: survey.id,
+                preset: locationPools.find((pool) => pool.name === survey.name)
+                  ?.id,
               });
-              showModal('configModal');
             }}
             disabled={isDisabled}
           >
@@ -163,12 +176,6 @@ export default function Surveys() {
         ],
       };
     });
-
-  useEffect(() => {
-    if (!modalToShow && selectedSurvey) {
-      setSelectedSurvey(null);
-    }
-  }, [modalToShow]);
 
   return (
     <div className='d-flex flex-column gap-2 mt-3 w-100'>
@@ -189,37 +196,55 @@ export default function Surveys() {
         itemsPerPage={5}
         emptyMessage='No surveys found'
       />
-      {selectedSurvey && (
-        <ConfigModal
-          show={modalToShow === 'configModal'}
-          survey={{ id: selectedSurvey.value, name: selectedSurvey.label }}
-        />
-      )}
-      {selectedSurvey && (
-        <EditLocationsModal
-          key={selectedSurvey.value}
-          show={modalToShow === 'editLocationPoolModal'}
-          preset={{
-            id: locationPools.find(
-              (pool) => pool.name === selectedSurvey.label
-            )!.id,
-            name: selectedSurvey.label,
-          }}
-          surveyId={selectedSurvey.value}
-        />
-      )}
-      {selectedSurvey && (
-        <AddLocationsModal
-          show={modalToShow === 'addLocationsToPoolModal'}
-          preset={{
-            id: locationPools.find(
-              (pool) => pool.name === selectedSurvey.label
-            )!.id,
-            name: selectedSurvey.label,
-          }}
-          surveyId={selectedSurvey.value}
-        />
-      )}
+      <Suspense
+        key={`${dialog.name}:${dialog.get('survey')}:${dialog.get('preset')}`}
+        fallback={
+          <DialogNotice message='Loading dialog...' onClose={dialog.close} />
+        }
+      >
+        {knownDialog && !selectedSurvey && (
+          <DialogNotice
+            message='Loading the survey, or it is no longer available in this organization.'
+            onClose={dialog.close}
+          />
+        )}
+        {modalToShow === 'configModal' && selectedSurvey && (
+          <ConfigModal show survey={selectedSurvey} onClose={dialog.close} />
+        )}
+        {knownDialog &&
+          modalToShow !== 'configModal' &&
+          selectedSurvey &&
+          !selectedPreset && (
+            <DialogNotice
+              message='The selected location pool is unavailable.'
+              onClose={dialog.close}
+            />
+          )}
+        {modalToShow === 'editLocationPoolModal' &&
+          selectedSurvey &&
+          selectedPreset && (
+            <EditLocationsModal
+              key={selectedSurvey.id + selectedPreset.id}
+              show
+              preset={selectedPreset}
+              surveyId={selectedSurvey.id}
+              organizationId={organizationId}
+              onClose={dialog.close}
+            />
+          )}
+        {modalToShow === 'addLocationsToPoolModal' &&
+          selectedSurvey &&
+          selectedPreset && (
+            <AddLocationsModal
+              key={selectedSurvey.id + selectedPreset.id}
+              show
+              preset={selectedPreset}
+              surveyId={selectedSurvey.id}
+              organizationId={organizationId}
+              onClose={dialog.close}
+            />
+          )}
+      </Suspense>
     </div>
   );
 }

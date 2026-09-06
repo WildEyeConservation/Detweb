@@ -1,10 +1,11 @@
+import { uploadOrchestrator } from '../upload/core/UploadOrchestrator';
+import { useDialogGuard } from '../routing/useDialogGuard';
 import { Button, Form } from 'react-bootstrap';
 import { useState } from 'react';
 import { Modal, Body, Header, Footer, Title } from '../Modal';
 import { useSession } from '../session';
 import { useMyOrganizations } from '../data/memberships';
 import { client } from '../stores/appClient';
-import { showModalAction as showModal } from '../stores/modalStore';
 import { useEffect } from 'react';
 import Select from 'react-select';
 import LabeledToggleSwitch from '../LabeledToggleSwitch';
@@ -36,9 +37,11 @@ const CORE_STEPS: UploadWizardStep[] = [
 
 export default function NewSurveyModal({
   show,
+  onClose: closeDialog,
   projects,
 }: {
   show: boolean;
+  onClose: () => void;
   projects: string[];
 }) {
   const myOrganizationHook = useMyOrganizations();
@@ -89,6 +92,8 @@ export default function NewSurveyModal({
   const [stepIndex, setStepIndex] = useState(0);
   const [furthestIndex, setFurthestIndex] = useState(0);
 
+  const finishNavigation = useDialogGuard({ busy: loading, dirty: Boolean(name || imagesReady) });
+
   const canSubmit = !loading && filesReady && name && organization && gpsReady;
 
   const stepReady = (index: number): boolean => {
@@ -115,149 +120,159 @@ export default function NewSurveyModal({
   };
 
   async function handleSave() {
+    if (uploadOrchestrator.isActive()) {
+      alert('Wait for the current upload to finish before starting another survey.');
+      return;
+    }
     if (!organization) return;
     if (projects.includes(name.toLowerCase())) {
       alert('A project with this name already exists');
       return;
     }
 
-    setLoading(true);
+    try {
+      setLoading(true);
 
-    const { data: project } = await client.models.Project.create({
-      name,
-      organizationId: organization.value,
-      createdBy: user.userId,
-      status: 'uploading',
-      group: organization.value,
-    });
-
-    if (!project) {
-      alert('Failed to create survey');
-      setLoading(false);
-      return;
-    }
-
-    // Log project creation
-    await logAdminAction(
-      client,
-      user.userId,
-      `Created project "${name}" in organization "${organization.label}"`,
-      project.id,
-      organization.value
-    ).catch(console.error);
-
-    const admins = await fetchAllPaginatedResults(
-      client.models.OrganizationMembership.membershipsByOrganizationId,
-      {
+      const { data: project } = await client.models.Project.create({
+        name,
         organizationId: organization.value,
-        filter: { isAdmin: { eq: true } },
-        selectionSet: ['userId'],
+        createdBy: user.userId,
+        status: 'uploading',
+        group: organization.value,
+      });
+
+      if (!project) {
+        alert('Failed to create survey');
+        setLoading(false);
+        return;
       }
-    );
 
-    await Promise.all(
-      admins.map(async (a) => {
-        await client.models.UserProjectMembership.create({
-          userId: a.userId,
-          projectId: project.id,
-          isAdmin: true,
-          group: organization.value,
-        });
-      })
-    );
+      // Log project creation
+      await logAdminAction(
+        client,
+        user.userId,
+        `Created project "${name}" in organization "${organization.label}"`,
+        project.id,
+        organization.value
+      ).catch(console.error);
 
-    const exceptions = permissionExceptions.filter((pe) => !pe.temp);
-
-    await Promise.all(
-      exceptions.map(async (e) => {
-        if (e.annotationAccess) {
-          await client.models.UserProjectMembership.create({
-            userId: e.user.id,
-            projectId: project.id,
-            isAdmin: false,
-            group: organization.value,
-          });
+      const admins = await fetchAllPaginatedResults(
+        client.models.OrganizationMembership.membershipsByOrganizationId,
+        {
+          organizationId: organization.value,
+          filter: { isAdmin: { eq: true } },
+          selectionSet: ['userId'],
         }
-      })
-    );
+      );
 
-    // users already exclude current user and admins
-    const other = (users[organization.value] ?? []).filter(
-      (u) => !exceptions.some((e) => e.user.id === u.id)
-    );
-
-    if (globalAnnotationAccess?.value === 'Yes') {
       await Promise.all(
-        other.map(async (u) => {
+        admins.map(async (a) => {
           await client.models.UserProjectMembership.create({
-            userId: u.id,
+            userId: a.userId,
             projectId: project.id,
-            isAdmin: false,
+            isAdmin: true,
             group: organization.value,
           });
         })
       );
-    }
 
-    await client.models.ProjectTestConfig.create({
-      projectId: project.id,
-      testType: 'interval',
-      interval: 50,
-      accuracy: 50,
-      postTestConfirmation: false,
-      group: organization.value,
-    });
+      const exceptions = permissionExceptions.filter((pe) => !pe.temp);
 
-    const { data: testPreset } = await client.models.TestPreset.create({
-      name: name,
-      organizationId: organization.value,
-      group: organization.value,
-    });
+      await Promise.all(
+        exceptions.map(async (e) => {
+          if (e.annotationAccess) {
+            await client.models.UserProjectMembership.create({
+              userId: e.user.id,
+              projectId: project.id,
+              isAdmin: false,
+              group: organization.value,
+            });
+          }
+        })
+      );
 
-    if (!testPreset) {
-      alert('Failed to create test preset');
-      setLoading(false);
-      return;
-    }
+      // users already exclude current user and admins
+      const other = (users[organization.value] ?? []).filter(
+        (u) => !exceptions.some((e) => e.user.id === u.id)
+      );
 
-    await client.models.TestPresetProject.create({
-      testPresetId: testPreset.id,
-      projectId: project.id,
-      group: organization.value,
-    });
+      if (globalAnnotationAccess?.value === 'Yes') {
+        await Promise.all(
+          other.map(async (u) => {
+            await client.models.UserProjectMembership.create({
+              userId: u.id,
+              projectId: project.id,
+              isAdmin: false,
+              group: organization.value,
+            });
+          })
+        );
+      }
 
-    client.mutations.updateProjectMemberships({
-      projectId: project.id,
-    });
-
-    if (uploadSubmitFn) {
-      await uploadSubmitFn(project.id);
-    }
-
-    // If a shapefile was provided during upload, save it to the project now
-    if (shapefileLatLngs && shapefileLatLngs.length > 0) {
-      await saveShapefileForProject(client, project.id, shapefileLatLngs, organization.value);
-    }
-
-    // Create an empty tiled location set for global tiles
-    const { data: tiledLocationSet } = await client.models.LocationSet.create({
-      name: `${name} - Tiles`,
-      projectId: project.id,
-      description: JSON.stringify({ mode: 'tiled', global: true }),
-      locationCount: 0,
-      group: organization.value,
-    });
-
-    if (tiledLocationSet?.id) {
-      // Update project with the tiled location set ID
-      await client.models.Project.update({
-        id: project.id,
-        tiledLocationSetId: tiledLocationSet.id,
+      await client.models.ProjectTestConfig.create({
+        projectId: project.id,
+        testType: 'interval',
+        interval: 50,
+        accuracy: 50,
+        postTestConfirmation: false,
+        group: organization.value,
       });
-    }
 
-    setLoading(false);
-    showModal(null);
+      const { data: testPreset } = await client.models.TestPreset.create({
+        name: name,
+        organizationId: organization.value,
+        group: organization.value,
+      });
+
+      if (!testPreset) {
+        alert('Failed to create test preset');
+        setLoading(false);
+        return;
+      }
+
+      await client.models.TestPresetProject.create({
+        testPresetId: testPreset.id,
+        projectId: project.id,
+        group: organization.value,
+      });
+
+      client.mutations.updateProjectMemberships({
+        projectId: project.id,
+      });
+
+      if (uploadSubmitFn) {
+        await uploadSubmitFn(project.id);
+      }
+
+      // If a shapefile was provided during upload, save it to the project now
+      if (shapefileLatLngs && shapefileLatLngs.length > 0) {
+        await saveShapefileForProject(client, project.id, shapefileLatLngs, organization.value);
+      }
+
+      // Create an empty tiled location set for global tiles
+      const { data: tiledLocationSet } = await client.models.LocationSet.create({
+        name: `${name} - Tiles`,
+        projectId: project.id,
+        description: JSON.stringify({ mode: 'tiled', global: true }),
+        locationCount: 0,
+        group: organization.value,
+      });
+
+      if (tiledLocationSet?.id) {
+        // Update project with the tiled location set ID
+        await client.models.Project.update({
+          id: project.id,
+          tiledLocationSetId: tiledLocationSet.id,
+        });
+      }
+
+      setLoading(false);
+      finishNavigation(closeDialog);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Unable to save. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -585,7 +600,7 @@ export default function NewSurveyModal({
             {loading ? 'Creating...' : 'Create'}
           </Button>
         )}
-        <Button variant='dark' onClick={() => showModal(null)}>
+        <Button variant='dark' onClick={() => closeDialog()}>
           Cancel
         </Button>
       </Footer>

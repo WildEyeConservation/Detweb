@@ -1,13 +1,12 @@
-import { useState, useEffect, useContext, useRef, useCallback } from 'react';
+import { useDialogGuard } from '../routing/useDialogGuard';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button, Form, Spinner } from 'react-bootstrap';
 import { Modal, Header, Title, Body, Footer } from '../Modal';
-import { TestingContext } from './testingContext';
 import {
   setCurrentAnnoCountAction,
   useCurrentAnnoCount,
 } from '../stores/taskStore';
 import { client } from '../stores/appClient';
-import { showModalAction as showModal } from '../stores/modalStore';
 import { fetchAllPaginatedResults } from '../utils';
 import { type FetcherType, type TaskPayload, TaskBuffer } from '../TaskBuffer';
 import LightLocationView from './LightLocationView';
@@ -15,6 +14,8 @@ import { ProjectScope } from '../data/projectScope';
 
 type Props = {
   show: boolean;
+  onClose: () => void;
+  organizationId: string;
   preset: { id: string; name: string };
   surveyId: string;
 };
@@ -25,10 +26,9 @@ type LocationReferenceTask = TaskPayload & {
   location: { id: string; annotationSetId: string };
 };
 
-export default function EditLocationsModal({ show, preset, surveyId }: Props) {
+export default function EditLocationsModal({ show, preset, surveyId, organizationId, onClose }: Props) {
   const currentAnnoCount = useCurrentAnnoCount();
   const setCurrentAnnoCount = setCurrentAnnoCountAction;
-  const { organizationId } = useContext(TestingContext)!;
   const locationsRef = useRef<
     { testPresetId: string; locationId: string; annotationSetId: string }[]
   >([]);
@@ -50,6 +50,8 @@ export default function EditLocationsModal({ show, preset, surveyId }: Props) {
     number | ''
   >('');
   const [removing, setRemoving] = useState(false);
+  const [countSaves, setCountSaves] = useState(0);
+  useDialogGuard({ busy: removing || countSaves > 0 });
   const currentLocation = useRef<{
     locationId: string;
     annotationSetId: string;
@@ -198,85 +200,97 @@ export default function EditLocationsModal({ show, preset, surveyId }: Props) {
     const loc = locations[index];
     if (!loc) return;
     setRemoving(true);
-    await (client as any).models.TestPresetLocation.delete({
-      testPresetId: preset.id,
-      locationId: loc.locationId,
-      annotationSetId: loc.annotationSetId,
-    } as any);
-    await refreshLocations();
-    setRemoving(false);
+    try {
+      await (client as any).models.TestPresetLocation.delete({
+        testPresetId: preset.id,
+        locationId: loc.locationId,
+        annotationSetId: loc.annotationSetId,
+      } as any);
+      await refreshLocations();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to remove location.");
+    } finally {
+      setRemoving(false);
+    }
   }
 
   async function saveAnnotations(cLocation: {
     locationId: string;
     annotationSetId: string;
   }) {
-    // @ts-ignore selectionSet typing is complex in client
-    const { data: location } = await (client as any).models.Location.get({
-      id: cLocation.locationId,
-      selectionSet: ['imageId', 'width', 'height', 'x', 'y'] as const,
-    } as any);
-    if (!location) return;
-
-    // @ts-ignore complex union types from generated client
-    const annotations = (await (fetchAllPaginatedResults as any)(
-      // @ts-ignore complex union types from generated client
-      (client as any).models.Annotation.annotationsByImageIdAndSetId,
-      {
-        imageId: location.imageId,
-        setId: { eq: cLocation.annotationSetId },
-        selectionSet: ['categoryId', 'x', 'y'] as const,
-      } as any
-    )) as any[];
-
-    const boundsxy: [number, number][] = [
-      [location.x - location.width / 2, location.y - location.height / 2],
-      [location.x + location.width / 2, location.y + location.height / 2],
-    ];
-
-    const annotationCounts: Record<string, number> = {};
-    for (const annotation of annotations as any[]) {
-      const isWithin =
-        annotation.x >= boundsxy[0][0] &&
-        annotation.y >= boundsxy[0][1] &&
-        annotation.x <= boundsxy[1][0] &&
-        annotation.y <= boundsxy[1][1];
-
-      if (isWithin) {
-        annotationCounts[annotation.categoryId] =
-          (annotationCounts[annotation.categoryId] || 0) + 1;
-      }
-    }
-
-    for (const [categoryId, count] of Object.entries(annotationCounts)) {
-      // @ts-ignore complex union types from generated client
-      const { data: locationAnnotationCount } = await (
-        client as any
-      ).models.LocationAnnotationCount.get({
-        locationId: cLocation.locationId,
-        categoryId,
-        annotationSetId: cLocation.annotationSetId,
+    setCountSaves((count) => count + 1);
+    try {
+      // @ts-ignore selectionSet typing is complex in client
+      const { data: location } = await (client as any).models.Location.get({
+        id: cLocation.locationId,
+        selectionSet: ['imageId', 'width', 'height', 'x', 'y'] as const,
       } as any);
+      if (!location) return;
 
-      if (locationAnnotationCount) {
-        await (client as any).models.LocationAnnotationCount.update({
-          locationId: cLocation.locationId,
-          categoryId,
-          annotationSetId: cLocation.annotationSetId,
-          count,
-        } as any);
-      } else {
-        await (client as any).models.LocationAnnotationCount.create({
-          locationId: cLocation.locationId,
-          categoryId,
-          annotationSetId: cLocation.annotationSetId,
-          count,
-          group: organizationId,
-        } as any);
+      // @ts-ignore complex union types from generated client
+      const annotations = (await (fetchAllPaginatedResults as any)(
+        // @ts-ignore complex union types from generated client
+        (client as any).models.Annotation.annotationsByImageIdAndSetId,
+        {
+          imageId: location.imageId,
+          setId: { eq: cLocation.annotationSetId },
+          selectionSet: ['categoryId', 'x', 'y'] as const,
+        } as any
+      )) as any[];
+
+      const boundsxy: [number, number][] = [
+        [location.x - location.width / 2, location.y - location.height / 2],
+        [location.x + location.width / 2, location.y + location.height / 2],
+      ];
+
+      const annotationCounts: Record<string, number> = {};
+      for (const annotation of annotations as any[]) {
+        const isWithin =
+          annotation.x >= boundsxy[0][0] &&
+          annotation.y >= boundsxy[0][1] &&
+          annotation.x <= boundsxy[1][0] &&
+          annotation.y <= boundsxy[1][1];
+
+        if (isWithin) {
+          annotationCounts[annotation.categoryId] =
+            (annotationCounts[annotation.categoryId] || 0) + 1;
+        }
       }
-    }
 
-    setCurrentAnnoCount({});
+      for (const [categoryId, count] of Object.entries(annotationCounts)) {
+        // @ts-ignore complex union types from generated client
+        const { data: locationAnnotationCount } = await (
+          client as any
+        ).models.LocationAnnotationCount.get({
+          locationId: cLocation.locationId,
+          categoryId,
+          annotationSetId: cLocation.annotationSetId,
+        } as any);
+
+        if (locationAnnotationCount) {
+          await (client as any).models.LocationAnnotationCount.update({
+            locationId: cLocation.locationId,
+            categoryId,
+            annotationSetId: cLocation.annotationSetId,
+            count,
+          } as any);
+        } else {
+          await (client as any).models.LocationAnnotationCount.create({
+            locationId: cLocation.locationId,
+            categoryId,
+            annotationSetId: cLocation.annotationSetId,
+            count,
+            group: organizationId,
+          } as any);
+        }
+      }
+
+      setCurrentAnnoCount({});
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Unable to save annotation counts.');
+    } finally {
+      setCountSaves((count) => count - 1);
+    }
   }
 
   useEffect(() => {
@@ -389,7 +403,7 @@ export default function EditLocationsModal({ show, preset, surveyId }: Props) {
           </div>
         </Body>
         <Footer>
-          <Button variant='dark' onClick={() => showModal(null)}>
+          <Button variant='dark' onClick={() => onClose()}>
             Close
           </Button>
         </Footer>

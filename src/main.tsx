@@ -1,3 +1,4 @@
+import { surveyDialogRoutes } from './survey/surveyDialogRoutes';
 import ReactDOM from 'react-dom/client';
 import AppWithAuthenticator from './App.tsx';
 import './index.css';
@@ -46,6 +47,7 @@ const router = createBrowserRouter([
     ),
     errorElement: <ErrorPage />,
     children: [
+      { path: 'settings/:tab?', element: null },
       {
         path: 'jobs',
         lazy: async () => ({ Component: (await import('./user/Jobs')).default }),
@@ -164,6 +166,13 @@ const router = createBrowserRouter([
         path: 'surveys',
         lazy: async () => ({ Component: (await import('./survey/Surveys')).default }),
         children: [
+          ...surveyDialogRoutes.map(({ path, kind }) => ({
+            path,
+            lazy: async () => {
+              const { default: Dialog } = await import('./survey/SurveyDialogRoute');
+              return { Component: () => <Dialog key={kind} kind={kind} /> };
+            },
+          })),
           {
             path: ':surveyId/edit/:tab?',
             lazy: async () => ({ Component: (await import('./survey/SurveyEditorRoute')).default }),

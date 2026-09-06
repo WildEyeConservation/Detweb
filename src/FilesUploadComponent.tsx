@@ -1,3 +1,4 @@
+import { useDialogGuard } from './routing/useDialogGuard';
 import {
   useEffect,
   useState,
@@ -3320,11 +3321,12 @@ export default function FilesUploadComponent({
   >(null);
   const [readyToSubmit, setReadyToSubmit] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [furthestIndex, setFurthestIndex] = useState(0);
   const [imagesReady, setImagesReady] = useState(false);
   const [gpsReady, setGpsReady] = useState(false);
+
+  const finishNavigation = useDialogGuard({ busy: isSubmitting, dirty: imagesReady });
 
   const stepReadyToAdvance = (index: number): boolean => {
     switch (index) {
@@ -3339,6 +3341,10 @@ export default function FilesUploadComponent({
 
   // Modal version needs to handle its own submit
   const handleModalSubmit = async () => {
+    if (uploadOrchestrator.isActive()) {
+      alert('Wait for the current upload to finish before starting another upload.');
+      return;
+    }
     if (!uploadSubmitFn || !project?.id) return;
     setIsSubmitting(true);
     try {
@@ -3358,9 +3364,10 @@ export default function FilesUploadComponent({
         /* noop: status update will be enforced by UploadManager */
       }
 
-      handleClose();
-
       await uploadSubmitFn(project.id, fromStaleUpload);
+      finishNavigation(handleClose);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Unable to prepare the upload. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -3411,7 +3418,7 @@ export default function FilesUploadComponent({
         {stepIndex > 0 && (
           <Button
             variant='secondary'
-            disabled={isSubmitting || isClosing}
+            disabled={isSubmitting}
             onClick={() => setStepIndex(stepIndex - 1)}
           >
             Back
@@ -3432,7 +3439,7 @@ export default function FilesUploadComponent({
         ) : (
           <Button
             variant='primary'
-            disabled={!readyToSubmit || isSubmitting || isClosing}
+            disabled={!readyToSubmit || isSubmitting}
             onClick={handleModalSubmit}
           >
             Submit
@@ -3440,11 +3447,8 @@ export default function FilesUploadComponent({
         )}
         <Button
           variant='dark'
-          disabled={isSubmitting || isClosing}
-          onClick={() => {
-            setIsClosing(true);
-            handleClose();
-          }}
+          disabled={isSubmitting}
+          onClick={handleClose}
         >
           Cancel
         </Button>

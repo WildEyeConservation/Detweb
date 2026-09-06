@@ -1,4 +1,5 @@
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
+import { dialogSearch } from './routing/dialogSearch';
 import {
   useEffect,
   useState,
@@ -53,7 +54,8 @@ export function Review({ showAnnotationSetDropdown = true }) {
   const [selectedCategories, setSelectedCategories] = useState<Option[]>([]);
   const [selectedInfoTags, setSelectedInfoTags] = useState<Option[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<Option[]>([]);
-  const [tab, setTab] = useState<'carousel' | 'map'>('map');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get('tab') === 'carousel' ? 'carousel' : 'map';
   const [selectedAnnotationSet, setSelectedAnnotationSet] =
     useState<string>('');
   const [imageBased] = useState(true);
@@ -638,16 +640,12 @@ export function Review({ showAnnotationSetDropdown = true }) {
         <Card className='h-100 w-100'>
           <Card.Body>
             <Tabs
-              onTabChange={(tab) => {
-                switch (tab) {
-                  case 0:
-                    setTab('map');
-                    break;
-                  case 1:
-                    setTab('carousel');
-                    break;
-                }
-              }}
+              activeTab={tab === 'map' ? 0 : 1}
+              onTabChange={(index) => setSearchParams((previous) => {
+                const next = dialogSearch(previous, null);
+                next.set('tab', index === 1 ? 'carousel' : 'map');
+                return next;
+              })}
             >
               <Tab label='Map'>
                 <div className='h-100 w-100 pt-3'>

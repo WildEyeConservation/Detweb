@@ -1,9 +1,9 @@
+import { useDialogGuard } from '../routing/useDialogGuard';
 import { Alert, Button, Form } from 'react-bootstrap';
 import { Modal, Body, Header, Footer, Title } from '../Modal';
 import { useState } from 'react';
 import { Tabs, Tab } from '../Tabs';
 import { Schema } from '../amplify/client-schema';
-import { showModalAction as showModal } from '../stores/modalStore';
 import SpeciesLabelling from './SpeciesLabelling';
 import FalseNegatives from './FalseNegatives';
 import QCReview from './QCReview';
@@ -21,11 +21,13 @@ type LaunchHandlerType = {
 
 export default function LaunchAnnotationSetModal({
   show,
+  onClose: closeDialog,
   project,
   annotationSet,
   onOptimisticStatus,
 }: {
   show: boolean;
+  onClose: () => void;
   project: Schema['Project']['type'];
   annotationSet: Schema['AnnotationSet']['type'];
   onOptimisticStatus?: (
@@ -45,6 +47,8 @@ export default function LaunchAnnotationSetModal({
   const [homographyLaunchHandler, setHomographyLaunchHandler] = useState<LaunchHandlerType>(null);
   const [individualIdLaunchHandler, setIndividualIdLaunchHandler] = useState<LaunchHandlerType>(null);
 
+  const finishNavigation = useDialogGuard({ busy: launching, dirty: false });
+
   // Task type for each tab, in render order.
   const tabTaskTypes: WorkflowType[] = [
     'species-labelling',
@@ -59,7 +63,7 @@ export default function LaunchAnnotationSetModal({
     setTaskType('species-labelling');
     setProgressMessage('');
     setLaunchError('');
-    showModal(null);
+    closeDialog();
   }
 
   async function handleSubmit() {
@@ -123,7 +127,7 @@ export default function LaunchAnnotationSetModal({
       return;
     }
     setLaunching(false);
-    onClose();
+    finishNavigation(onClose);
   }
 
   return (

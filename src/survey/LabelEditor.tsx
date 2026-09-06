@@ -39,6 +39,7 @@ export default function LabelEditor({
   setHandleSave,
   isEditing = false,
   onStatusChange,
+  onDirtyChange,
   modelName = 'Category',
   title = 'Labels',
   description = 'Set up the labels based on the species you expect to encounter.',
@@ -52,6 +53,7 @@ export default function LabelEditor({
   >;
   isEditing?: boolean;
   onStatusChange?: (status: string) => void;
+  onDirtyChange?: (dirty: boolean) => void;
   modelName?: 'Category' | 'InfoTag';
   title?: string;
   description?: string;
@@ -67,6 +69,10 @@ export default function LabelEditor({
   useEffect(() => {
     defaultLabelsRef.current = defaultLabels;
   }, [defaultLabels]);
+
+  useEffect(() => {
+    onDirtyChange?.(JSON.stringify(labels) !== JSON.stringify(defaultLabelsRef.current));
+  }, [labels, onDirtyChange]);
 
   const handleSave = useCallback(
     async (annotationSetId: string, projectId: string, group: string) => {

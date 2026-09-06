@@ -21,7 +21,7 @@ export default function ImageViewerModal({
 }) {
   const currentIndex = imageId ? imageIds.indexOf(imageId) : -1;
   const hasPrevious = currentIndex > 0;
-  const hasNext = currentIndex < imageIds.length - 1;
+  const hasNext = currentIndex >= 0 && currentIndex < imageIds.length - 1;
 
   const handlePrevious = () => {
     if (hasPrevious) {
@@ -40,7 +40,7 @@ export default function ImageViewerModal({
       <Modal.Header closeButton>
         <Modal.Title>
           View Image{' '}
-          {imageId ? `(${currentIndex + 1} of ${imageIds.length})` : ''}
+          {currentIndex >= 0 ? `(${currentIndex + 1} of ${imageIds.length})` : ''}
         </Modal.Title>
       </Modal.Header>
       <Modal.Body style={{ height: '75vh' }}>

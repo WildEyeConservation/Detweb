@@ -19,6 +19,9 @@ module.exports = {
         patterns: [
           {
             group: [
+              '**/stores/modalStore',
+              '**/Testing/testingContext',
+              './testingContext',
               '**/Context',
               '**/Context.tsx',
               '**/UserContext',

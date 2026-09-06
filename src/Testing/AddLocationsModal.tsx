@@ -1,16 +1,14 @@
+import { useDialogGuard } from '../routing/useDialogGuard';
 import {
   useState,
   useEffect,
-  useContext,
   useMemo,
   useRef,
   useCallback,
 } from 'react';
 import { Button, Form, Spinner } from 'react-bootstrap';
 import { Modal, Header, Title, Body, Footer } from '../Modal';
-import { TestingContext } from './testingContext';
 import { client } from '../stores/appClient';
-import { showModalAction as showModal } from '../stores/modalStore';
 import { fetchAllPaginatedResults } from '../utils';
 import { type FetcherType, type TaskPayload, TaskBuffer } from '../TaskBuffer';
 import LightLocationView from './LightLocationView';
@@ -18,6 +16,8 @@ import { ProjectScope } from '../data/projectScope';
 
 type Props = {
   show: boolean;
+  onClose: () => void;
+  organizationId: string;
   preset: { id: string; name: string };
   surveyId: string;
 };
@@ -28,10 +28,10 @@ type LocationReferenceTask = TaskPayload & {
   location: { id: string; annotationSetId: string };
 };
 
-export default function AddLocationsModal({ show, preset, surveyId }: Props) {
-  const { organizationId } = useContext(TestingContext)!;
+export default function AddLocationsModal({ show, preset, surveyId, organizationId, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
+  useDialogGuard({ busy: adding });
   const [candidates, setCandidates] = useState<
     { annotationSetId: string; locationId: string }[]
   >([]);
@@ -63,10 +63,7 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
   const [addedLocations, setAddedLocations] = useState<Record<string, boolean>>(
     {}
   );
-  const lastAddedRef = useRef<{
-    annotationSetId: string;
-    locationId: string;
-  } | null>(null);
+
 
   const fetcher: FetcherType<LocationReferenceTask> = useCallback(async () => {
     const cand = candidatesRef.current[candidateIndexRef.current];
@@ -341,7 +338,7 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
     });
     setLocationSets((prev) => (created ? [...prev, created] : prev));
     return created?.id as string;
-  }, [surveyId, locationSets]);
+  }, [surveyId, locationSets, organizationId]);
 
   async function saveAnnotations(cand: {
     annotationSetId: string;
@@ -468,25 +465,18 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
       });
 
       // mark for effect using the new location
-      lastAddedRef.current = {
-        annotationSetId: cand.annotationSetId,
-        locationId: newLoc.id,
-      };
+      await saveAnnotations({ annotationSetId: cand.annotationSetId, locationId: newLoc.id });
       setAddedLocations((prev) => ({
         ...prev,
         [`${cand.annotationSetId}_${cand.locationId}`]: true,
       }));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to add location.");
     } finally {
       setAdding(false);
     }
   }
 
-  useEffect(() => {
-    if (lastAddedRef.current) {
-      saveAnnotations(lastAddedRef.current);
-      lastAddedRef.current = null;
-    }
-  }, [addedLocations]);
 
   return (
     <ProjectScope projectId={surveyId}>
@@ -737,7 +727,7 @@ export default function AddLocationsModal({ show, preset, surveyId }: Props) {
           </div>
         </Body>
         <Footer>
-          <Button variant='dark' onClick={() => showModal(null)}>
+          <Button variant='dark' onClick={() => onClose()}>
             Close
           </Button>
         </Footer>

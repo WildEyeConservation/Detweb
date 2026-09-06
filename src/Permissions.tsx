@@ -1,3 +1,6 @@
+import { useSearchParams } from 'react-router-dom';
+import { dialogSearch } from './routing/dialogSearch';
+import { useOrganizationRoute } from './routing/useOrganizationRoute';
 import { Card, Button } from 'react-bootstrap';
 import { Tabs, Tab } from './Tabs';
 import Users from './organization/Users';
@@ -8,10 +11,8 @@ import { useIsOrganizationAdmin } from './data/memberships';
 
 export default function Permissions() {
   const isOrganizationAdmin = useIsOrganizationAdmin();
-  const [organization, setOrganization] = useState<{
-    id: string;
-    name: string;
-  }>({ id: '', name: '' });
+  const { organization, setOrganization, allowAutoSelect, notice } =
+    useOrganizationRoute();
   const [onClick, setOnClick] = useState<{
     name: string;
     function: () => void;
@@ -38,9 +39,11 @@ export default function Permissions() {
           <OrganizationSelector
             organization={organization}
             setOrganization={setOrganization}
+            allowAutoSelect={allowAutoSelect}
           />
         </Card.Header>
         <Card.Body>
+          {notice && <div role='alert'>{notice}</div>}
           {organization.id && (
             <PermissionsBody
               key={organization.id}
@@ -51,10 +54,7 @@ export default function Permissions() {
         </Card.Body>
         {onClick && (
           <Card.Footer className='d-flex justify-content-center'>
-            <Button
-              variant='primary'
-              onClick={onClick.function}
-            >
+            <Button variant='primary' onClick={onClick.function}>
               {onClick.name}
             </Button>
           </Card.Footer>
@@ -71,8 +71,18 @@ function PermissionsBody({
   organization: { id: string; name: string };
   setOnClick: (onClick: { name: string; function: () => void } | null) => void;
 }) {
+  const [params, setParams] = useSearchParams();
   return (
-    <Tabs defaultTab={0} onTabChange={() => setOnClick(null)}>
+    <Tabs
+      activeTab={params.get('tab') === 'info' ? 1 : 0}
+      onTabChange={(tab) =>
+        setParams((previous) => {
+          const next = dialogSearch(previous, null);
+          next.set('tab', tab === 1 ? 'info' : 'users');
+          return next;
+        })
+      }
+    >
       <Tab label='Users'>
         <Users
           key={organization.id}

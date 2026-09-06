@@ -1,3 +1,4 @@
+import { useDialogGuard } from '../routing/useDialogGuard';
 import Form from 'react-bootstrap/Form';
 import Button from 'react-bootstrap/Button';
 import { useState, useEffect } from 'react';
@@ -16,11 +17,13 @@ export default function CreateOrganization({
     requestedByEmail: string;
   };
 }) {
-
   const [name, setName] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [adminEmail, setAdminEmail] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  const [dirty, setDirty] = useState(false);
+  const finishNavigation = useDialogGuard({ busy: isSubmitting, dirty });
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -49,25 +52,33 @@ export default function CreateOrganization({
         alert(errors[0].message);
       } else {
         alert('Organisation ' + name + ' created for ' + adminEmail);
+        finishNavigation(onHide);
       }
     } catch (err: any) {
       alert(err.message ?? 'Failed to create organization');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setIsSubmitting(false);
-    handleClear();
-    onHide();
   };
 
   async function handleDeny() {
-    if (request) {
-      await client.models.OrganizationRegistration.update({
+    if (!request) return;
+    setIsSubmitting(true);
+    try {
+      const { errors } = await client.models.OrganizationRegistration.update({
         id: request.id,
         status: 'denied',
       });
+      if (errors?.length)
+        throw new Error(errors.map((error) => error.message).join('; '));
+      finishNavigation(onHide);
+    } catch (error) {
+      alert(
+        error instanceof Error ? error.message : 'Unable to deny this request.'
+      );
+    } finally {
+      setIsSubmitting(false);
     }
-
-    onHide();
   }
 
   const handleClear = () => {
@@ -93,7 +104,11 @@ export default function CreateOrganization({
         <Title>{request ? 'Add' : 'Create'} Organisation</Title>
       </Header>
       <Body>
-        <Form onSubmit={handleSubmit} className='p-3'>
+        <Form
+          onSubmit={handleSubmit}
+          className='p-3'
+          onChangeCapture={() => setDirty(true)}
+        >
           <Form.Group className='mb-3'>
             <Form.Label>Name</Form.Label>
             <Form.Control
@@ -128,7 +143,11 @@ export default function CreateOrganization({
             }`}
           >
             {request && (
-              <Button variant='danger' onClick={handleDeny}>
+              <Button
+                variant='danger'
+                onClick={handleDeny}
+                disabled={isSubmitting}
+              >
                 Deny
               </Button>
             )}

@@ -1,6 +1,6 @@
 import { Button, Form } from 'react-bootstrap';
-import { useContext, useState, useEffect } from 'react';
-import { TestingContext } from './testingContext';
+import { useState, useEffect } from 'react';
+import { useTestingProjects, useTestingMemberships } from '../data/testing';
 import { client } from '../stores/appClient';
 import { fetchAllPaginatedResults } from '../utils';
 import MyTable from '../Table';
@@ -13,9 +13,9 @@ import { useUsers } from '../apiInterface';
 import Select from 'react-select';
 // removed modal; pass/fail rules are now inline
 
-export default function Results() {
-  const { organizationMembershipsHook, organizationProjects } =
-    useContext(TestingContext)!;
+export default function Results({ organizationId }: { organizationId: string }) {
+  const organizationProjects = useTestingProjects(organizationId);
+  const organizationMembershipsHook = useTestingMemberships(organizationId);
   const { users: allUsers } = useUsers();
   const [results, setResults] = useState<Schema['TestResult']['type'][]>([]);
   const [isLoading, setIsLoading] = useState(false);

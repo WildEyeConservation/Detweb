@@ -1,8 +1,10 @@
 import MyTable from './Table';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useMyMemberships, useMyOrganizations } from './data/memberships';
 import { client } from './stores/appClient';
-import { showModalAction as showModal, useModalToShow } from './stores/modalStore';
+import { useDialogRoute } from './routing/useDialogRoute';
+import { dialogDate, dialogIds } from './routing/dialogValues';
+import DialogNotice from './routing/DialogNotice';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import type { UserStatsType } from './schemaTypes';
@@ -10,13 +12,13 @@ import exportFromJSON from 'export-from-json';
 import { useUsers } from './apiInterface';
 import Select from 'react-select';
 import { Card, Button, Spinner } from 'react-bootstrap';
-import SnapshotStatsModal from './SnapshotStatsModal';
+const SnapshotStatsModal = lazy(() => import('./SnapshotStatsModal'));
 import { fetchAllPaginatedResults } from './utils';
 
 export default function UserStats() {
   const myOrganizationHook = useMyOrganizations();
   const myMembershipHook = useMyMemberships();
-  const modalToShow = useModalToShow();
+  const dialog = useDialogRoute();
   const { users: allUsers } = useUsers();
   const [projects, setProjects] = useState<
     {
@@ -47,6 +49,14 @@ export default function UserStats() {
     }[]
     | undefined
   >([]);
+
+  const snapshotProject = projects.find((row) => row.id === dialog.get('survey'));
+  const snapshotIds = dialogIds(dialog.get('sets'));
+  const snapshotSets = snapshotProject?.annotationSets?.filter((row) => snapshotIds.includes(row.id))
+    .map((row) => ({ value: row.id, label: row.name }));
+  const snapshotStart = dialogDate(dialog.get('start'));
+  const snapshotEnd = dialogDate(dialog.get('end'));
+  const snapshotAllowed = myMembershipHook.data.some((row) => row.projectId === snapshotProject?.id && row.isAdmin);
 
   // State for export loading
   const [exporting, setExporting] = useState(false);
@@ -571,7 +581,7 @@ export default function UserStats() {
             <Button
               variant='primary'
               style={{ flex: 1 }}
-              onClick={() => showModal('snapshotStats')}
+              onClick={() => dialog.open('snapshotStats', { survey: project?.value, sets: JSON.stringify(selectedSets.map((set) => set.value)), start: startString ?? undefined, end: endString ?? undefined })}
               disabled={!project || !selectedSets?.length}
             >
               Snapshot
@@ -595,18 +605,21 @@ export default function UserStats() {
           </Card.Footer>
         )}
       </Card>
-      <SnapshotStatsModal
-        show={modalToShow === 'snapshotStats'}
-        onHide={() => showModal(null)}
-        projectLabel={project?.label}
-        startDate={startDate}
-        endDate={endDate}
-        startString={startString}
-        endString={endString}
-        selectedSets={selectedSets}
-        allUsers={allUsers.map((u) => ({ id: u.id, name: u.name || u.id }))}
-        queryObservations={queryObservations}
-      />
+      {dialog.name === 'snapshotStats' && (
+        <Suspense fallback={<DialogNotice message='Loading report...' onClose={dialog.close} />}>
+          {snapshotProject && snapshotAllowed && snapshotSets?.length === snapshotIds.length && snapshotIds.length > 0 && snapshotStart && snapshotEnd && snapshotStart <= snapshotEnd ? (
+            <SnapshotStatsModal
+              key={`${snapshotProject.id}:${dialog.get('sets')}:${dialog.get('start')}:${dialog.get('end')}`}
+              show onHide={dialog.close} projectLabel={snapshotProject.name}
+              startDate={snapshotStart} endDate={snapshotEnd}
+              startString={dialog.get('start')} endString={dialog.get('end')}
+              selectedSets={snapshotSets}
+              allUsers={allUsers.map((u) => ({ id: u.id, name: u.name || u.id }))}
+              queryObservations={queryObservations}
+            />
+          ) : <DialogNotice message='This report is loading or its survey, sets, or date range are unavailable.' onClose={dialog.close} />}
+        </Suspense>
+      )}
     </div>
   );
 }

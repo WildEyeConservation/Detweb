@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useQueries } from '@tanstack/react-query';
 import { useMyOrganizations } from './data/memberships';
 import { client } from './stores/appClient';
-import { Schema } from './amplify/client-schema';
 import Dropdown from 'react-bootstrap/Dropdown';
 import DropdownButton from 'react-bootstrap/DropdownButton';
 import ButtonGroup from 'react-bootstrap/ButtonGroup';
@@ -9,7 +9,9 @@ import ButtonGroup from 'react-bootstrap/ButtonGroup';
 function OrganizationSelector({
   organization,
   setOrganization,
+  allowAutoSelect = true,
 }: {
+  allowAutoSelect?: boolean;
   organization: {
     id: string;
     name: string;
@@ -17,62 +19,32 @@ function OrganizationSelector({
   setOrganization: (organization: { id: string; name: string }) => void;
 }) {
   const { data: myOrganizations } = useMyOrganizations();
-  const [organizations, setOrganizations] = useState<
-    Schema['Organization']['type'][]
-  >([]);
-
-  useEffect(() => {
-    // Only fetch organizations if we have admin memberships and haven't already loaded them
-    if (!myOrganizations?.length) return;
-
-    const adminMemberships = myOrganizations.filter(
-      (membership) => membership.isAdmin
-    );
-    if (!adminMemberships.length) return;
-
-    // Check if we already have the organizations and they match the current admin memberships
-    const currentOrgIds = organizations.map((org) => org.id).sort();
-    const newOrgIds = adminMemberships.map((m) => m.organizationId).sort();
-
-    if (
-      currentOrgIds.length === newOrgIds.length &&
-      currentOrgIds.every((id, index) => id === newOrgIds[index])
-    ) {
-      return; // No changes needed
-    }
-
-    Promise.all(
-      adminMemberships.map(
-        async (membership) =>
+  const queries = useQueries({
+    queries: myOrganizations
+      .filter((membership) => membership.isAdmin)
+      .map((membership) => ({
+        queryKey: ['organization', membership.organizationId],
+        staleTime: 30_000,
+        queryFn: async () =>
           (
             await client.models.Organization.get({
               id: membership.organizationId,
             })
-          ).data
-      )
-    ).then((allOrganizations) => {
-      const validOrganizations = allOrganizations.filter(
-        (organization) => organization !== null
-      );
-      setOrganizations(validOrganizations);
-
-      // Auto-select organization only if there's exactly one and no organization is currently selected
-      if (
-        validOrganizations.length === 1 &&
-        validOrganizations[0]?.id &&
-        !organization.id
-      ) {
-        setOrganization({
-          id: validOrganizations[0].id,
-          name: validOrganizations[0].name,
-        });
-      }
-    });
-  }, [
-    myOrganizations,
-    organizations,
-    organization.id,
-  ]);
+          ).data,
+      })),
+  });
+  const organizations = queries.flatMap((query) =>
+    query.data ? [query.data] : []
+  );
+  const onlyOrganization =
+    organizations.length === 1 && queries.every((query) => !query.isPending)
+      ? organizations[0]
+      : undefined;
+  useEffect(() => {
+    if (allowAutoSelect && !organization.id && onlyOrganization) {
+      setOrganization({ id: onlyOrganization.id, name: onlyOrganization.name });
+    }
+  }, [allowAutoSelect, organization.id, onlyOrganization, setOrganization]);
 
   if (organizations.length <= 1) {
     return null;

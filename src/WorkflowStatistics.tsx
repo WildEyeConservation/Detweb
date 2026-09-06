@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -16,7 +18,10 @@ import { client } from './stores/appClient';
 import { useUsers } from './apiInterface';
 import { fetchAllPaginatedResults } from './utils';
 import { WORKFLOW_REGISTRY, type WorkflowType } from './workflowRegistry';
-import WorkflowSnapshotModal from './WorkflowSnapshotModal';
+import { useDialogRoute } from './routing/useDialogRoute';
+import { dialogDate, dialogIds } from './routing/dialogValues';
+import DialogNotice from './routing/DialogNotice';
+const WorkflowSnapshotModal = lazy(() => import('./WorkflowSnapshotModal'));
 import {
   eventToCsvRow,
   fetchAllWorkflowEvents,
@@ -150,7 +155,11 @@ export default function WorkflowStatistics() {
   const [error, setError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [exportProgress, setExportProgress] = useState<string | null>(null);
-  const [showSnapshot, setShowSnapshot] = useState(false);
+  const dialog = useDialogRoute();
+  const snapshotProject = projects.find((row) => row.id === dialog.get('survey'));
+  const snapshotRunIds = dialogIds(dialog.get('runs'));
+  const snapshotStart = dialogDate(dialog.get('start'));
+  const snapshotEnd = dialogDate(dialog.get('end'));
   // Selections can change faster than queries return; only the latest wins.
   const requestSequence = useRef(0);
 
@@ -712,7 +721,7 @@ export default function WorkflowStatistics() {
             <Button
               variant='primary'
               style={{ flex: 1 }}
-              onClick={() => setShowSnapshot(true)}
+              onClick={() => dialog.open('workflowSnapshot', { survey: project?.value, runs: JSON.stringify(visibleRunIds), start: startString ?? undefined, end: endString ?? undefined })}
               disabled={visibleRunIds.length === 0 || !startDate || !endDate}
             >
               Snapshot
@@ -738,21 +747,18 @@ export default function WorkflowStatistics() {
           </Card.Footer>
         )}
       </Card>
-      {project && (
-        <WorkflowSnapshotModal
-          show={showSnapshot}
-          onHide={() => setShowSnapshot(false)}
-          client={client}
-          projectId={project.value}
-          projectLabel={project.label}
-          runs={visibleRunIds.map((runId) => ({
-            runId,
-            displayName: runName(runId),
-          }))}
-          startDate={startDate}
-          endDate={endDate}
-          userName={userName}
-        />
+      {dialog.name === 'workflowSnapshot' && (
+        <Suspense fallback={<DialogNotice message='Loading report...' onClose={dialog.close} />}>
+          {snapshotProject && snapshotRunIds.length > 0 && snapshotStart && snapshotEnd && snapshotStart <= snapshotEnd ? (
+            <WorkflowSnapshotModal
+              key={`${snapshotProject.id}:${dialog.get('runs')}:${dialog.get('start')}:${dialog.get('end')}`}
+              show onHide={dialog.close} client={client}
+              projectId={snapshotProject.id} projectLabel={snapshotProject.name}
+              runs={snapshotRunIds.map((runId) => ({ runId, displayName: runName(runId) }))}
+              startDate={snapshotStart} endDate={snapshotEnd} userName={userName}
+            />
+          ) : <DialogNotice message='This report is loading or its survey, runs, or date range are unavailable.' onClose={dialog.close} />}
+        </Suspense>
       )}
     </div>
   );

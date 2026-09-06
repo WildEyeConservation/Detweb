@@ -1,21 +1,26 @@
+import { useDialogGuard } from '../routing/useDialogGuard';
 import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import { Modal } from 'react-bootstrap';
 import { useState } from 'react';
 import { client } from '../stores/appClient';
-import { showModalAction as showModal } from '../stores/modalStore';
 
 export default function InviteUserModal({
   organization,
   show,
+  onClose,
 }: {
   organization: {
     id: string;
     name: string;
   };
   show: boolean;
+  onClose: () => void;
 }) {
+  const [dirty, setDirty] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const finishNavigation = useDialogGuard({ busy: isSubmitting, dirty });
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -38,7 +43,7 @@ export default function InviteUserModal({
       if (errors?.length) {
         alert(errors[0].message);
       } else {
-        showModal(null);
+        finishNavigation(onClose);
         setTimeout(() => alert('Invite sent!'), 300);
       }
     } catch (err: any) {
@@ -49,19 +54,15 @@ export default function InviteUserModal({
   };
 
   return (
-    <Modal show={show} onHide={() => showModal(null)}>
+    <Modal show={show} onHide={() => onClose()}>
       <Modal.Header closeButton>
         <Modal.Title>Invite a user to {organization.name}</Modal.Title>
       </Modal.Header>
       <Modal.Body>
-        <Form onSubmit={handleSubmit}>
+        <Form onSubmit={handleSubmit} onChangeCapture={() => setDirty(true)}>
           <Form.Group className='mb-3' controlId='formBasicEmail'>
             <Form.Label>Email</Form.Label>
-            <Form.Control
-              type='email'
-              placeholder='Enter email'
-              name='email'
-            />
+            <Form.Control type='email' placeholder='Enter email' name='email' />
           </Form.Group>
           <Button variant='primary' type='submit' disabled={isSubmitting}>
             Send Invite

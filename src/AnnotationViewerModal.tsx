@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Modal, Button } from 'react-bootstrap';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { client } from './stores/appClient';
 import AnnotationWorkspace from './AnnotationWorkspace';
 
 export default function AnnotationViewerModal({
   show,
   onClose,
   imageId,
+  imageMeta,
   annotationSetId,
   imageIds,
   onNavigate,
@@ -15,44 +15,11 @@ export default function AnnotationViewerModal({
   show: boolean;
   onClose: () => void;
   imageId: string | null;
+  imageMeta: { id: string; width: number; height: number };
   annotationSetId: string;
   imageIds: string[];
   onNavigate: (imageId: string) => void;
 }) {
-  const [imageMeta, setImageMeta] = useState<{
-    id: string;
-    width: number;
-    height: number;
-  } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      if (!imageId) {
-        setImageMeta(null);
-        return;
-      }
-      const resp: any = await (client as any).models.Image.get(
-        { id: imageId },
-        { selectionSet: ['id', 'width', 'height', 'timestamp'] }
-      );
-      const data = (resp?.data ?? null) as {
-        id: string;
-        width: number;
-        height: number;
-      } | null;
-      if (!cancelled) {
-        setImageMeta(
-          data ? { id: data.id, width: data.width, height: data.height } : null
-        );
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [imageId]);
-
   const currentIndex = useMemo(
     () => (imageId ? imageIds.indexOf(imageId) : -1),
     [imageId, imageIds]
@@ -73,7 +40,7 @@ export default function AnnotationViewerModal({
       <Modal.Header closeButton>
         <Modal.Title>
           Annotate Image{' '}
-          {imageId ? `(${currentIndex + 1} of ${imageIds.length})` : ''}
+          {currentIndex >= 0 ? `(${currentIndex + 1} of ${imageIds.length})` : ''}
         </Modal.Title>
       </Modal.Header>
       <Modal.Body style={{ height: '75vh' }}>

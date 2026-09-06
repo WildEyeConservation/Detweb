@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button, Spinner } from 'react-bootstrap';
 import Select, { type SingleValue } from 'react-select';
@@ -11,7 +11,7 @@ import type { CategoryType, ImageType } from '../schemaTypes';
 import { useHerdData } from './hooks/useHerdData';
 import { HerdMapPair } from './HerdMapPair';
 import { HerdNavBar } from './HerdNavBar';
-import { ChainTilesModal } from './components/ChainTilesModal';
+const ChainTilesModal = lazy(() => import('./components/ChainTilesModal').then((module) => ({ default: module.ChainTilesModal })));
 import ChangeCategoryModal from '../ChangeCategoryModal';
 import { useCategories } from '../data/project';
 import { useCurrentProject, useProjectId } from '../data/projectScope';
@@ -62,7 +62,7 @@ export function HerdViewHarness({ annotationSetId }: Props) {
   const { data: categories } = useCategories(projectId);
   const { surveyId } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const chainParam = searchParams.get('chain');
 
   const herd = useHerdData();
@@ -411,19 +411,24 @@ export function HerdViewHarness({ annotationSetId }: Props) {
   );
 
   // ---- Chain-tiles modal ----
-  const [tilesChainId, setTilesChainId] = useState<string | null>(null);
+  const tilesChainId = chainParam;
+  const setTilesChainId = useCallback((id: string | null) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (id) next.set('chain', id);
+      else next.delete('chain');
+      return next;
+    });
+  }, [setSearchParams]);
   const onViewChainTiles = useCallback(
     (annotationId: string) => {
       const a = annotations.find((x) => x.id === annotationId);
       if (a) setTilesChainId(a.objectId ?? a.id);
     },
-    [annotations]
+    [annotations, setTilesChainId]
   );
   // Preserve old `?chain=<id>` share links: open the modal and position the
   // maps at the first pair of the herd run containing that chain.
-  useEffect(() => {
-    if (chainParam) setTilesChainId(chainParam);
-  }, [chainParam]);
 
   useEffect(() => {
     if (!chainParam) return;
@@ -556,6 +561,7 @@ export function HerdViewHarness({ annotationSetId }: Props) {
         </>
       )}
 
+      {tilesChainId && <Suspense fallback={null}>
       <ChainTilesModal
         show={tilesChainId !== null}
         onHide={() => setTilesChainId(null)}
@@ -565,6 +571,7 @@ export function HerdViewHarness({ annotationSetId }: Props) {
         onToggleObscured={toggleObscured}
         openImageHrefFor={openImageHrefFor}
       />
+      </Suspense>}
       <ChangeCategoryModal
         show={labelChange !== null}
         onClose={() => setLabelChange(null)}
