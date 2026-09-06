@@ -8,29 +8,24 @@ import {
   removeDirectoryHandle,
 } from './core/dirHandles';
 import { clearProjectStores, fileStore } from './core/persistence';
-import { ACTIVE_PHASES, type UploadBackend } from './core/types';
+import { type UploadBackend } from './core/types';
 import { uploadOrchestrator } from './core/UploadOrchestrator';
 import {
   onUploadUiRequest,
   setUploadUiState,
-  useUploadStatus,
+  useActiveUploadProjectId,
 } from './uploadUi';
 
 // Handles resume/delete UI; transfer state lives in ./core.
 export default function UploadManager() {
   const { user } = useSession();
-  const snapshot = useUploadStatus();
+  const activeProjectId = useActiveUploadProjectId();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingResumeRef = useRef<{ id: string; name: string } | null>(null);
   const pendingDeleteRef = useRef<{ id: string; name: string } | null>(null);
   const [showResumeModal, setShowResumeModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-
-  const activeProjectId =
-    snapshot && ACTIVE_PHASES.includes(snapshot.phase)
-      ? snapshot.projectId
-      : null;
 
   const startUpload = (projectId: string, files: File[]) => {
     uploadOrchestrator.start({
