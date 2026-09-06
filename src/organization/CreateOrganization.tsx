@@ -1,3 +1,5 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { ALL_USERS_QUERY_KEY } from '../data/userDirectoryQuery';
 import { useDialogGuard } from '../routing/useDialogGuard';
 import Form from 'react-bootstrap/Form';
 import Button from 'react-bootstrap/Button';
@@ -17,6 +19,7 @@ export default function CreateOrganization({
     requestedByEmail: string;
   };
 }) {
+  const queryClient = useQueryClient();
   const [name, setName] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [adminEmail, setAdminEmail] = useState<string>('');
@@ -51,6 +54,7 @@ export default function CreateOrganization({
       if (errors?.length) {
         alert(errors[0].message);
       } else {
+        void queryClient.invalidateQueries({ queryKey: ALL_USERS_QUERY_KEY });
         alert('Organisation ' + name + ' created for ' + adminEmail);
         finishNavigation(onHide);
       }

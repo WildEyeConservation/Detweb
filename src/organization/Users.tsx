@@ -27,7 +27,7 @@ export default function Users({
   const openDialog = dialog.open;
   const [removingUser, setRemovingUser] = useState(false);
   const { user: authUser } = useSession();
-  const { users } = useUsers();
+  const { users, refetch: refetchUsers } = useUsers();
 
   const { data: memberships, isLoading: membershipsLoading, refetch, isFetching } = useQuery<Schema['OrganizationMembership']['type'][]>({
     queryKey: ['OrganizationMembership', organization.id],
@@ -224,7 +224,7 @@ export default function Users({
               variant='link'
               size='sm'
               className='p-0 text-muted'
-              onClick={() => refetch()}
+              onClick={() => { void refetch(); void refetchUsers(); }}
               disabled={isFetching}
               title='Refresh'
             >
