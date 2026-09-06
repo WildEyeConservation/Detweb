@@ -329,7 +329,8 @@ export default function AnnotationWorkspace(props: AnnotationWorkspaceProps) {
         { imageId: location.image.id, setId: { eq: location.annotationSetId } },
         { limit: 10000, nextToken }
       ),
-    subscriptionFilter
+    subscriptionFilter,
+    { subscribe: visible, refetchOnSubscribe: true }
   ) as unknown as AnnotationsHook;
   const stats = useImageStats(annotationsHook);
 

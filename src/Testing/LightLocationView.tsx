@@ -114,7 +114,12 @@ export default function LightLocationView({
         { nextToken }
       ) as any;
     },
-    subscriptionFilter
+    subscriptionFilter,
+    {
+      enabled: Boolean(loaded?.image.id && loaded?.annotationSetId && loaded.id === locationRef.id && loaded.annotationSetId === locationRef.annotationSetId),
+      subscribe: visible,
+      refetchOnSubscribe: true,
+    }
   ) as any;
 
   const annotations = useMemo<LightAnnotation[]>(

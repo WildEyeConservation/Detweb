@@ -46,6 +46,7 @@ import { useQuery, useMutation, useQueryClient, hashKey } from '@tanstack/react-
 import { useEffect, useMemo, useCallback, useRef } from 'react';
 import type { DataModels, SubscriptionOptions } from '../amplify/shared/data-schema.generated';
 import { client } from './stores/appClient';
+import { refreshAfterMutations } from './utils/refreshAfterMutations';
 import { acquireSubscriptions } from './utils/sharedSubscriptions';
 import {
   isMissingRow,
@@ -61,6 +62,8 @@ export interface OptimisticOptions<T> {
   enabled?: boolean;
   /** Keep live events only for data that must change while the screen is open. */
   subscribe?: boolean;
+  /** Catch up once when the first live consumer becomes visible. */
+  refetchOnSubscribe?: boolean;
   staleTime?: number;
   authMode?: 'apiKey' | 'userPool' | 'iam' | 'identityPool' | 'lambda' | 'none';
 }
@@ -80,6 +83,7 @@ export function useOptimisticUpdates<
   const queryClient = useQueryClient();
   const enabled = options?.enabled ?? true;
   const subscribe = options?.subscribe ?? true;
+  const refetchOnSubscribe = options?.refetchOnSubscribe ?? false;
   // Equivalent inline filters must not tear down and reopen subscriptions.
   const queryHash = hashKey([modelKey, subscriptionFilter]);
   const queryKey = useMemo(() => JSON.parse(queryHash), [queryHash]);
@@ -122,6 +126,7 @@ export function useOptimisticUpdates<
       return allResults;
     },
   });
+  const refetch = queryResult.refetch;
   const stableData = useMemo(() => data ?? [], [data]);
 
   useEffect(() => {
@@ -163,9 +168,12 @@ export function useOptimisticUpdates<
         error: (error: unknown) => console.warn(error),
       });
 
-      return [createSub, updateSub, deleteSub];
+      const stopRefresh = refetchOnSubscribe
+        ? refreshAfterMutations(queryClient, queryKey, () => { void refetch({ cancelRefetch: false }); })
+        : () => {};
+      return [createSub, updateSub, deleteSub, { unsubscribe: stopRefresh }];
     });
-  }, [enabled, subscribe, model, queryClient, queryKey, authMode, getKey]);
+  }, [enabled, subscribe, refetchOnSubscribe, refetch, model, queryClient, queryKey, authMode, getKey]);
 
   /*
   Rollbacks go through the pure transforms in utils/optimisticCache so a failed
@@ -186,6 +194,7 @@ export function useOptimisticUpdates<
   };
 
   const createMutation = useMutation({
+    mutationKey: queryKey,
     mutationFn: model.create,
     onMutate: async (newItem: any) => {
       newItem.id ||= crypto.randomUUID(); // If the item does not have an id, generate a random UUID for it.
@@ -218,6 +227,7 @@ export function useOptimisticUpdates<
   });
 
   const updateMutation = useMutation({
+    mutationKey: queryKey,
     mutationFn: model.update,
     onMutate: async (updatedItem: T) => {
       await queryClient.cancelQueries({ queryKey });
@@ -252,6 +262,7 @@ export function useOptimisticUpdates<
   });
 
   const deleteMutation = useMutation({
+    mutationKey: queryKey,
     mutationFn: model.delete,
     onMutate: async (deletedItem: T) => {
       await queryClient.cancelQueries({ queryKey });
