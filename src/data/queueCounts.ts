@@ -1,27 +1,22 @@
-import { GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { useSession } from '../session';
+import { queueCountQuery } from './queueCountQuery';
 
 export function useQueueMessageCount(url: string | undefined) {
   const { getSqsClient } = useSession();
-  const { data } = useQuery({
-    queryKey: ['sqsMessageCount', url],
-    queryFn: async () => {
-      const sqsClient = await getSqsClient();
-      const result = await sqsClient.send(
-        new GetQueueAttributesCommand({
-          QueueUrl: url,
-          AttributeNames: ['ApproximateNumberOfMessages'],
-        })
-      );
-      return Number(result.Attributes?.ApproximateNumberOfMessages ?? 0);
-    },
-    enabled: Boolean(url),
-    staleTime: 0,
-    refetchInterval: 10000,
-    refetchIntervalInBackground: false,
-  });
+  return useQuery(queueCountQuery(url, getSqsClient)).data;
+}
 
-  // undefined until the first answer so callers can tell "unknown" from "empty".
-  return data;
+export function useQueueMessageCounts(urls: (string | null | undefined)[]) {
+  const { getSqsClient } = useSession();
+  const uniqueUrls = [
+    ...new Set(urls.filter((url): url is string => Boolean(url))),
+  ];
+  const queries = useQueries({
+    queries: uniqueUrls.map((url) => queueCountQuery(url, getSqsClient)),
+  });
+  // Keep unknown counts distinct from confirmed empty queues.
+  return Object.fromEntries(
+    uniqueUrls.map((url, index) => [url, queries[index].data])
+  );
 }

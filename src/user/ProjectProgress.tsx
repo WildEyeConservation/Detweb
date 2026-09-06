@@ -2,10 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Spinner, ProgressBar } from 'react-bootstrap';
 import { useQueueMessageCount } from '../data/queueCounts';
 
-export default function ProjectProgress({
-  queue,
-  onScanningChange,
-}: {
+interface ProjectProgressProps {
   queue?: {
     url?: string | null;
     batchSize?: number | null;
@@ -16,7 +13,23 @@ export default function ProjectProgress({
     emptyQueueTimestamp?: string | null;
   };
   onScanningChange?: (isScanning: boolean) => void;
-}) {
+  jobsRemaining?: number;
+}
+
+export default function ProjectProgress(props: ProjectProgressProps) {
+  // Jobs already owns these queries. Its rows consume the supplied count,
+  // including undefined while loading, instead of starting another poller.
+  return 'jobsRemaining' in props
+    ? <ProjectProgressView {...props} />
+    : <PolledProjectProgress {...props} />;
+}
+
+function PolledProjectProgress(props: ProjectProgressProps) {
+  const jobsRemaining = useQueueMessageCount(props.queue?.url || undefined);
+  return <ProjectProgressView {...props} jobsRemaining={jobsRemaining} />;
+}
+
+function ProjectProgressView({ queue, onScanningChange, jobsRemaining }: ProjectProgressProps) {
   const queueInfo = queue
     ? {
         url: queue.url || '',
@@ -28,7 +41,6 @@ export default function ProjectProgress({
         emptyQueueTimestamp: queue.emptyQueueTimestamp ?? null,
       }
     : null;
-  const jobsRemaining = useQueueMessageCount(queueInfo?.url || undefined);
 
   const prevScanningRef = useRef<boolean>(false);
 

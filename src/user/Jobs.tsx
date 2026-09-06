@@ -1,14 +1,14 @@
 import { Card } from 'react-bootstrap';
 import { useEffect, useState } from 'react';
-import { useSession } from '../session';
+import { useQueries } from '@tanstack/react-query';
+import { useQueueMessageCounts } from '../data/queueCounts';
+import { fetchAllPaginatedResults } from '../utils';
 import { useMyMemberships, useMyOrganizations } from '../data/memberships';
 import { client } from '../stores/appClient';
 import { Schema } from '../amplify/client-schema';
 import { Spinner, Button, Form } from 'react-bootstrap';
 import MyTable from '../Table';
 import { useNavigate } from 'react-router-dom';
-import { type GetQueueAttributesCommandInput } from '@aws-sdk/client-sqs';
-import { GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
 import ProjectProgress from './ProjectProgress';
 import IndividualIdProgress from '../individual-id/IndividualIdProgress';
 import { Minimize2, Maximize2 } from 'lucide-react';
@@ -39,23 +39,9 @@ type Project = {
 export default function Jobs() {
   const userProjectMembershipHook = useMyMemberships();
   const myOrganizationHook = useMyOrganizations();
-  const { getSqsClient } = useSession();
   const navigate = useNavigate();
 
   const [displayProjects, setDisplayProjects] = useState<Project[]>([]);
-  const [jobsRemaining, setJobsRemaining] = useState<Record<string, string>>(
-    {}
-  );
-  const [individualIdJobs, setIndividualIdJobs] = useState<
-    {
-      jobId: string;
-      projectId: string;
-      projectName: string;
-      organizationId: string;
-      organizationName: string;
-      name: string;
-    }[]
-  >([]);
   const [isLoading, setIsLoading] = useState(false);
   const [takingJob, setTakingJob] = useState(false);
   const [deletingJob] = useState(false);
@@ -146,7 +132,6 @@ export default function Jobs() {
   }, [organizationFilter]);
 
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
     let cancelled = false; // cancellation flag
 
     async function fetchProjectsAndJobs() {
@@ -196,115 +181,36 @@ export default function Jobs() {
       setDisplayProjects(validProjects);
       setIsLoading(false);
 
-      // Individual ID jobs live on their own table (no Queue, no register
-      // flag) so they are scanned separately. Projects still `launching` are
-      // excluded — the project only leaves `launching` once tiling + the
-      // transect-update fanout finish, which is exactly when the job becomes
-      // claimable.
-      const iidScanProjects = projectResults
-        .map((result) => (result as { data: Project | null }).data)
-        .filter(
-          (project): project is Project =>
-            project !== null && project.status !== 'launching'
-        );
-
-      async function getIndividualIdJobs() {
-        if (cancelled) return;
-        const entries: {
-          jobId: string;
-          projectId: string;
-          projectName: string;
-          organizationId: string;
-          organizationName: string;
-          name: string;
-        }[] = [];
-        await Promise.all(
-          iidScanProjects.map(async (project) => {
-            try {
-              const { data } = await (
-                client.models as any
-              ).IndividualIdJob.individualIdJobsByProjectId(
-                { projectId: project.id },
-                { selectionSet: ['id', 'name', 'status'] }
-              );
-              for (const job of data || []) {
-                if (job.status === 'active') {
-                  entries.push({
-                    jobId: job.id,
-                    projectId: project.id,
-                    projectName: project.name,
-                    organizationId: project.organization.id,
-                    organizationName: project.organization.name,
-                    name: job.name,
-                  });
-                }
-              }
-            } catch (e) {
-              console.warn(
-                'Failed to load Individual ID jobs',
-                project.id,
-                e
-              );
-            }
-          })
-        );
-        if (cancelled) return;
-        setIndividualIdJobs(entries);
-      }
-
-      getIndividualIdJobs();
-
-      async function getJobsRemaining() {
-        if (cancelled) return;
-
-        const queueUrls = validProjects.flatMap((project) =>
-          project.queues.map((queue) => queue.url || '')
-        );
-
-        const jobsRemaining = (
-          await Promise.all(
-            queueUrls.map(async (queueUrl) => {
-              const params: GetQueueAttributesCommandInput = {
-                QueueUrl: queueUrl,
-                AttributeNames: ['ApproximateNumberOfMessages'],
-              };
-              const sqsClient = await getSqsClient();
-              const result = await sqsClient.send(
-                new GetQueueAttributesCommand(params)
-              );
-              return {
-                [queueUrl]:
-                  result.Attributes?.ApproximateNumberOfMessages || 'Unknown',
-              };
-            })
-          )
-        ).reduce((acc, curr) => ({ ...acc, ...curr }), {});
-
-        if (cancelled) return;
-
-        setJobsRemaining(jobsRemaining);
-
-        getIndividualIdJobs();
-
-        setDisplayProjects(validProjects);
-      }
-
-      // Kick off the first polling call immediately
-      getJobsRemaining();
-
-      // Immediately set up the interval (if still mounted)
-      if (!cancelled) {
-        interval = setInterval(getJobsRemaining, 10000);
-      }
     }
 
-    fetchProjectsAndJobs();
+    void fetchProjectsAndJobs().catch((error) => {
+      if (cancelled) return;
+      console.error('Failed to load jobs', error);
+      setIsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [userProjectMembershipHook.data, myOrganizationHook.data]);
 
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [userProjectMembershipHook.data]);
+  const iidProjects = displayProjects.filter((project) => !organizationFilter || project.organization.id === organizationFilter);
+  const iidQueries = useQueries({ queries: iidProjects.map((project) => ({
+    queryKey: ['available-individual-id-jobs', project.id],
+    queryFn: async () => fetchAllPaginatedResults(
+      client.models.IndividualIdJob.individualIdJobsByProjectId,
+      { projectId: project.id, selectionSet: ['id', 'name', 'status', 'totalTransects', 'remainingTransects'] as const }
+    ),
+    staleTime: 10_000,
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
+  })) });
+  const individualIdJobs = iidQueries.flatMap((query, index) => {
+    const project = iidProjects[index];
+    return (query.data ?? []).filter((job) => job.status === 'active').map((job) => ({
+      jobId: job.id, projectId: project.id, projectName: project.name,
+      organizationId: project.organization.id, organizationName: project.organization.name,
+      name: job.name,
+      stats: { status: job.status, total: job.totalTransects ?? 0, remaining: job.remainingTransects ?? 0 },
+    }));
+  });
 
   const organizationOptions = Array.from(
     new Map(
@@ -330,6 +236,10 @@ export default function Jobs() {
 
     return matchesOrganization && matchesSearch;
   });
+
+  const jobsRemaining = useQueueMessageCounts(filteredProjects.flatMap((project) => [
+    ...project.queues.map((queue) => queue.url), project.progressQueue?.url,
+  ]));
 
   const sortedProjects = [...filteredProjects].sort((a, b) => {
     if (sortBy === 'createdAt') {
@@ -432,7 +342,7 @@ export default function Jobs() {
     ...sortedProjects.flatMap((project) =>
       project.queues
         .map((queue) => {
-          const numJobsRemaining = Number(jobsRemaining[queue.url || ''] || 0);
+          const numJobsRemaining = jobsRemaining[queue.url || ''];
 
           if (
             numJobsRemaining === 0 &&
@@ -501,6 +411,7 @@ export default function Jobs() {
                 >
                   <ProjectProgress
                     queue={project.progressQueue}
+                    jobsRemaining={jobsRemaining[project.progressQueue?.url || '']}
                     onScanningChange={(isScanning) => {
                       setScanningProjects(prev => {
                         const next = new Set(prev);
@@ -514,7 +425,7 @@ export default function Jobs() {
                     className='ms-1'
                     variant='primary'
                     disabled={
-                      takingJob || deletingJob || numJobsRemaining === 0 || scanningProjects.has(project.id)
+                      takingJob || deletingJob || numJobsRemaining === undefined || numJobsRemaining === 0 || scanningProjects.has(project.id)
                     }
                     onClick={() =>
                       handleTakeJob({
@@ -588,7 +499,7 @@ export default function Jobs() {
                 style={{ maxWidth: '600px', width: '100%' }}
               >
                 <div className='flex-grow-1'>
-                  <IndividualIdProgress projectId={job.projectId} />
+                  <IndividualIdProgress projectId={job.projectId} stats={job.stats} />
                 </div>
                 <Button
                   size={compactMode ? 'sm' : undefined}

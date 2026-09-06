@@ -9,11 +9,16 @@ import { client } from '../stores/appClient';
  * IndividualIdJob counter (remainingTransects is ACID-decremented on each
  * completed transect). Polls every 10s so it advances as workers finish.
  */
-export default function IndividualIdProgress({
-  projectId,
-}: {
-  projectId: string;
-}) {
+type ProgressStats = { status?: string | null; total: number; remaining: number } | null;
+interface ProgressProps { projectId: string; stats?: ProgressStats }
+
+export default function IndividualIdProgress(props: ProgressProps) {
+  return 'stats' in props
+    ? <ProgressView stats={props.stats} loading={false} />
+    : <PolledIndividualIdProgress projectId={props.projectId} />;
+}
+
+function PolledIndividualIdProgress({ projectId }: { projectId: string }) {
   const { data: stats, isLoading: loading } = useQuery({
     queryKey: ['individualIdProgress', projectId],
     queryFn: async () => {
@@ -54,6 +59,10 @@ export default function IndividualIdProgress({
     },
   });
 
+  return <ProgressView stats={stats} loading={loading} />;
+}
+
+function ProgressView({ stats, loading }: { stats?: ProgressStats; loading: boolean }) {
   if (loading && !stats) return <Spinner />;
   if (!stats || stats.total <= 0) {
     return <p className='mb-0'>ChainLinker job</p>;
