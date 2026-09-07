@@ -10,6 +10,43 @@ import {
 
 type Call = { name: string; input: Record<string, unknown> };
 
+test('image statistics follow saved changes and are not repeated after an ack retry', async () => {
+  const steps: string[] = [];
+  const progress = { counted: false, acknowledged: false };
+  let failAck = true;
+  const options = {
+    commits: [Promise.resolve().then(() => { steps.push('saved'); })],
+    progress,
+    countCompletion: true,
+    incrementCount: async () => { steps.push('count'); },
+    recordStatistics: async () => { steps.push('statistics'); },
+    acknowledge: async () => {
+      steps.push('ack');
+      if (failAck) throw new Error('ack failed');
+    },
+  };
+  await assert.rejects(finalizeInfoTagImage(options), /ack failed/);
+  failAck = false;
+  await finalizeInfoTagImage(options);
+  assert.deepEqual(steps, ['saved', 'count', 'statistics', 'ack', 'ack']);
+});
+
+test('failed saves and images without remaining work do not report statistics', async () => {
+  let statistics = 0;
+  const options = {
+    progress: { counted: false, acknowledged: false },
+    countCompletion: true,
+    incrementCount: async () => {},
+    recordStatistics: async () => { statistics++; },
+    acknowledge: async () => {},
+  };
+  await assert.rejects(finalizeInfoTagImage({
+    ...options, commits: [Promise.reject(new Error('save failed'))],
+  }), /save failed/);
+  await finalizeInfoTagImage({ ...options, commits: [], countCompletion: false });
+  assert.equal(statistics, 0);
+});
+
 function fakeClient(
   responses: Record<string, { errors?: Array<{ message: string }> }> = {}
 ) {
