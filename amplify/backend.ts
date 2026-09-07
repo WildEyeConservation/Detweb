@@ -558,6 +558,7 @@ workflowRunsTable.addGlobalSecondaryIndex({
 for (const launchResource of [
   backend.launchAnnotationSet,
   backend.launchFalseNegatives,
+  backend.launchQCReview,
   backend.monitorTilingTasks,
   backend.launchIndividualId,
 ]) {

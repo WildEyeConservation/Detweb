@@ -17,6 +17,7 @@ import {
 import { randomUUID } from 'crypto';
 import pLimit from 'p-limit';
 import { enqueuePretile } from '../shared/enqueuePretile';
+import { createShadowWorkflowRun, workflowLaunchUserId } from '../workflowStats/runWriter';
 
 // Inline minimal mutations – return key fields + `group` to avoid nested-resolver
 // auth failures while still enabling subscription delivery via groupDefinedIn('group').
@@ -217,7 +218,7 @@ export const handler: LaunchQCReviewHandler = async (event) => {
       throw err;
     }
 
-    const result = await handleLaunch(payload, organizationId);
+    const result = await handleLaunch(payload, organizationId, workflowLaunchUserId(event.identity));
 
     // Project stays in `launching` until reconcilePretileLaunches confirms
     // every image in the pretile manifest has `Image.tiledAt` stamped.
@@ -246,7 +247,7 @@ export const handler: LaunchQCReviewHandler = async (event) => {
 
 // ── Core launch logic ──
 
-async function handleLaunch(payload: LaunchQCReviewPayload, organizationId: string) {
+async function handleLaunch(payload: LaunchQCReviewPayload, organizationId: string, launchedBy: string) {
   const {
     projectId,
     annotationSetId,
@@ -356,6 +357,18 @@ async function handleLaunch(payload: LaunchQCReviewPayload, organizationId: stri
       manifestKey,
       items: sampled.map((a) => ({ annotationId: a.id, imageId: a.imageId })),
     }
+  );
+
+  await createShadowWorkflowRun(
+    {
+      runId: queue.id,
+      workflowType: 'qc-review',
+      projectId,
+      annotationSetId,
+      displayName: queueDisplayName,
+      configuration: { categoryId, samplePercent, batchSize, annotatorUserIds, launchedCount: sampled.length },
+    },
+    { userId: launchedBy, organizationId }
   );
 
   // 7. Enqueue SQS messages.
