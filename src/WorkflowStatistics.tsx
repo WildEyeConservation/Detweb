@@ -470,7 +470,7 @@ export default function WorkflowStatistics() {
       completionsByRun.set(
         bucket.workflowRunId,
         (completionsByRun.get(bucket.workflowRunId) ?? 0) +
-          bucket.completedUnits
+          (bucket.workflowType === 'info-tags' ? bucket.metrics.annotationsProcessed ?? 0 : bucket.completedUnits)
       );
     });
     return runs
@@ -507,7 +507,8 @@ export default function WorkflowStatistics() {
       annotationSetId: bucket.annotationSetId,
       run: runName(bucket.workflowRunId),
       workflowRunId: bucket.workflowRunId,
-      completedUnits: bucket.completedUnits,
+      completedUnits: bucket.workflowType === 'info-tags'
+        ? bucket.metrics.annotationsProcessed ?? '' : bucket.completedUnits,
       skippedUnits: bucket.skippedUnits,
       activeTimeMs: bucket.activeTimeMs,
       waitingTimeMs: bucket.waitingTimeMs,

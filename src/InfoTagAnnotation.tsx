@@ -36,7 +36,7 @@ import {
 } from './infoTags';
 import { findShortcutMatch, formatShortcutKey } from './utils/hotkeys';
 import { recordWorkflowTask, type RecordWorkflowTaskInput } from './recordWorkflowTask';
-import { infoTagWorkflowMetrics, type InfoTagChange } from './infoTagWorkflowStats';
+import { infoTagWorkflowMetrics } from './infoTagWorkflowStats';
 import { useActiveTimeTracker } from './useActiveTimeTracker';
 
 const TILE_SIZE = 256;
@@ -170,8 +170,8 @@ export default function InfoTagAnnotation({
   const [imageComplete, setImageComplete] = useState(false);
   const [readyToAdvance, setReadyToAdvance] = useState(false);
   const finishedRef = useRef(false);
-  const changesRef = useRef(new Map<string, InfoTagChange>());
-  const completionStatsRef = useRef<RecordWorkflowTaskInput | null>(null);
+  const annotationStatsRef = useRef(new Map<string, RecordWorkflowTaskInput>());
+  const waitingAssignedRef = useRef(false);
   const visibleAtRef = useRef<number | null>(null);
   const [imageReadyAt, setImageReadyAt] = useState<number | null>(null);
   const statsMapRef = useRef<maplibregl.Map | null>(null);
@@ -307,6 +307,9 @@ export default function InfoTagAnnotation({
   }, [annotationSetId, categoryIds, client, imageId]);
 
   const currentTarget = targets[currentIndex];
+  useEffect(() => {
+    activeTime.reset();
+  }, [currentTarget?.id, activeTime]);
   const currentCategory = categories.find(
     (category) => category.id === currentTarget?.categoryId
   );
@@ -838,23 +841,6 @@ export default function InfoTagAnnotation({
       if (finishedRef.current) return;
       finishedRef.current = true;
       countCompletionRef.current = countCompletion;
-      if (countCompletion && !completionStatsRef.current) {
-        const now = Date.now();
-        const visibleAt = visibleAtRef.current ?? now;
-        completionStatsRef.current = {
-          workflowRunId: queueId,
-          workItemType: 'image',
-          workItemId: imageId,
-          idempotencyKey: `image:${imageId}`,
-          outcome: 'tagged',
-          activeTimeMs: activeTime.read(),
-          waitingTimeMs: Math.min(600_000, Math.max(0, (imageReadyAt ?? now) - visibleAt)),
-          metrics: infoTagWorkflowMetrics(changesRef.current.values()),
-        };
-      }
-      if (completionStatsRef.current && !progressRef.current.statisticsRecorded) {
-        completionStatsRef.current.metrics = infoTagWorkflowMetrics(changesRef.current.values());
-      }
       setImageComplete(true);
       finalizeInfoTagImage({
         commits: commitsRef.current.map((record) => record.promise),
@@ -865,11 +851,6 @@ export default function InfoTagAnnotation({
             await client.mutations.incrementQueueCount({ id: queueId }),
             'Failed to record queue progress'
           ),
-        recordStatistics: async () => {
-          if (completionStatsRef.current) {
-            await recordWorkflowTask(client, completionStatsRef.current);
-          }
-        },
         acknowledge: async () => {
           await ack?.();
         },
@@ -887,7 +868,7 @@ export default function InfoTagAnnotation({
           );
         });
     },
-    [ack, activeTime, client, imageId, imageReadyAt, queueId]
+    [ack, client, queueId]
   );
 
   // An image whose annotations are all tagged already is acknowledged without
@@ -944,11 +925,27 @@ export default function InfoTagAnnotation({
     const before = persistedTagIdsRef.current.get(target.id) ?? new Set<string>();
     const after = new Set(selectedTagIds);
     const position = markerPosition;
-    const initialChange = changesRef.current.get(target.id);
-    changesRef.current.set(target.id, {
-      beforeTags: initialChange?.beforeTags ?? new Set(before),
-      afterTags: after,
-    });
+    // Capture at the annotation decision, not at image completion. Each retry
+    // reuses the first payload so time and initial tag state remain unchanged.
+    const activeTimeMs = activeTime.reset();
+    let task = annotationStatsRef.current.get(target.id);
+    if (!task) {
+      const now = Date.now();
+      const visibleAt = visibleAtRef.current ?? now;
+      task = {
+        workflowRunId: queueId,
+        workItemType: 'annotation',
+        workItemId: target.id,
+        idempotencyKey: `annotation:${target.id}`,
+        outcome: 'tagged',
+        activeTimeMs,
+        waitingTimeMs: waitingAssignedRef.current ? 0
+          : Math.min(600_000, Math.max(0, (imageReadyAt ?? now) - visibleAt)),
+        metrics: infoTagWorkflowMetrics([{ beforeTags: before, afterTags: after }]),
+      };
+      annotationStatsRef.current.set(target.id, task);
+      waitingAssignedRef.current = true;
+    }
     persistedTagIdsRef.current.set(target.id, after);
     persistedPositionsRef.current.set(target.id, position);
     setAnnotations((current) =>
@@ -970,6 +967,7 @@ export default function InfoTagAnnotation({
           after,
           position,
           taggedBy: user.userId,
+          recordStatistics: () => recordWorkflowTask(client, task),
         }),
       promise: Promise.resolve(),
       failed: false,
@@ -984,6 +982,9 @@ export default function InfoTagAnnotation({
       finishImage();
     }
   }, [
+    activeTime,
+    imageReadyAt,
+    queueId,
     annotationSetId,
     client,
     currentIndex,

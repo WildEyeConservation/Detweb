@@ -560,6 +560,7 @@ for (const launchResource of [
   backend.launchFalseNegatives,
   backend.launchQCReview,
   backend.launchInfoTags,
+  backend.launchHomography,
   backend.monitorTilingTasks,
   backend.launchIndividualId,
 ]) {

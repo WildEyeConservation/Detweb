@@ -38,28 +38,44 @@ rather than time elapsed.
 
 ## Physical storage
 
-Info Tags (`info-tags`) creates a run using its Queue ID and records one event
-per completed image through `recordWorkflowTask`. All annotation saves must
-succeed before statistics are submitted and the queue message acknowledged.
-Images with no remaining targets receive no completion credit. The event key
-is the image ID within the run, so revisits and acknowledgement retries cannot
-add another completion. Statistics submission remains best-effort.
+Homographies (`homographies`) creates a run with its Queue ID before enqueueing
+pairs. Save and Skip persist the ImageNeighbour change, check API errors, record
+queue progress, submit a task event, then acknowledge the message. A failed save
+or acknowledgement leaves the user on the pair with an error. Queue progress is
+not repeated on an acknowledgement retry within the mounted task.
 
-Metrics compare the initial and final state of each worked annotation:
-`annotationsProcessed` counts distinct annotations completed, including unchanged
-ones. `annotationsTagged` counts annotations whose tags changed; `tagsAdded`
-counts net additions. Removed tags and marker repositioning are not tracked.
-Info Tags reports seconds per annotation processed instead of seconds per image.
-Selections containing older completions without processed counts show an
-unavailable average rather than treating missing counts as zero.
-An image completed without changes still counts.
-The first recorded completion is immutable, as in Review and ChainLinker.
+Each resolved pair adds one completed unit; skipped units are a subset of that
+total. Saved pairs contribute `saved`, `controlPointPairs`, and
+`suggestedPointsRetained` (complete matching suggested-ID pairs). Skipped pairs
+carry time but zero saved/point metrics. The pair key is stable within its run:
+revisits count once, retaining the first recorded outcome.
 
-Info Tags uses the interaction-based active clock, enabled only while its image
-is visible, initially loaded, and unfinished. Gaps over 90 seconds are dropped.
-Initial loading wait excludes preloading and is capped at 10 minutes. Timing is
-captured when the last annotation is submitted, before waiting for saves; retrying
-failed saves preserves that timing. Old queues without runs are not backfilled.
+Waiting includes loading suggested points and both images' initial tiles, capped
+at 10 minutes. Once both images are ready, the interaction-based clock excludes
+gaps over 90 seconds and pauses during save/skip requests. Time is captured before
+the request. Back/forward navigation alone does not report completion. As with
+the other browser adapters, statistics are best-effort and old runs are not
+backfilled. This integration is for queued homography work, not standalone edits.
+
+Info Tags (`info-tags`) records one event per annotation after its tag links and
+infoTaggedBy update succeed. The event uses the annotation ID within the run,
+so retries and revisits count once and retain the first recorded outcome.
+Partial-image work is credited immediately; the last annotation follows the
+same path. Finishing the image only increments queue progress and acknowledges
+the message after all pending annotation commits finish.
+
+Each event contributes one annotationsProcessed, including unchanged tags.
+annotationsTagged and tagsAdded describe the first committed tag change.
+Removed tags and marker repositioning are not tracked. Reports use processed
+counts, including those on legacy image events, rather than mixing old image
+units with new annotation units. Missing historical counts remain unavailable.
+
+The interaction-based clock resets for each annotation and excludes gaps over
+90 seconds, preloading and initial loading. Time is captured before saving.
+The initial image wait is assigned only to the first submitted annotation in
+that image visit, capped at 10 minutes; retries reuse the same payload. No event
+is recorded for an unfinished annotation. Statistics remain best-effort and old
+queues without runs are not backfilled.
 
 Review (`qc-review`) also uses the authenticated `recordWorkflowTask` adapter.
 Its launch creates a run using the Queue ID before enqueueing annotations.

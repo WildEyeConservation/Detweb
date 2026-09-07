@@ -187,6 +187,7 @@ export function buildWorkflowSections(
         : undefined;
       const metricKeys = definition
         ? definition.metricKeys.filter((key) =>
+            key !== (workflowType === 'info-tags' ? 'annotationsProcessed' : '') &&
             items.some((item) => item.metrics[key] !== undefined)
           )
         : [...new Set(items.flatMap((item) => Object.keys(item.metrics)))].sort();
@@ -207,7 +208,9 @@ export function buildWorkflowSections(
       });
 
       const cellsFor = (totals: Totals): (string | number)[] => [
-        totals.completedUnits,
+        isInfoTags
+          ? totals.processedCountComplete ? totals.metrics.annotationsProcessed ?? 0 : '—'
+          : totals.completedUnits,
         ...(showSkipped ? [totals.skippedUnits] : []),
         formatDuration(totals.activeTimeMs),
         isInfoTags
@@ -242,7 +245,7 @@ export function buildWorkflowSections(
             description: COMMON_COLUMN_DESCRIPTIONS.username,
           },
           {
-            content: `${unitPlural} completed`,
+            content: isInfoTags ? 'Annotations processed' : `${unitPlural} completed`,
             sort: true,
             description: COMMON_COLUMN_DESCRIPTIONS.completed(unitPlural),
           },

@@ -17,8 +17,8 @@ test('Info Tags weights the overall rate by annotations processed across differe
   ], (id) => id);
   const rows = sectionToCsvRows(section);
   const total = rows.find((row) => row.Username === 'All users')!;
-  assert.equal(total['images completed'], 2);
-  assert.equal(total['Annotations processed'], '102');
+  assert.equal('images completed' in total, false);
+  assert.equal(total['Annotations processed'], 102);
   assert.equal(total['Seconds per annotation processed'], '6.1');
   assert.equal(total['Annotations tagged'], '0');
   for (const row of rows) {
