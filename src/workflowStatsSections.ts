@@ -189,6 +189,7 @@ export function buildWorkflowSections(
       const unitPlural = definition?.unit.plural ?? 'units';
       const unitSingular = definition?.unit.singular ?? 'unit';
       const showSearchAverage = workflowType === 'species-labelling';
+      const showSkipped = workflowType === 'homographies';
 
       const byUser = new Map<string, Totals>();
       const overall = emptyTotals();
@@ -201,7 +202,7 @@ export function buildWorkflowSections(
 
       const cellsFor = (totals: Totals): (string | number)[] => [
         totals.completedUnits,
-        totals.skippedUnits,
+        ...(showSkipped ? [totals.skippedUnits] : []),
         formatDuration(totals.activeTimeMs),
         perUnitAverage(totals.activeTimeMs, totals.completedUnits),
         ...(showSearchAverage ? [searchAverage(totals.metrics)] : []),
@@ -231,7 +232,9 @@ export function buildWorkflowSections(
             sort: true,
             description: COMMON_COLUMN_DESCRIPTIONS.completed(unitPlural),
           },
-          { content: 'Skipped', description: COMMON_COLUMN_DESCRIPTIONS.skipped },
+          ...(showSkipped
+            ? [{ content: 'Skipped', description: COMMON_COLUMN_DESCRIPTIONS.skipped }]
+            : []),
           {
             content: 'Time spent',
             description: COMMON_COLUMN_DESCRIPTIONS.timeSpent,
