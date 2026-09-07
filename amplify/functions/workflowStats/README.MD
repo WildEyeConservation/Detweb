@@ -38,6 +38,25 @@ rather than time elapsed.
 
 ## Physical storage
 
+Homographies (`homographies`) creates a run with its Queue ID before enqueueing
+pairs. Save and Skip persist the ImageNeighbour change, check API errors, record
+queue progress, submit a task event, then acknowledge the message. A failed save
+or acknowledgement leaves the user on the pair with an error. Queue progress is
+not repeated on an acknowledgement retry within the mounted task.
+
+Each resolved pair adds one completed unit; skipped units are a subset of that
+total. Saved pairs contribute `saved`, `controlPointPairs`, and
+`suggestedPointsRetained` (complete matching suggested-ID pairs). Skipped pairs
+carry time but zero saved/point metrics. The pair key is stable within its run:
+revisits count once, retaining the first recorded outcome.
+
+Waiting includes loading suggested points and both images' initial tiles, capped
+at 10 minutes. Once both images are ready, the interaction-based clock excludes
+gaps over 90 seconds and pauses during save/skip requests. Time is captured before
+the request. Back/forward navigation alone does not report completion. As with
+the other browser adapters, statistics are best-effort and old runs are not
+backfilled. This integration is for queued homography work, not standalone edits.
+
 Info Tags (`info-tags`) records one event per annotation after its tag links and
 infoTaggedBy update succeed. The event uses the annotation ID within the run,
 so retries and revisits count once and retain the first recorded outcome.

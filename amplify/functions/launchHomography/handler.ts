@@ -13,6 +13,7 @@ import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
 import pLimit from 'p-limit';
 import { enqueuePretile } from '../shared/enqueuePretile';
+import { createShadowWorkflowRun, workflowLaunchUserId } from '../workflowStats/runWriter';
 
 // ── GraphQL queries & mutations ──
 
@@ -156,7 +157,7 @@ export const handler: LaunchHomographyHandler = async (event) => {
 
     await setProjectStatus(payload.projectId, 'launching');
 
-    const result = await handleLaunch(payload, organizationId);
+    const result = await handleLaunch(payload, organizationId, workflowLaunchUserId(event.identity));
 
     // Project stays in `launching` until reconcilePretileLaunches confirms
     // every image in the pretile manifest has `Image.tiledAt` stamped.
@@ -181,7 +182,7 @@ export const handler: LaunchHomographyHandler = async (event) => {
 
 // ── Core launch logic ──
 
-async function handleLaunch(payload: LaunchHomographyPayload, organizationId: string) {
+async function handleLaunch(payload: LaunchHomographyPayload, organizationId: string, launchedBy: string) {
   const { projectId, annotationSetId, batchSize, hidden, manifestS3Key, launchedCount, queueName } = payload;
 
   // 1. Download the pre-computed manifest from S3
@@ -242,6 +243,18 @@ async function handleLaunch(payload: LaunchHomographyPayload, organizationId: st
       group: organizationId,
     },
   });
+
+  await createShadowWorkflowRun(
+    {
+      runId: queueId,
+      workflowType: 'homographies',
+      projectId,
+      annotationSetId,
+      displayName: queueDisplayName,
+      configuration: { batchSize, launchedCount: manifestItems.length, manifestS3Key },
+    },
+    { userId: launchedBy, organizationId }
+  );
 
   // 4. Build pair payloads and enqueue
   const pairs: HomographyPairPayload[] = manifestItems.map((item) => ({

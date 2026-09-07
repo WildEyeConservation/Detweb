@@ -82,8 +82,6 @@ export default function HomographyTask() {
             continue;
           }
 
-          if (pairKey) processedRef.current.add(pairKey);
-
           body.ack = async () => {
             try {
               const sqsClient2 = await getSqsClient();
@@ -93,8 +91,10 @@ export default function HomographyTask() {
                   ReceiptHandle: entity.ReceiptHandle,
                 })
               );
-            } catch {
+              if (pairKey) processedRef.current.add(pairKey);
+            } catch (error) {
               console.log(`Homography ack failed for pair ${pairKey}`);
+              throw error;
             }
           };
 
