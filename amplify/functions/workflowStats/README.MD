@@ -46,9 +46,13 @@ is the image ID within the run, so revisits and acknowledgement retries cannot
 add another completion. Statistics submission remains best-effort.
 
 Metrics compare the initial and final state of each worked annotation:
-`annotationsTagged` counts annotations whose tags changed, `tagsAdded` and
-`tagsRemoved` count net link changes, and `markersRepositioned` counts annotations
-whose final position differs. An image completed without changes still counts.
+`annotationsProcessed` counts distinct annotations completed, including unchanged
+ones. `annotationsTagged` counts annotations whose tags changed; `tagsAdded`
+counts net additions. Removed tags and marker repositioning are not tracked.
+Info Tags reports seconds per annotation processed instead of seconds per image.
+Selections containing older completions without processed counts show an
+unavailable average rather than treating missing counts as zero.
+An image completed without changes still counts.
 The first recorded completion is immutable, as in Review and ChainLinker.
 
 Info Tags uses the interaction-based active clock, enabled only while its image
