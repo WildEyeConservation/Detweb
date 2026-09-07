@@ -325,7 +325,7 @@ export async function commitInfoTagsForAnnotation(
   );
 }
 
-export type InfoTagImageProgress = { counted: boolean; acknowledged: boolean };
+export type InfoTagImageProgress = { counted: boolean; acknowledged: boolean; statisticsRecorded?: boolean };
 
 // Queue progress is only recorded and the SQS message only deleted once every
 // tag write for the image has landed, so a failed save is redelivered instead
@@ -335,6 +335,7 @@ export async function finalizeInfoTagImage(options: {
   progress: InfoTagImageProgress;
   countCompletion: boolean;
   incrementCount: () => Promise<void>;
+  recordStatistics?: () => Promise<void>;
   acknowledge: () => Promise<void>;
 }): Promise<void> {
   const results = await Promise.allSettled(options.commits);
@@ -346,6 +347,10 @@ export async function finalizeInfoTagImage(options: {
   if (options.countCompletion && !options.progress.counted) {
     await options.incrementCount();
     options.progress.counted = true;
+  }
+  if (options.countCompletion && options.recordStatistics && !options.progress.statisticsRecorded) {
+    await options.recordStatistics();
+    options.progress.statisticsRecorded = true;
   }
   if (!options.progress.acknowledged) {
     await options.acknowledge();

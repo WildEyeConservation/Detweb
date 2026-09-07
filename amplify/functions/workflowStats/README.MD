@@ -38,6 +38,25 @@ rather than time elapsed.
 
 ## Physical storage
 
+Info Tags (`info-tags`) creates a run using its Queue ID and records one event
+per completed image through `recordWorkflowTask`. All annotation saves must
+succeed before statistics are submitted and the queue message acknowledged.
+Images with no remaining targets receive no completion credit. The event key
+is the image ID within the run, so revisits and acknowledgement retries cannot
+add another completion. Statistics submission remains best-effort.
+
+Metrics compare the initial and final state of each worked annotation:
+`annotationsTagged` counts annotations whose tags changed, `tagsAdded` and
+`tagsRemoved` count net link changes, and `markersRepositioned` counts annotations
+whose final position differs. An image completed without changes still counts.
+The first recorded completion is immutable, as in Review and ChainLinker.
+
+Info Tags uses the interaction-based active clock, enabled only while its image
+is visible, initially loaded, and unfinished. Gaps over 90 seconds are dropped.
+Initial loading wait excludes preloading and is capped at 10 minutes. Timing is
+captured when the last annotation is submitted, before waiting for saves; retrying
+failed saves preserves that timing. Old queues without runs are not backfilled.
+
 Review (`qc-review`) also uses the authenticated `recordWorkflowTask` adapter.
 Its launch creates a run using the Queue ID before enqueueing annotations.
 After saving a review, the browser records one annotation with exactly one of

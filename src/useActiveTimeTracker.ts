@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 /**
  * Measures how long a user actually worked on something, rather than how long
@@ -29,9 +29,10 @@ export interface ActiveTimeTracker {
 }
 
 export function useActiveTimeTracker(
-  options: { idleGapMs?: number } = {}
+  options: { idleGapMs?: number; enabled?: boolean } = {}
 ): ActiveTimeTracker {
   const idleGapMs = options.idleGapMs ?? DEFAULT_IDLE_GAP_MS;
+  const enabled = options.enabled ?? true;
   const accumulatedRef = useRef(0);
   const lastTickRef = useRef<number>(Date.now());
 
@@ -41,12 +42,15 @@ export function useActiveTimeTracker(
     const now = Date.now();
     const delta = now - lastTickRef.current;
     lastTickRef.current = now;
-    if (delta > 0 && delta <= idleGapMs) {
+    if (enabled && delta > 0 && delta <= idleGapMs) {
       accumulatedRef.current += delta;
     }
-  }, [idleGapMs]);
+  }, [enabled, idleGapMs]);
 
   useEffect(() => {
+    // Hidden/preloaded tasks must not accumulate another task's interactions.
+    lastTickRef.current = Date.now();
+    if (!enabled) return;
     const onActivity = () => settle();
     // Same signals the transect heartbeat already treats as activity.
     window.addEventListener('pointerdown', onActivity, true);
@@ -57,7 +61,7 @@ export function useActiveTimeTracker(
       window.removeEventListener('keydown', onActivity, true);
       window.removeEventListener('wheel', onActivity, true);
     };
-  }, [settle]);
+  }, [enabled, settle]);
 
   const read = useCallback(() => {
     // Fold in the time since the last interaction so a total read mid-task is
@@ -73,5 +77,5 @@ export function useActiveTimeTracker(
     return total;
   }, [read]);
 
-  return { read, reset };
+  return useMemo(() => ({ read, reset }), [read, reset]);
 }

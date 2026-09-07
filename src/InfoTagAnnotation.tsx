@@ -35,6 +35,9 @@ import {
   type InfoTagImageProgress,
 } from './infoTags';
 import { findShortcutMatch, formatShortcutKey } from './utils/hotkeys';
+import { recordWorkflowTask, type RecordWorkflowTaskInput } from './recordWorkflowTask';
+import { infoTagWorkflowMetrics, type InfoTagChange } from './infoTagWorkflowStats';
+import { useActiveTimeTracker } from './useActiveTimeTracker';
 
 const TILE_SIZE = 256;
 const DEFAULT_ZOOM_OFFSET = 6;
@@ -167,6 +170,17 @@ export default function InfoTagAnnotation({
   const [imageComplete, setImageComplete] = useState(false);
   const [readyToAdvance, setReadyToAdvance] = useState(false);
   const finishedRef = useRef(false);
+  const changesRef = useRef(new Map<string, InfoTagChange>());
+  const completionStatsRef = useRef<RecordWorkflowTaskInput | null>(null);
+  const visibleAtRef = useRef<number | null>(null);
+  const [imageReadyAt, setImageReadyAt] = useState<number | null>(null);
+  const statsMapRef = useRef<maplibregl.Map | null>(null);
+  const activeTime = useActiveTimeTracker({
+    enabled: visible && !loading && imageReadyAt !== null && !imageComplete,
+  });
+  useEffect(() => {
+    if (visible && visibleAtRef.current === null) visibleAtRef.current = Date.now();
+  }, [visible]);
   const progressRef = useRef<InfoTagImageProgress>({
     counted: false,
     acknowledged: false,
@@ -434,6 +448,8 @@ export default function InfoTagAnnotation({
       const columns = Math.ceil(image.width / coverage);
       const rows = Math.ceil(image.height / coverage);
       const bounds = instance.getBounds();
+      const pendingTiles: Promise<void>[] = [];
+      let addedTiles = 0;
 
       for (let row = 0; row < rows; row++) {
         for (let column = 0; column < columns; column++) {
@@ -462,7 +478,7 @@ export default function InfoTagAnnotation({
             bounds.getNorth() >= tileBounds.getSouth();
           if (!isVisible) continue;
           loadedTilesRef.current.add(sourceId);
-          getTileBlob(
+          pendingTiles.push(getTileBlob(
             `slippymaps/${sourceKey}/${zoom}/${row}/${column}.png`
           )
             .then((blob) => {
@@ -488,10 +504,20 @@ export default function InfoTagAnnotation({
                 },
                 LAYER_ANNOTATIONS
               );
+              addedTiles += 1;
             })
-            .catch(() => loadedTilesRef.current.delete(sourceId));
+            .catch(() => { loadedTilesRef.current.delete(sourceId); }));
         }
       }
+      void Promise.all(pendingTiles).then(() => {
+        if (addedTiles > 0 && statsMapRef.current === instance) {
+          instance.once('idle', () => {
+            if (statsMapRef.current === instance) {
+              setImageReadyAt((previous) => previous ?? Date.now());
+            }
+          });
+        }
+      });
     },
     [image, scale, sourceKey, toLngLat]
   );
@@ -527,6 +553,7 @@ export default function InfoTagAnnotation({
       'top-left'
     );
     instance.touchZoomRotate.disableRotation();
+    statsMapRef.current = instance;
     instance.on('load', () => {
       instance.addSource(SOURCE_CURRENT, {
         type: 'geojson',
@@ -670,6 +697,7 @@ export default function InfoTagAnnotation({
     instance.on('moveend', () => updateVisibleTiles(instance));
     return () => {
       cancelledRef.current = true;
+      statsMapRef.current = null;
       dragMarkerRef.current?.remove();
       dragMarkerRef.current = null;
       tagBadgeMarkerRef.current?.remove();
@@ -810,6 +838,23 @@ export default function InfoTagAnnotation({
       if (finishedRef.current) return;
       finishedRef.current = true;
       countCompletionRef.current = countCompletion;
+      if (countCompletion && !completionStatsRef.current) {
+        const now = Date.now();
+        const visibleAt = visibleAtRef.current ?? now;
+        completionStatsRef.current = {
+          workflowRunId: queueId,
+          workItemType: 'image',
+          workItemId: imageId,
+          idempotencyKey: `image:${imageId}`,
+          outcome: 'tagged',
+          activeTimeMs: activeTime.read(),
+          waitingTimeMs: Math.min(600_000, Math.max(0, (imageReadyAt ?? now) - visibleAt)),
+          metrics: infoTagWorkflowMetrics(changesRef.current.values()),
+        };
+      }
+      if (completionStatsRef.current && !progressRef.current.statisticsRecorded) {
+        completionStatsRef.current.metrics = infoTagWorkflowMetrics(changesRef.current.values());
+      }
       setImageComplete(true);
       finalizeInfoTagImage({
         commits: commitsRef.current.map((record) => record.promise),
@@ -820,6 +865,11 @@ export default function InfoTagAnnotation({
             await client.mutations.incrementQueueCount({ id: queueId }),
             'Failed to record queue progress'
           ),
+        recordStatistics: async () => {
+          if (completionStatsRef.current) {
+            await recordWorkflowTask(client, completionStatsRef.current);
+          }
+        },
         acknowledge: async () => {
           await ack?.();
         },
@@ -837,7 +887,7 @@ export default function InfoTagAnnotation({
           );
         });
     },
-    [ack, client, queueId]
+    [ack, activeTime, client, imageId, imageReadyAt, queueId]
   );
 
   // An image whose annotations are all tagged already is acknowledged without
@@ -894,6 +944,13 @@ export default function InfoTagAnnotation({
     const before = persistedTagIdsRef.current.get(target.id) ?? new Set<string>();
     const after = new Set(selectedTagIds);
     const position = markerPosition;
+    const initialChange = changesRef.current.get(target.id);
+    changesRef.current.set(target.id, {
+      beforeTags: initialChange?.beforeTags ?? new Set(before),
+      afterTags: after,
+      beforePosition: initialChange?.beforePosition ?? { x: target.x, y: target.y },
+      afterPosition: { ...position },
+    });
     persistedTagIdsRef.current.set(target.id, after);
     persistedPositionsRef.current.set(target.id, position);
     setAnnotations((current) =>

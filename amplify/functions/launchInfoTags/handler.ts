@@ -13,6 +13,7 @@ import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
 import pLimit from 'p-limit';
 import { enqueuePretile } from '../shared/enqueuePretile';
+import { createShadowWorkflowRun, workflowLaunchUserId } from '../workflowStats/runWriter';
 import {
   assertInputsBelongToProject,
   parsePayload,
@@ -198,7 +199,7 @@ export const handler: LaunchInfoTagsHandler = async (event) => {
     // here has to hand it back or the survey stays locked.
     let result;
     try {
-      result = await handleLaunch(payload, organizationId);
+      result = await handleLaunch(payload, organizationId, workflowLaunchUserId(event.identity));
     } catch (error) {
       await setProjectStatus(payload.projectId, 'active').catch((statusError) =>
         console.error(
@@ -231,7 +232,8 @@ export const handler: LaunchInfoTagsHandler = async (event) => {
 
 async function handleLaunch(
   payload: LaunchInfoTagsPayload,
-  organizationId: string
+  organizationId: string,
+  launchedBy: string
 ) {
   const {
     projectId,
@@ -312,6 +314,18 @@ async function handleLaunch(
       manifestKey,
       items,
     }
+  );
+
+  await createShadowWorkflowRun(
+    {
+      runId: queue.id,
+      workflowType: 'info-tags',
+      projectId,
+      annotationSetId,
+      displayName,
+      configuration: { categoryIds, batchSize, launchedCount: items.length, annotationCount: candidates.length },
+    },
+    { userId: launchedBy, organizationId }
   );
 
   await enqueueImages(
