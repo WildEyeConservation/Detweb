@@ -38,6 +38,20 @@ rather than time elapsed.
 
 ## Physical storage
 
+Review (`qc-review`) also uses the authenticated `recordWorkflowTask` adapter.
+Its launch creates a run using the Queue ID before enqueueing annotations.
+After saving a review, the browser records one annotation with exactly one of
+`approved`, `relabelled`, or `falsePositive`, then acknowledges the message.
+Reviews already owned by another user are acknowledged without recording credit.
+The annotation ID is the idempotency key within the run: undo and redelivery do
+not add completions or replace the first event's outcome. Statistics writes are
+best-effort, as for ChainLinker; old queues without runs are not backfilled.
+
+Review timing starts when the task becomes visible, excluding buffer preloading.
+The first loaded tile batch reaching map idle ends initial waiting; elapsed time
+after that is active review time, captured before the save begins. Active time
+is capped at 15 minutes and waiting at 10 minutes. Review has no skip action.
+
 The Amplify data stack is close to its CloudFormation change-set resource cap.
 The following concepts are therefore standalone DynamoDB tables in the sibling
 `DetwebWorkflowStats` stack rather than Amplify Data models:
