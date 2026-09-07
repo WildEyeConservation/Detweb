@@ -38,6 +38,13 @@ rather than time elapsed.
 
 ## Physical storage
 
+Workflow Statistics is the main navigation statistics page for signed-in users.
+The daily-statistics and event queries require a Cognito user identity and check
+the stored organizationId on every returned aggregate, run, and event against
+that user's organization groups. Sysadmins retain cross-organization access.
+Snapshots and exports use those same protected queries. The legacy Annotation
+Statistics page remains available at `/annotation-statistics`.
+
 Homographies (`homographies`) creates a run with its Queue ID before enqueueing
 pairs. Save and Skip persist the ImageNeighbour change, check API errors, record
 queue progress, submit a task event, then acknowledge the message. A failed save

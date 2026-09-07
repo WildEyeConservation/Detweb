@@ -215,8 +215,6 @@ const router = createBrowserRouter([
         element: <UserStats />,
       },
       {
-        // The screen itself also checks the sysadmin group, so reaching this
-        // path directly shows a notice rather than an empty report.
         path: 'workflow-statistics',
         element: <WorkflowStatistics />,
       },

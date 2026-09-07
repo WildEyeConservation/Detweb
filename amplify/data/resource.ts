@@ -1326,7 +1326,7 @@ const schema = a
         endDate: a.string(),
       })
       .returns(a.json())
-      .authorization((allow) => [allow.group('sysadmin')])
+      .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(queryWorkflowStats)),
     // Pages through the immutable task events behind the daily statistics,
     // for raw exports and time-of-day snapshots. Runs are validated against
@@ -1342,7 +1342,7 @@ const schema = a
         limit: a.integer(),
       })
       .returns(a.json())
-      .authorization((allow) => [allow.group('sysadmin')])
+      .authorization((allow) => [allow.authenticated()])
       .handler(a.handler.function(queryWorkflowEvents)),
     // Records one completed unit for workflows whose completion happens in the
     // browser. The caller names only the run and the work item: workflow type,
