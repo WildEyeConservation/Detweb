@@ -948,8 +948,6 @@ export default function InfoTagAnnotation({
     changesRef.current.set(target.id, {
       beforeTags: initialChange?.beforeTags ?? new Set(before),
       afterTags: after,
-      beforePosition: initialChange?.beforePosition ?? { x: target.x, y: target.y },
-      afterPosition: { ...position },
     });
     persistedTagIdsRef.current.set(target.id, after);
     persistedPositionsRef.current.set(target.id, position);

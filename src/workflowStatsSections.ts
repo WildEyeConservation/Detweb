@@ -131,6 +131,7 @@ export const COMMON_COLUMN_DESCRIPTIONS = {
 };
 
 interface Totals {
+  processedCountComplete: boolean;
   completedUnits: number;
   skippedUnits: number;
   activeTimeMs: number;
@@ -140,6 +141,7 @@ interface Totals {
 
 function emptyTotals(): Totals {
   return {
+    processedCountComplete: true,
     completedUnits: 0,
     skippedUnits: 0,
     activeTimeMs: 0,
@@ -149,6 +151,9 @@ function emptyTotals(): Totals {
 }
 
 function accumulate(totals: Totals, contribution: WorkflowContribution) {
+  if (contribution.completedUnits > 0 && contribution.metrics.annotationsProcessed === undefined) {
+    totals.processedCountComplete = false;
+  }
   totals.completedUnits += contribution.completedUnits;
   totals.skippedUnits += contribution.skippedUnits;
   totals.activeTimeMs += contribution.activeTimeMs;
@@ -190,6 +195,7 @@ export function buildWorkflowSections(
       const unitSingular = definition?.unit.singular ?? 'unit';
       const showSearchAverage = workflowType === 'species-labelling';
       const showSkipped = workflowType === 'homographies';
+      const isInfoTags = workflowType === 'info-tags';
 
       const byUser = new Map<string, Totals>();
       const overall = emptyTotals();
@@ -204,10 +210,18 @@ export function buildWorkflowSections(
         totals.completedUnits,
         ...(showSkipped ? [totals.skippedUnits] : []),
         formatDuration(totals.activeTimeMs),
-        perUnitAverage(totals.activeTimeMs, totals.completedUnits),
+        isInfoTags
+          ? totals.processedCountComplete
+            ? perUnitAverage(totals.activeTimeMs, totals.metrics.annotationsProcessed ?? 0)
+            : '—'
+          : perUnitAverage(totals.activeTimeMs, totals.completedUnits),
         ...(showSearchAverage ? [searchAverage(totals.metrics)] : []),
         formatDuration(totals.waitingTimeMs),
-        ...metricKeys.map((key) => formatMetric(key, totals.metrics[key] ?? 0)),
+        ...metricKeys.map((key) =>
+          key === 'annotationsProcessed' && !totals.processedCountComplete
+            ? '—'
+            : formatMetric(key, totals.metrics[key] ?? 0)
+        ),
       ];
 
       const rows = [...byUser.entries()]
@@ -240,8 +254,10 @@ export function buildWorkflowSections(
             description: COMMON_COLUMN_DESCRIPTIONS.timeSpent,
           },
           {
-            content: `Seconds per ${unitSingular}`,
-            description: COMMON_COLUMN_DESCRIPTIONS.average(unitPlural),
+            content: isInfoTags ? 'Seconds per annotation processed' : `Seconds per ${unitSingular}`,
+            description: isInfoTags
+              ? 'Active time divided by annotations processed, including unchanged annotations. Unavailable when the selection includes older completions without processed counts.'
+              : COMMON_COLUMN_DESCRIPTIONS.average(unitPlural),
           },
           ...(showSearchAverage
             ? [

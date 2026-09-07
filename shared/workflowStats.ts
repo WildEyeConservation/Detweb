@@ -67,6 +67,11 @@ export const WORKFLOW_METRIC_DEFINITIONS = {
     unit: 'count',
     description: 'Annotations rejected as not an animal.',
   },
+  annotationsProcessed: {
+    label: 'Annotations processed',
+    unit: 'count',
+    description: 'Annotations completed in the tagging workflow, including those whose tags were unchanged.',
+  },
   annotationsTagged: {
     label: 'Annotations tagged',
     unit: 'count',
@@ -76,16 +81,6 @@ export const WORKFLOW_METRIC_DEFINITIONS = {
     label: 'Tags added',
     unit: 'count',
     description: 'Info tags attached to annotations.',
-  },
-  tagsRemoved: {
-    label: 'Tags removed',
-    unit: 'count',
-    description: 'Info tags detached from annotations.',
-  },
-  markersRepositioned: {
-    label: 'Markers repositioned',
-    unit: 'count',
-    description: 'Annotation markers moved to a new position.',
   },
   saved: {
     label: 'Saved',
@@ -144,10 +139,9 @@ export const WORKFLOW_REGISTRY: Record<WorkflowType, WorkflowDefinition> = {
     label: 'Info Tags',
     unit: { singular: 'image', plural: 'images' },
     metricKeys: [
+      'annotationsProcessed',
       'annotationsTagged',
       'tagsAdded',
-      'tagsRemoved',
-      'markersRepositioned',
     ],
   },
   homographies: {
