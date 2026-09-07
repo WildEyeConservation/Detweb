@@ -13,7 +13,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import exportFromJSON from 'export-from-json';
 import MyTable from './Table';
-import { GlobalContext, UserContext } from './Context';
+import { GlobalContext } from './Context';
 import { useUsers } from './apiInterface';
 import { fetchAllPaginatedResults } from './utils';
 import { WORKFLOW_REGISTRY, type WorkflowType } from './workflowRegistry';
@@ -34,11 +34,11 @@ import {
  * per-workflow metrics for every instrumented workflow, read from the durable
  * Workflow Run / Daily Stats tables rather than from Observations.
  *
- * Sysadmin-only for now. The columns come from the shared workflow registry,
+ * Organization members can read their organization's statistics. Columns come from the shared workflow registry,
  * so newly instrumented workflows appear here without changes.
  *
  * Layout: inputs (survey, annotation sets, date range) in a filter bar;
- * results below it, with the run filter beside them because it narrows what
+ * results below it, with the workflow filter beside them because it narrows what
  * is shown rather than what is fetched; exports in the card footer.
  */
 
@@ -131,9 +131,7 @@ function startOfLocalDay(date: Date): Date {
 
 export default function WorkflowStatistics() {
   const { client } = useContext(GlobalContext)!;
-  const { cognitoGroups } = useContext(UserContext)!;
   const { users: allUsers } = useUsers();
-  const isSysadmin = cognitoGroups.includes('sysadmin');
 
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [organizationNames, setOrganizationNames] = useState<
@@ -165,7 +163,6 @@ export default function WorkflowStatistics() {
   const requestSequence = useRef(0);
 
   useEffect(() => {
-    if (!isSysadmin) return;
     let cancelled = false;
 
     async function loadProjects() {
@@ -215,7 +212,7 @@ export default function WorkflowStatistics() {
     return () => {
       cancelled = true;
     };
-  }, [client, isSysadmin]);
+  }, [client]);
 
   const projectOptions = useMemo(
     () =>
@@ -559,14 +556,6 @@ export default function WorkflowStatistics() {
     } finally {
       setExportProgress(null);
     }
-  }
-
-  if (!isSysadmin) {
-    return (
-      <div className='p-4 text-light'>
-        Workflow statistics are restricted to sysadmins.
-      </div>
-    );
   }
 
   const hasResults = workflowSections.length > 0;
