@@ -137,7 +137,7 @@ export const WORKFLOW_REGISTRY: Record<WorkflowType, WorkflowDefinition> = {
   },
   'info-tags': {
     label: 'Info Tags',
-    unit: { singular: 'image', plural: 'images' },
+    unit: { singular: 'annotation', plural: 'annotations' },
     metricKeys: [
       'annotationsProcessed',
       'annotationsTagged',

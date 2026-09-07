@@ -279,6 +279,7 @@ export type InfoTagCommit = {
   after: Iterable<string>;
   position: { x: number; y: number };
   taggedBy: string;
+  recordStatistics?: () => Promise<void>;
 };
 
 // The links are written first and `infoTaggedBy` only once they all succeed:
@@ -314,18 +315,18 @@ export async function commitInfoTagsForAnnotation(
     ),
   ]);
 
-  assertNoGraphqlErrors(
-    await client.models.Annotation.update({
+  const saved = await client.models.Annotation.update({
       id: commit.annotationId,
       infoTaggedBy: commit.taggedBy,
       x: commit.position.x,
       y: commit.position.y,
-    }),
-    'Failed to record informational tagging'
-  );
+    });
+  assertNoGraphqlErrors(saved, 'Failed to record informational tagging');
+  if (!saved.data) throw new Error('Failed to record informational tagging: no annotation returned');
+  await commit.recordStatistics?.();
 }
 
-export type InfoTagImageProgress = { counted: boolean; acknowledged: boolean; statisticsRecorded?: boolean };
+export type InfoTagImageProgress = { counted: boolean; acknowledged: boolean };
 
 // Queue progress is only recorded and the SQS message only deleted once every
 // tag write for the image has landed, so a failed save is redelivered instead
@@ -335,7 +336,6 @@ export async function finalizeInfoTagImage(options: {
   progress: InfoTagImageProgress;
   countCompletion: boolean;
   incrementCount: () => Promise<void>;
-  recordStatistics?: () => Promise<void>;
   acknowledge: () => Promise<void>;
 }): Promise<void> {
   const results = await Promise.allSettled(options.commits);
@@ -347,10 +347,6 @@ export async function finalizeInfoTagImage(options: {
   if (options.countCompletion && !options.progress.counted) {
     await options.incrementCount();
     options.progress.counted = true;
-  }
-  if (options.countCompletion && options.recordStatistics && !options.progress.statisticsRecorded) {
-    await options.recordStatistics();
-    options.progress.statisticsRecorded = true;
   }
   if (!options.progress.acknowledged) {
     await options.acknowledge();
