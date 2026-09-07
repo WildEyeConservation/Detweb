@@ -146,7 +146,7 @@ export default function WorkflowStatistics() {
   // Until the user touches the dates, the range follows the survey: from its
   // earliest run launch to today, so an older survey never opens empty.
   const [dateRangeIsAuto, setDateRangeIsAuto] = useState(true);
-  const [selectedRun, setSelectedRun] = useState<SelectOption | null>(null);
+  const [selectedWorkflow, setSelectedWorkflow] = useState<SelectOption | null>(null);
 
   const [buckets, setBuckets] = useState<StatsBucket[]>([]);
   const [runs, setRuns] = useState<RunSummary[]>([]);
@@ -282,7 +282,7 @@ export default function WorkflowStatistics() {
         setRuns(parsed.runs ?? []);
         setTruncated(parsed.truncated === true);
         setHasLoaded(true);
-        if (!background) setSelectedRun(null);
+        if (!background) setSelectedWorkflow(null);
       } catch (queryError) {
         if (sequence !== requestSequence.current) return;
         setError(
@@ -375,7 +375,7 @@ export default function WorkflowStatistics() {
 
   function selectProject(option: SelectOption | null) {
     setProject(option);
-    setSelectedRun(null);
+    setSelectedWorkflow(null);
     setDateRangeIsAuto(true);
     const sets =
       projects
@@ -426,22 +426,37 @@ export default function WorkflowStatistics() {
     [runOptions]
   );
 
+  const workflowOptions = useMemo(
+    () => [...new Set([...runs, ...buckets].map((item) => item.workflowType))]
+      .map((value) => ({
+        value,
+        label: WORKFLOW_REGISTRY[value as WorkflowType]?.label ?? value,
+      }))
+      .sort((left, right) => left.label.localeCompare(right.label)),
+    [runs, buckets]
+  );
+
   const visibleBuckets = useMemo(
     () =>
-      selectedRun
+      selectedWorkflow
         ? bucketsInRange.filter(
-            (bucket) => bucket.workflowRunId === selectedRun.value
+            (bucket) => bucket.workflowType === selectedWorkflow.value
           )
         : bucketsInRange,
-    [bucketsInRange, selectedRun]
+    [bucketsInRange, selectedWorkflow]
   );
 
   const visibleRunIds = useMemo(
     () =>
-      selectedRun
-        ? [selectedRun.value]
-        : runOptions.map((option) => option.value),
-    [selectedRun, runOptions]
+      [...new Set([
+        ...runs
+          .filter((run) => !selectedWorkflow || run.workflowType === selectedWorkflow.value)
+          .map((run) => run.runId),
+        ...buckets
+          .filter((bucket) => !selectedWorkflow || bucket.workflowType === selectedWorkflow.value)
+          .map((bucket) => bucket.workflowRunId),
+      ])],
+    [selectedWorkflow, runs, buckets]
   );
 
   const workflowSections = useMemo(
@@ -459,7 +474,7 @@ export default function WorkflowStatistics() {
       );
     });
     return runs
-      .filter((run) => !selectedRun || run.runId === selectedRun.value)
+      .filter((run) => !selectedWorkflow || run.workflowType === selectedWorkflow.value)
       .sort((left, right) => right.launchedAt.localeCompare(left.launchedAt))
       .map((run) => ({
         id: run.runId,
@@ -473,7 +488,7 @@ export default function WorkflowStatistics() {
           completionsByRun.get(run.runId) ?? 0,
         ],
       }));
-  }, [runs, bucketsInRange, selectedRun]);
+  }, [runs, bucketsInRange, selectedWorkflow]);
 
   const exportBaseName = `${project?.label ?? 'survey'}_${startString ?? 'all'}_${
     endString ?? 'all'
@@ -697,20 +712,20 @@ export default function WorkflowStatistics() {
                     <RefreshCw size={14} />
                   </Button>
                 </div>
-                {runOptions.length > 1 && (
+                {workflowOptions.length > 0 && (
                   <div className='d-flex align-items-center gap-2'>
-                    <label htmlFor='workflow-run' className='mb-0'>
-                      Run:
+                    <label htmlFor='workflow-type' className='mb-0'>
+                      Workflow:
                     </label>
                     <div style={{ minWidth: '320px' }}>
                       <Select
-                        inputId='workflow-run'
+                        inputId='workflow-type'
                         className='text-black'
-                        value={selectedRun}
-                        options={runOptions}
-                        onChange={(option) => setSelectedRun(option)}
+                        value={selectedWorkflow}
+                        options={workflowOptions}
+                        onChange={(option) => setSelectedWorkflow(option)}
                         isClearable
-                        placeholder='All runs'
+                        placeholder='All workflows'
                       />
                     </div>
                   </div>
