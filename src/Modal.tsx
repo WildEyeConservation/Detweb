@@ -16,6 +16,13 @@ export const Title = ModalTitle;
 export const Body = ModalBody;
 export const Header = ModalHeader;
 
+/** A route can own the portal while a loaded dialog supplies its contents. */
+export const ModalFrame = forwardRef<HTMLDivElement, BootstrapModalProps & { embedded?: boolean }>(
+  ({ embedded = false, children, ...props }, ref) =>
+    embedded ? <>{children}</> : <BootstrapModal ref={ref} {...props}>{children}</BootstrapModal>
+);
+ModalFrame.displayName = 'ModalFrame';
+
 /**
  * Custom Modal Component - Enhanced Bootstrap Modal with additional features
  *
@@ -52,6 +59,8 @@ export const Header = ModalHeader;
  * ```
  */
 interface CustomModalProps extends BootstrapModalProps {
+  /** Render inside an existing modal frame, retaining the header/body/footer. */
+  embedded?: boolean;
   /** When true, removes close button and prevents backdrop/keyboard dismissal */
   strict?: boolean;
   /** Component to render in the help overlay */
@@ -68,6 +77,7 @@ interface CustomModalProps extends BootstrapModalProps {
 const CustomModal = forwardRef<HTMLDivElement, CustomModalProps>(
   (
     {
+      embedded = false,
       strict = false,
       helpComponent: HelpComponent,
       helpButtonText = 'Help',
@@ -147,7 +157,8 @@ const CustomModal = forwardRef<HTMLDivElement, CustomModalProps>(
     );
 
     return (
-      <BootstrapModal
+      <ModalFrame
+        embedded={embedded}
         ref={ref}
         size={size}
         backdrop={modalBackdrop}
@@ -218,7 +229,7 @@ const CustomModal = forwardRef<HTMLDivElement, CustomModalProps>(
             </div>
           )}
         </div>
-      </BootstrapModal>
+      </ModalFrame>
     );
   }
 );

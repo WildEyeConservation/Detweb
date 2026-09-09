@@ -20,12 +20,14 @@ type LaunchHandlerType = {
 } | null;
 
 export default function LaunchAnnotationSetModal({
+  embedded = false,
   show,
   onClose: closeDialog,
   project,
   annotationSet,
   onOptimisticStatus,
 }: {
+  embedded?: boolean;
   show: boolean;
   onClose: () => void;
   project: Schema['Project']['type'];
@@ -131,7 +133,7 @@ export default function LaunchAnnotationSetModal({
   }
 
   return (
-    <Modal show={show} strict={true} size='lg' disabled={launching}>
+    <Modal embedded={embedded} show={show} strict={true} size='lg' disabled={launching}>
       <Header>
         <Title>Launch for Manual Annotation</Title>
       </Header>

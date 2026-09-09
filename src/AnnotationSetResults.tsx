@@ -13,12 +13,14 @@ import {
 } from './infoTags';
 
 export default function AnnotationSetResults({
+  embedded = false,
   show,
   onClose,
   surveyId,
   annotationSet,
   onGenerateResults,
 }: {
+  embedded?: boolean;
   show: boolean;
   onClose: () => void;
   onGenerateResults: () => void;
@@ -191,7 +193,7 @@ export default function AnnotationSetResults({
 
   return (
     <>
-      <Modal show={show} onHide={onClose} strict={true} size='lg'>
+      <Modal embedded={embedded} show={show} onHide={onClose} strict={true} size='lg'>
         <Header>
           <Title>{annotationSet.name} Results</Title>
         </Header>

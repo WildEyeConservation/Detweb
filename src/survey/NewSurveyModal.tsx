@@ -36,10 +36,12 @@ const CORE_STEPS: UploadWizardStep[] = [
 ];
 
 export default function NewSurveyModal({
+  embedded = false,
   show,
   onClose: closeDialog,
   projects,
 }: {
+  embedded?: boolean;
   show: boolean;
   onClose: () => void;
   projects: string[];
@@ -353,7 +355,7 @@ export default function NewSurveyModal({
   }, [show]);
 
   return (
-    <Modal show={show} strict={true}>
+    <Modal embedded={embedded} show={show} strict={true}>
       <Header>
         <Title>New Survey</Title>
       </Header>

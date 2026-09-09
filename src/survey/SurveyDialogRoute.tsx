@@ -1,11 +1,11 @@
-import { lazy, Suspense, useEffect, useRef } from 'react';
+import { lazy, useEffect, useRef } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMyOrganizations, useMyMemberships } from '../data/memberships';
 import { surveyDetailsKey, surveyDetailsQuery } from '../data/surveyDetails';
 import { surveyNamesQuery } from '../data/surveyNamesQuery';
 import { client } from '../stores/appClient';
-import DialogNotice from '../routing/DialogNotice';
+import SurveyDialogFrame from './SurveyDialogFrame';
 import { surveyDialogHref, type SurveyDialogKind } from './surveyDialogRoutes';
 import { useSession } from '../session';
 import { useActiveUploadProjectId } from '../upload/uploadUi';
@@ -166,15 +166,22 @@ export default function SurveyDialogRoute({
   else if (isUpload && uploadBlocked && admitted.current !== identity)
     message =
       'Wait for the active job or upload to finish before preparing another upload.';
-  if (message) return <DialogNotice message={message} onClose={close} />;
 
   return (
-    <Suspense
-      key={identity}
-      fallback={<DialogNotice message='Loading dialog...' onClose={close} />}
+    <SurveyDialogFrame
+      kind={kind}
+      projectName={project?.name}
+      setName={set?.name ?? project?.annotationSets?.find(
+        (row: { id: string; name: string }) => row.id === annotationSetId
+      )?.name}
+      resume={search.get('resume') === 'stale'}
+      identity={identity}
+      message={message}
+      onClose={close}
     >
       {kind === 'newSurvey' && (
         <NewSurvey
+          embedded
           show
           onClose={close}
           projects={namesQuery.data ?? []}
@@ -182,6 +189,7 @@ export default function SurveyDialogRoute({
       )}
       {project && kind === 'addFiles' && (
         <Upload
+          embedded
           show
           handleClose={close}
           project={project}
@@ -190,6 +198,7 @@ export default function SurveyDialogRoute({
       )}
       {project && kind === 'addAnnotationSet' && (
         <AddSet
+          embedded
           show
           onClose={close}
           project={project}
@@ -209,10 +218,11 @@ export default function SurveyDialogRoute({
         />
       )}
       {set && kind === 'annotationCount' && (
-        <Details show setId={set.id} handleClose={close} />
+        <Details embedded show setId={set.id} handleClose={close} />
       )}
       {set && project && kind === 'editAnnotationSet' && (
         <EditSet
+          embedded
           show
           annotationSet={set}
           project={project}
@@ -221,6 +231,7 @@ export default function SurveyDialogRoute({
       )}
       {set && project && kind === 'annotationSetResults' && (
         <Results
+          embedded
           show
           annotationSet={set}
           surveyId={project.id}
@@ -234,6 +245,7 @@ export default function SurveyDialogRoute({
       )}
       {set && project && kind === 'launchAnnotationSet' && (
         <Launch
+          embedded
           show
           annotationSet={set}
           project={project}
@@ -249,11 +261,12 @@ export default function SurveyDialogRoute({
       )}
       {set && project && kind === 'generateJollyResults' && (
         <Generate
+          embedded
           surveyId={project.id}
           annotationSetId={set.id}
           onClose={close}
         />
       )}
-    </Suspense>
+    </SurveyDialogFrame>
   );
 }

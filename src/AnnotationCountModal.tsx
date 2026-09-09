@@ -9,12 +9,14 @@ import LabeledToggleSwitch from './LabeledToggleSwitch';
 import { Schema } from './amplify/client-schema';
 
 interface Props {
+  embedded?: boolean;
   show: boolean;
   handleClose: () => void;
   setId: string;
 }
 
 const AnnotationCountModal: React.FC<Props> = ({
+  embedded = false,
   show,
   handleClose,
   setId,
@@ -92,7 +94,7 @@ const AnnotationCountModal: React.FC<Props> = ({
   );
 
   return (
-    <Modal show={show} onHide={handleClose} size='lg'>
+    <Modal embedded={embedded} show={show} onHide={handleClose} size='lg'>
       <Header>
         <Title>Annotation Set Details</Title>
       </Header>

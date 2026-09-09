@@ -9,6 +9,7 @@ import LabelEditor from './survey/LabelEditor';
 import { useQuery } from '@tanstack/react-query';
 
 interface EditAnnotationSetModalProps {
+  embedded?: boolean;
   show: boolean;
   handleClose: () => void;
   annotationSet: { id: string; name: string };
@@ -18,6 +19,7 @@ interface EditAnnotationSetModalProps {
 }
 
 const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
+  embedded = false,
   show,
   handleClose,
   annotationSet,
@@ -118,7 +120,7 @@ const EditAnnotationSetModal: React.FC<EditAnnotationSetModalProps> = ({
   }, [annotationSet.name]);
 
   return (
-    <Modal show={show} onHide={handleClose} strict={true}>
+    <Modal embedded={embedded} show={show} onHide={handleClose} strict={true}>
       <Header>
         <Title>Edit Annotation Set</Title>
       </Header>

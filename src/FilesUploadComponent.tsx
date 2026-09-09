@@ -1,3 +1,4 @@
+import { ModalFrame } from './Modal';
 import { useDialogGuard } from './routing/useDialogGuard';
 import {
   useEffect,
@@ -68,6 +69,7 @@ const metadataStore = localforage.createInstance({
 });
 
 interface FilesUploadComponentProps {
+  embedded?: boolean;
   show: boolean;
   handleClose: () => void;
   project?: { id: string; name: string };
@@ -3311,6 +3313,7 @@ const MODAL_CORE_STEPS: UploadWizardStep[] = [
 
 // Original modal version
 export default function FilesUploadComponent({
+  embedded = false,
   show,
   handleClose,
   project,
@@ -3374,7 +3377,8 @@ export default function FilesUploadComponent({
   };
 
   return (
-    <Modal
+    <ModalFrame
+      embedded={embedded}
       show={show}
       onHide={handleClose}
       size='xl'
@@ -3453,6 +3457,6 @@ export default function FilesUploadComponent({
           Cancel
         </Button>
       </Modal.Footer>
-    </Modal>
+    </ModalFrame>
   );
 }

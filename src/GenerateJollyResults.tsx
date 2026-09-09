@@ -1,3 +1,4 @@
+import { ModalFrame } from './Modal';
 import {
   Alert,
   Button,
@@ -56,10 +57,12 @@ function parseLaunchResponse(value: unknown): LaunchResponse {
 }
 
 export default function GenerateJollyResults({
+  embedded = false,
   surveyId,
   annotationSetId,
   onClose,
 }: {
+  embedded?: boolean;
   onClose: () => void;
   surveyId: string;
   annotationSetId: string;
@@ -244,7 +247,8 @@ export default function GenerateJollyResults({
   const running = launching || activeJob !== null;
 
   return (
-    <Modal
+    <ModalFrame
+      embedded={embedded}
       show
       onHide={onClose}
       size='lg'
@@ -321,6 +325,6 @@ export default function GenerateJollyResults({
           Close
         </Button>
       </Modal.Footer>
-    </Modal>
+    </ModalFrame>
   );
 }

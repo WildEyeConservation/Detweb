@@ -7,12 +7,14 @@ import { client } from '../stores/appClient';
 import LabelEditor from './LabelEditor';
 
 export default function AddAnnotationSetModal({
+  embedded = false,
   show,
   onClose,
   project,
   addAnnotationSet,
   allProjects,
 }: {
+  embedded?: boolean;
   show: boolean;
   onClose: () => void;
   project: Schema['Project']['type'];
@@ -119,7 +121,7 @@ export default function AddAnnotationSetModal({
   }
 
   return (
-    <Modal show={show} onHide={onClose} disabled={busy} strict={true}>
+    <Modal embedded={embedded} show={show} onHide={onClose} disabled={busy} strict={true}>
       <Header>
         <Title>Add Annotation Set</Title>
       </Header>
