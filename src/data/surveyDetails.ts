@@ -32,10 +32,11 @@ export function surveyDetailsQuery(id: string) {
   return {
     queryKey: surveyDetailsKey(id),
     queryFn: async () => {
-      const { data } = await client.models.Project.get(
+      const { data, errors } = await client.models.Project.get(
         { id },
         { selectionSet: PROJECT_SELECTION_SET }
       );
+      if (errors?.length) throw new Error(errors.map((error) => error.message).join('; '));
       return data;
     },
     staleTime: 30_000,

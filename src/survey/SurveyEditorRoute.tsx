@@ -33,6 +33,8 @@ export default function SurveyEditorRoute() {
     // Editors also mutate through direct client calls. Refresh the table and
     // reference lists on return, including observers using the same cached data.
     void queryClient.invalidateQueries({ queryKey: ['surveys-project-details', surveyId] });
+    void queryClient.invalidateQueries({ queryKey: ['surveys-list'] });
+    void queryClient.invalidateQueries({ queryKey: ['surveys-names'] });
     void queryClient.invalidateQueries({ queryKey: ['project', surveyId] });
     for (const model of ['Category', 'ImageSet', 'LocationSet', 'AnnotationSet']) {
       void queryClient.invalidateQueries({ queryKey: [model, { filter: { projectId: { eq: surveyId } } }] });

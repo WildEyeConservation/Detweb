@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQueries, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSession } from '../session';
 import {
   useIsOrganizationAdmin,
   useMyMemberships,
+  useMyOrganizations,
 } from '../data/memberships';
 import { client } from '../stores/appClient';
 import { surveyDetailsKey as projectQueryKey, surveyDetailsQuery } from '../data/surveyDetails';
+import { surveyListQuery, surveyPage, selectSurveySummaries, type SurveySummary } from '../data/surveyListQuery';
 import { surveyDialogHref } from './surveyDialogRoutes';
 import {
   setSurveysCompactMode,
@@ -25,7 +27,7 @@ import {
   useUploadUi,
 } from '../upload/uploadUi.ts';
 import { Schema } from '../amplify/client-schema.ts';
-import { Card, Button, Form } from 'react-bootstrap';
+import { Alert, Card, Button, Form } from 'react-bootstrap';
 import MyTable from '../Table.tsx';
 import { Outlet, useNavigate } from 'react-router-dom';
 import ConfirmationModal from '../ConfirmationModal.tsx';
@@ -94,21 +96,35 @@ export default function Surveys() {
     };
   }, []);
 
-  const adminProjectIds = useMemo(
-    () =>
-      myProjectsHook.data
-        ?.filter((project) => project.isAdmin)
-        .map((project) => project.projectId) ?? [],
-    [myProjectsHook.data]
+  const organizations = useMyOrganizations();
+  const organizationIds = [...new Set([
+    ...organizations.data.map((row) => row.organizationId),
+    ...myProjectsHook.data.filter((row) => row.isAdmin).map((row) => row.group),
+  ].filter((id): id is string => Boolean(id)))].sort();
+  const organizationQueries = useQueries({
+    queries: organizationIds.map((id) => ({
+      queryKey: ['organization', id],
+      staleTime: 30_000,
+      queryFn: async () => (await client.models.Organization.get({ id })).data,
+    })),
+  });
+  const organizationOptions = organizationQueries.flatMap((query) =>
+    query.data ? [{ id: query.data.id, name: query.data.name }] : []
   );
-
+  const listQuery = useQuery({
+    ...surveyListQuery(user.username, organizationFilter,
+      (input, options) => client.models.UserProjectMembership.userProjectMembershipsByUserId(input, options)),
+    enabled: !myProjectsHook.meta.isPending,
+  });
+  const [pagination, setPagination] = useState({ page: 0, size: 5, filter: '' });
+  const filterKey = JSON.stringify([organizationFilter, search, sortBy]);
   const membershipUpdatedAtByProjectRef = useRef<Map<
     string,
     string | null | undefined
   > | null>(null);
 
   useEffect(() => {
-    if (!myProjectsHook.data) return;
+    if (myProjectsHook.meta.isPending) return;
 
     const currentUpdatedAtByProject = new Map(
       myProjectsHook.data.map((membership) => [
@@ -125,26 +141,51 @@ export default function Surveys() {
       return;
     }
 
+    let changed = previousUpdatedAtByProject.size !== currentUpdatedAtByProject.size;
     currentUpdatedAtByProject.forEach((updatedAt, projectId) => {
       if (
-        previousUpdatedAtByProject.has(projectId) &&
+        !previousUpdatedAtByProject.has(projectId) ||
         previousUpdatedAtByProject.get(projectId) !== updatedAt
       ) {
+        changed = true;
         queryClient.invalidateQueries({ queryKey: projectQueryKey(projectId) });
       }
     });
 
+    if (changed) {
+      void queryClient.invalidateQueries({ queryKey: ['surveys-list', user.username] });
+      void queryClient.invalidateQueries({ queryKey: ['surveys-names', user.username] });
+    }
     membershipUpdatedAtByProjectRef.current = currentUpdatedAtByProject;
-  }, [myProjectsHook.data, queryClient]);
+  }, [myProjectsHook.data, myProjectsHook.meta.isPending, queryClient, user.username]);
 
+  const adminIds = new Set(myProjectsHook.data.filter((row) => row.isAdmin).map((row) => row.projectId));
+  const sortedSummaries = selectSurveySummaries(
+    (listQuery.data ?? []).filter((row) => adminIds.has(row.id)), organizationFilter, search, sortBy
+  );
+
+  const page = surveyPage(sortedSummaries, pagination.filter === filterKey ? pagination.page : 0, pagination.size);
   const projectQueries = useQueries({
-    queries: adminProjectIds.map((id) => ({
+    queries: page.rows.map(({ id }) => ({
       ...surveyDetailsQuery(id),
       // Poll every 60s while a project is uploading so other viewers see the uploader's heartbeat
       refetchInterval: (query: { state: { data?: Schema['Project']['type'] | null } }) =>
         query.state.data?.status === 'uploading' ? 60000 : false,
     })),
   });
+
+  const nextProjectIdsKey = JSON.stringify(page.nextRows.map(({ id }) => id));
+  const readyToPrefetch = listQuery.isSuccess && !listQuery.isFetching &&
+    projectQueries.every((query) => query.isSuccess && !query.isFetching);
+  useEffect(() => {
+    if (!readyToPrefetch) return;
+    // Warm one page of details only. Progress components stay unmounted, so
+    // this does not start queue/job polling or recursively load later pages.
+    const ids: string[] = JSON.parse(nextProjectIdsKey);
+    for (const id of ids) {
+      void queryClient.prefetchQuery({ ...surveyDetailsQuery(id), retry: false });
+    }
+  }, [readyToPrefetch, nextProjectIdsKey, queryClient]);
 
   const projects = useMemo(
     () =>
@@ -173,19 +214,9 @@ export default function Surveys() {
     [projects]
   );
 
-  const organizationOptions = useMemo(
-    () =>
-      Array.from(
-        new Map(
-          projects.map((project) => [
-            project.organizationId,
-            project.organization.name,
-          ])
-        ).entries()
-      ).map(([id, name]) => ({ id, name })),
-    [projects]
-  );
-
+  const sortedProjects = projects;
+  const pageLoading = listQuery.isPending || projectQueries.some((query) => query.isPending);
+  const pageError = listQuery.isError || projectQueries.some((query) => query.isError);
   // Helper to optimistically update a single project in the React Query cache.
   const updateProjectInCache = (
     projectId: string,
@@ -193,7 +224,16 @@ export default function Surveys() {
       prev: Schema['Project']['type'] | undefined
     ) => Schema['Project']['type'] | undefined
   ) => {
-    queryClient.setQueryData(projectQueryKey(projectId), updater);
+    const updated = queryClient.setQueryData<Schema['Project']['type']>(projectQueryKey(projectId), updater);
+    if (updated) {
+      queryClient.setQueriesData<SurveySummary[]>({ queryKey: ['surveys-list', user.username] }, (rows) =>
+        rows?.map((row) => row.id === projectId ? {
+          ...row, name: updated.name, status: updated.status,
+          annotationSets: updated.annotationSets, queues: updated.queues.map(({ id }: { id: string }) => ({ id })),
+          individualIdJobs: updated.individualIdJobs,
+        } : row)
+      );
+    }
   };
 
   const projectIdsKey = projects.map((p) => p.id).sort().join(',');
@@ -369,46 +409,6 @@ export default function Surveys() {
       });
     }
   }
-
-  const filteredProjects = projects.filter((project) => {
-    const searchLower = search.toLowerCase();
-    const matchesStatus =
-      project.status !== 'deleted' && project.status !== 'hidden';
-    const matchesOrganization =
-      !organizationFilter || project.organizationId === organizationFilter;
-    const matchesAnnotationSet = project.annotationSets.some((set: { name: string }) =>
-      set.name.toLowerCase().includes(searchLower)
-    );
-    const matchesSearch =
-      searchLower === '' ||
-      project.name.toLowerCase().includes(searchLower) ||
-      project.organization.name.toLowerCase().includes(searchLower) ||
-      matchesAnnotationSet;
-
-    return matchesStatus && matchesOrganization && matchesSearch;
-  });
-
-  const sortedProjects = [...filteredProjects].sort((a, b) => {
-    if (sortBy === 'createdAt') {
-      return new Date(b.createdAt ?? '').getTime() - new Date(a.createdAt ?? '').getTime();
-    }
-    if (sortBy === 'createdAt-reverse') {
-      return new Date(a.createdAt ?? '').getTime() - new Date(b.createdAt ?? '').getTime();
-    }
-    if (sortBy === 'name') {
-      return a.name.localeCompare(b.name);
-    }
-    if (sortBy === 'name-reverse') {
-      return b.name.localeCompare(a.name);
-    }
-    if (sortBy === 'activeJobs') {
-      const hasJobA = a.queues.length > 0 || projectsWithIndividualIdJob.has(a.id);
-      const hasJobB = b.queues.length > 0 || projectsWithIndividualIdJob.has(b.id);
-      if (hasJobA !== hasJobB) return hasJobA ? -1 : 1;
-      return new Date(b.createdAt ?? '').getTime() - new Date(a.createdAt ?? '').getTime();
-    }
-    return 0;
-  });
 
   function renderAnnotationSetActions(
     project: Schema['Project']['type'],
@@ -939,9 +939,9 @@ export default function Surveys() {
     );
   };
 
-  const emptyMessage = 'You are not an admin of any surveys.';
+  const emptyMessage = pageLoading ? 'Loading surveys...' : pageError ? 'Unable to load surveys.' : 'No surveys match your filters.';
 
-  if (projects.length === 0 && !isOrganizationAdmin) {
+  if (myProjectsHook.data.every((row) => !row.isAdmin) && !isOrganizationAdmin) {
     return <><div>{myProjectsHook.meta.isPending ? "Loading surveys..." : "You are not authorized to access this page."}</div><Outlet /></>;
   }
 
@@ -1034,6 +1034,8 @@ export default function Surveys() {
                 : 'overflow-x-auto overflow-y-visible'
             }
           >
+            {pageError && <Alert variant='danger'>Some surveys could not be loaded. <Button variant='link' onClick={() => { void listQuery.refetch(); projectQueries.forEach((query) => { void query.refetch(); }); }}>Retry</Button></Alert>}
+            {pageLoading && <div role='status' className='mb-2'>Loading surveys...</div>}
             {isMobile ? (
               sortedProjects.length > 0 ? (
                 <div className='d-flex flex-column gap-3'>
@@ -1051,11 +1053,23 @@ export default function Surveys() {
                   { content: 'Annotation Sets', style: { width: '50%' } },
                 ]}
                 tableData={tableData}
-                pagination={true}
-                itemsPerPage={5}
+                pagination={false}
                 emptyMessage={emptyMessage}
               />
             )}
+            <div className='d-flex justify-content-between align-items-center gap-2 mt-3'>
+              <Form.Select aria-label='Surveys per page' value={pagination.size} style={{ width: 'auto' }}
+                onChange={(event) => setPagination({ page: 0, size: Number(event.target.value), filter: filterKey })}>
+                {[5, 10, 25, 50, 100].map((size) => <option key={size} value={size}>{size} per page</option>)}
+              </Form.Select>
+              <div className='d-flex align-items-center gap-2'>
+                <span>Page {page.currentPage + 1} of {page.pageCount}</span>
+                <Button aria-label='Previous survey page' disabled={page.currentPage === 0}
+                  onClick={() => setPagination({ ...pagination, page: page.currentPage - 1, filter: filterKey })}>&lt;</Button>
+                <Button aria-label='Next survey page' disabled={page.currentPage + 1 >= page.pageCount}
+                  onClick={() => setPagination({ ...pagination, page: page.currentPage + 1, filter: filterKey })}>&gt;</Button>
+              </div>
+            </div>
           </Card.Body>
           {isOrganizationAdmin && (
             <Card.Footer className='d-flex justify-content-center'>

@@ -3,6 +3,7 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMyOrganizations, useMyMemberships } from '../data/memberships';
 import { surveyDetailsKey, surveyDetailsQuery } from '../data/surveyDetails';
+import { surveyNamesQuery } from '../data/surveyNamesQuery';
 import { client } from '../stores/appClient';
 import DialogNotice from '../routing/DialogNotice';
 import { surveyDialogHref, type SurveyDialogKind } from './surveyDialogRoutes';
@@ -43,7 +44,12 @@ export default function SurveyDialogRoute({
     ...surveyDetailsQuery(surveyId ?? ''),
     enabled: Boolean(canOpen && surveyId),
   });
-  const needsAllProjects = kind === 'newSurvey' || kind === 'addAnnotationSet';
+  const namesQuery = useQuery({
+    ...surveyNamesQuery(user.username, (input, options) =>
+      client.models.UserProjectMembership.userProjectMembershipsByUserId(input, options)),
+    enabled: kind === 'newSurvey' && canOpen,
+  });
+  const needsAllProjects = kind === 'addAnnotationSet';
   const projectQueries = useQueries({
     queries:
       needsAllProjects && canOpen
@@ -94,6 +100,8 @@ export default function SurveyDialogRoute({
 
   useEffect(
     () => () => {
+      void cache.invalidateQueries({ queryKey: ['surveys-list'] });
+      void cache.invalidateQueries({ queryKey: ['surveys-names'] });
       if (!surveyId) return;
       void cache.invalidateQueries({ queryKey: surveyDetailsKey(surveyId) });
       void cache.invalidateQueries({ queryKey: ['project', surveyId] });
@@ -126,9 +134,13 @@ export default function SurveyDialogRoute({
     memberships.meta.isPending ||
     (kind === 'newSurvey' && organizations.meta.isPending)
   )
-    message = 'Loading survey access...';
+    message = kind === 'newSurvey' ? 'Checking organisation access...' : 'Loading survey access...';
   else if (!canOpen)
     message = 'You do not have permission to open this survey dialog.';
+  else if (kind === 'newSurvey' && namesQuery.isError)
+    message = 'Unable to load existing survey names. Please close and try again.';
+  else if (kind === 'newSurvey' && namesQuery.isPending)
+    message = 'Loading existing survey names...';
   else if (
     projectQueries.some((query) => query.isError) ||
     (surveyId && projectQuery.isError) ||
@@ -165,7 +177,7 @@ export default function SurveyDialogRoute({
         <NewSurvey
           show
           onClose={close}
-          projects={allProjects.map((row) => row.name.toLowerCase())}
+          projects={namesQuery.data ?? []}
         />
       )}
       {project && kind === 'addFiles' && (
