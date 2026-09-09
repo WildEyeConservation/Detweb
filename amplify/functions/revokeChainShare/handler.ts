@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import { env } from '$amplify/env/revokeChainShare';
 import { Amplify } from 'aws-amplify';
 import { generateClient, GraphQLResult } from 'aws-amplify/data';
@@ -196,7 +197,7 @@ export const handler: RevokeChainShareHandler = async (event) => {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Error revoking chain share',
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? getErrorDetails(error).message : String(error),
       }),
     };
   }

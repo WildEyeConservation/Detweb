@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { LaunchIndividualIdHandler } from '../../data/resource';
 import { env } from '$amplify/env/launchIndividualId';
 import { Amplify } from 'aws-amplify';
@@ -213,10 +214,10 @@ export const handler: LaunchIndividualIdHandler = async (event) => {
       await setProjectStatus(payload.projectId, 'launching', {
         status: { eq: 'active' },
       });
-    } catch (err: any) {
-      const msg = err?.message ?? '';
-      const errMsgs = Array.isArray(err?.errors)
-        ? err.errors.map((e: any) => e?.message ?? '').join(' ')
+    } catch (err) {
+      const msg = getErrorDetails(err)?.message ?? '';
+      const errMsgs = Array.isArray(getErrorDetails(err)?.errors)
+        ? getErrorDetails(err).errors.map((e) => e?.message ?? '').join(' ')
         : '';
       if (
         msg.includes('ConditionalCheckFailed') ||
@@ -251,7 +252,7 @@ export const handler: LaunchIndividualIdHandler = async (event) => {
     ).catch((e) => console.warn('Failed to update project memberships', e));
 
     return { statusCode: 200, body: JSON.stringify(result) };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error launching Individual ID job', error);
     if (payloadS3Key) {
       await deletePayloadFromS3(payloadS3Key).catch(() => {});
@@ -260,7 +261,7 @@ export const handler: LaunchIndividualIdHandler = async (event) => {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Failed to launch Individual ID job',
-        error: error?.message ?? 'Unknown error',
+        error: getErrorDetails(error)?.message ?? 'Unknown error',
       }),
     };
   }
@@ -529,7 +530,7 @@ async function fetchAllProjectImages(
   const all: ProjectImageRow[] = [];
   let nextToken: string | null = null;
   do {
-    const variables: Record<string, any> = { projectId, limit: 10000 };
+    const variables: Record<string, unknown> = { projectId, limit: 10000 };
     if (nextToken) variables.nextToken = nextToken;
     const res = await executeGraphql<{
       imagesByProjectId?: {
@@ -691,12 +692,12 @@ async function deletePayloadFromS3(key: string): Promise<void> {
 
 async function executeGraphql<T>(
   query: string,
-  variables: Record<string, any>
+  variables: Record<string, unknown>
 ): Promise<T> {
-  const response = (await client.graphql({
+  const response = (await client.graphql<unknown>({
     query,
     variables,
-  } as any)) as GraphQLResult<T>;
+  })) as GraphQLResult<T>;
   if (response.errors && response.errors.length > 0) {
     throw new Error(
       `GraphQL error: ${JSON.stringify(

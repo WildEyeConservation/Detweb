@@ -36,7 +36,7 @@ export type EnqueuePretileInput = {
   annotationSetId: string | null;
   workflow: PretileWorkflow;
   imageIds: string[];
-  executeGraphql: <T>(query: string, variables: Record<string, any>) => Promise<T>;
+  executeGraphql: <T>(query: string, variables: Record<string, unknown>) => Promise<T>;
   outputsBucket: string;
   queueUrl: string;
   refreshQueueUrl: string;

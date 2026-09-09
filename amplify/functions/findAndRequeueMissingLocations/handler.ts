@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { Handler } from 'aws-lambda';
 import { env } from '$amplify/env/findAndRequeueMissingLocations';
 import { Amplify } from 'aws-amplify';
@@ -173,13 +174,13 @@ export const handler: Handler = async () => {
         locationsRequeued: requeuedTotal,
       }),
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in findAndRequeueMissingLocations', error);
     return {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Failed to check for missing locations',
-        error: error?.message ?? 'Unknown error',
+        error: getErrorDetails(error)?.message ?? 'Unknown error',
       }),
     };
   }
@@ -196,7 +197,7 @@ async function fetchCandidateQueues(): Promise<QueueRecord[]> {
         limit: 100,
         nextToken,
       },
-    } as any)) as GraphQLResult<{
+    })) as GraphQLResult<{
       listQueues?: {
         items?: Array<QueueRecord | null>;
         nextToken?: string | null;
@@ -458,7 +459,7 @@ async function fetchAnnotatedLocationIds(locations: Location[], annotationSetId:
               limit: 10000,
               nextToken,
             },
-          } as any)) as GraphQLResult<{
+          })) as GraphQLResult<{
             annotationsByImageIdAndSetId?: {
               items?: Array<Annotation | null>;
               nextToken?: string | null;
@@ -540,7 +541,7 @@ async function fetchObservedLocationIds(annotationSetId: string): Promise<Set<st
         limit: 10000,
         nextToken,
       },
-    } as any)) as GraphQLResult<{
+    })) as GraphQLResult<{
       observationsByAnnotationSetId?: {
         items?: Array<{ id: string; locationId: string } | null>;
         nextToken?: string | null;
@@ -663,7 +664,7 @@ async function logRequeueAction(queue: QueueRecord, count: number): Promise<void
     const response = (await client.graphql({
       query: getProject,
       variables: { id: queue.projectId },
-    } as any)) as GraphQLResult<{
+    })) as GraphQLResult<{
       getProject?: { id: string; name: string; organizationId?: string };
     }>;
     projectName = response.data?.getProject?.name ?? 'Unknown';
@@ -816,7 +817,7 @@ async function fetchUnreviewedQCAnnotations(
               limit: 10000,
               nextToken,
             },
-          } as any)) as GraphQLResult<{
+          })) as GraphQLResult<{
             annotationsByImageIdAndSetId?: {
               items?: Array<{
                 id: string;
@@ -953,7 +954,7 @@ async function processInfoTagRequeue(queue: QueueRecord): Promise<number> {
               limit: 10000,
               nextToken,
             },
-          } as any)) as GraphQLResult<{
+          })) as GraphQLResult<{
             annotationsByImageIdAndSetId?: {
               items?: Array<{
                 id: string;
@@ -1204,12 +1205,12 @@ async function requeueHomographyPairs(
 
 async function executeGraphql<T>(
   query: string,
-  variables: Record<string, any>
+  variables: Record<string, unknown>
 ): Promise<T> {
-  const response = (await client.graphql({
+  const response = (await client.graphql<unknown>({
     query,
     variables,
-  } as any)) as GraphQLResult<T>;
+  })) as GraphQLResult<T>;
 
   if (response.errors && response.errors.length > 0) {
     throw new Error(

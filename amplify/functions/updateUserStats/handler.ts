@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -479,7 +480,7 @@ export const handler: DynamoDBStreamHandler = async (event) => {
         eventId: record.eventID,
         sequenceNumber: record.dynamodb?.SequenceNumber,
         error: describeError(error),
-        stack: error instanceof Error ? error.stack : undefined,
+        stack: error instanceof Error ? getErrorDetails(error).stack : undefined,
       });
       // The event source mapping does not enable partial-batch responses.
       // Throw so Lambda retries the batch; transaction receipts make

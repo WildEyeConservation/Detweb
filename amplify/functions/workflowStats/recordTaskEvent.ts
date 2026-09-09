@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -74,7 +75,7 @@ export const handler: Handler<
       workflowType: task.workflowType,
       workflowRunId: task.workflowRunId,
       projectId: task.projectId,
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? getErrorDetails(error).message : String(error),
     });
     throw error;
   }

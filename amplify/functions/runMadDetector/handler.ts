@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { RunMadDetectorHandler } from '../../data/resource';
 import { env } from '$amplify/env/runMadDetector';
 import { Amplify } from 'aws-amplify';
@@ -106,7 +107,7 @@ export const handler: RunMadDetectorHandler = async (event, context) => {
             }),
           })
         );
-      } catch (err: any) {
+      } catch (err) {
         console.error(
           `Error sending SQS message for chunk starting at index ${processed}`,
           err
@@ -135,7 +136,7 @@ export const handler: RunMadDetectorHandler = async (event, context) => {
               ),
             })
           );
-        } catch (err: any) {
+        } catch (err) {
           console.error(
             'Error re-invoking lambda with remaining images',
             err
@@ -157,18 +158,18 @@ export const handler: RunMadDetectorHandler = async (event, context) => {
         count: images.length,
       }),
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in runMadDetector:', error);
     console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name,
+      message: getErrorDetails(error).message,
+      stack: getErrorDetails(error).stack,
+      name: getErrorDetails(error).name,
     });
     return {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Error running mad detector',
-        error: error.message,
+        error: getErrorDetails(error).message,
       }),
     };
   }

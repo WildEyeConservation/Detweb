@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import {
   BatchWriteCommand,
   DynamoDBDocumentClient,
@@ -319,7 +320,7 @@ export const handler = async (
   } catch (rollbackError) {
     const rollbackMessage =
       rollbackError instanceof Error
-        ? rollbackError.message
+        ? getErrorDetails(rollbackError).message
         : String(rollbackError);
     const combinedError = `${error}. Rollback failed: ${rollbackMessage}`;
     await updateTerminalStatus(

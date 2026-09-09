@@ -1,3 +1,4 @@
+import { getErrorMessages } from '../../shared/errorMessage';
 import type { CancelIndividualIdJobHandler } from '../../data/resource';
 import { env } from '$amplify/env/cancelIndividualIdJob';
 import { Amplify } from 'aws-amplify';
@@ -76,7 +77,7 @@ async function executeGraphql<T>(
   query: string,
   variables: Record<string, unknown>
 ): Promise<T> {
-  const response = (await gqlClient.graphql({
+  const response = (await gqlClient.graphql<unknown>({
     query,
     variables,
   } as never)) as GraphQLResult<T>;
@@ -92,9 +93,7 @@ async function executeGraphql<T>(
 }
 
 function isConditionalCheckFailed(error: unknown): boolean {
-  return /ConditionalCheckFailed/.test(
-    error instanceof Error ? error.message : String(error)
-  );
+  return getErrorMessages(error).some(message => message.includes('ConditionalCheckFailed'));
 }
 
 // Cancelling a ChainLinker job used to be a direct model update from the

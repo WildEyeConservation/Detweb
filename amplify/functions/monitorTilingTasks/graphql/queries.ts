@@ -1,5 +1,5 @@
 /* tslint:disable */
-/* eslint-disable */
+
 // GraphQL queries for monitorTilingTasks lambda
 
 export const tilingTasksByStatus = /* GraphQL */ `

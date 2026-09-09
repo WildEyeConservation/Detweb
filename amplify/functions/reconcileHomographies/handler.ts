@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { Handler } from 'aws-lambda';
 import { env } from '$amplify/env/reconcileHomographies';
 import { Amplify } from 'aws-amplify';
@@ -168,7 +169,7 @@ function invertHomography(H: number[]): number[] {
 }
 
 async function downloadManifest(manifestS3Key: string): Promise<ManifestItem[]> {
-  const bucketName = (env as any).OUTPUTS_BUCKET_NAME;
+  const bucketName = (env).OUTPUTS_BUCKET_NAME;
   if (!bucketName) throw new Error('OUTPUTS_BUCKET_NAME not set');
 
   const res = await s3Client.send(
@@ -182,7 +183,7 @@ async function downloadManifest(manifestS3Key: string): Promise<ManifestItem[]> 
 }
 
 async function deleteManifest(manifestS3Key: string): Promise<void> {
-  const bucketName = (env as any).OUTPUTS_BUCKET_NAME;
+  const bucketName = (env).OUTPUTS_BUCKET_NAME;
   if (!bucketName) return;
   try {
     await s3Client.send(
@@ -236,7 +237,7 @@ async function fetchAffectedImagesAndGraph(
         const res = (await client.graphql({
           query: getImageWithNeighboursQuery,
           variables: { id: imageId },
-        } as any)) as GraphQLResult<{ getImage?: ImageWithNeighbours | null }>;
+        })) as GraphQLResult<{ getImage?: ImageWithNeighbours | null }>;
 
         if (res.errors?.length) {
           console.warn(`Failed to fetch image ${imageId}:`, res.errors);
@@ -290,7 +291,7 @@ async function fetchNeighbourMetadata(
         const res = (await client.graphql({
           query: getImageMetaQuery,
           variables: { id: imageId },
-        } as any)) as GraphQLResult<{
+        })) as GraphQLResult<{
           getImage?: {
             id: string;
             timestamp: string | number | null;
@@ -339,7 +340,7 @@ async function fetchAnnotationsForImages(
               limit: 10000,
               nextToken,
             },
-          } as any)) as GraphQLResult<{
+          })) as GraphQLResult<{
             annotationsByImageIdAndSetId?: {
               items?: Array<{
                 id: string;
@@ -434,7 +435,7 @@ async function batchUpdate(
         await client.graphql({
           query: updateAnnotationMutation,
           variables: { input: update },
-        } as any);
+        });
         completed++;
         if (completed % 1000 === 0) {
           console.log(`Updated ${completed}/${updates.length} annotations`);
@@ -526,13 +527,13 @@ export const handler: Handler = async (event) => {
         updated: updates.length,
       }),
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('reconcileHomographies failed', error);
     return {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Reconciliation failed',
-        error: error?.message ?? 'Unknown error',
+        error: getErrorDetails(error)?.message ?? 'Unknown error',
       }),
     };
   }

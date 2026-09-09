@@ -8,12 +8,13 @@ from PIL import Image
 
 sys.modules.setdefault('onnxruntime', types.SimpleNamespace())
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'code'))
 from stormfly_detector import StormflyDetector
 
 
 class StormflyGraphQLTests(unittest.TestCase):
     def test_required_location_ids_use_non_null_graphql_variables(self):
-        source = Path(__file__).with_name('processSQS.py').read_text()
+        source = (Path(__file__).resolve().parents[1] / 'code' / 'processSQS.py').read_text()
 
         self.assertNotIn('$projectId: ID=""', source)
         self.assertNotIn("'$projectId: ID'", source)

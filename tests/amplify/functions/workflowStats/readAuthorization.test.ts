@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { authorizeWorkflowStatsItem, requireWorkflowStatsUser } from './readAuthorization';
+import { createRequire } from 'node:module';
+const backendModule = createRequire(import.meta.url)('../../../../amplify/functions/workflowStats/readAuthorization') as typeof import('../../../../amplify/functions/workflowStats/readAuthorization');
+const { authorizeWorkflowStatsItem, requireWorkflowStatsUser } = backendModule;
 
 test('ordinary organization members can read statistics without admin roles', () => {
   const user = { sub: 'member', groups: ['organization-a'] };

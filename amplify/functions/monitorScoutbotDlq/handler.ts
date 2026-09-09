@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { Handler } from 'aws-lambda';
 import { env } from '$amplify/env/monitorScoutbotDlq';
 import {
@@ -175,7 +176,7 @@ export const handler: Handler = async () => {
       }),
     };
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage = error instanceof Error ? getErrorDetails(error).message : 'Unknown error';
     console.error('Error in monitorScoutbotDlq:', error);
     return {
       statusCode: 500,

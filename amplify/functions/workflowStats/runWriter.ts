@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -104,7 +105,7 @@ export async function finishShadowWorkflowRun(
     console.error('Workflow statistics run finish failed', {
       runId: input.runId,
       status: input.status,
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? getErrorDetails(error).message : String(error),
     });
     return 'failed';
   }
@@ -129,7 +130,7 @@ export async function createShadowWorkflowRun(
     console.error('Workflow statistics run creation failed', {
       runId: input.runId,
       workflowType: input.workflowType,
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? getErrorDetails(error).message : String(error),
     });
     return false;
   }

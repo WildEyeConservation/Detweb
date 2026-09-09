@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { RunImageRegistrationHandler } from '../../data/resource';
 import { env } from '$amplify/env/runImageRegistration';
 import { Amplify } from 'aws-amplify';
@@ -278,7 +279,7 @@ async function handlePair(
           client.graphql({
             query: createImageNeighbour,
             variables: { input },
-          }) as Promise<GraphQLResult<any>>
+          }) as Promise<GraphQLResult<unknown>>
         );
       } catch (e: unknown) {
         const errors = ((): unknown[] => {
@@ -546,7 +547,7 @@ function addStalePairDeletionTasks(
               client.graphql({
                 query: deleteImageNeighbour,
                 variables: { input: { image1Id: lb.id, image2Id: rb.id } },
-              }) as Promise<GraphQLResult<any>>
+              }) as Promise<GraphQLResult<unknown>>
             );
             console.log(`Deleted stale pair ${lb.id} / ${rb.id}`);
           }
@@ -828,7 +829,7 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
               kickoff: true,
               group: organizationId ?? null,
             },
-          }) as Promise<GraphQLResult<any>>
+          }) as Promise<GraphQLResult<unknown>>
         );
         console.log(
           `RegistrationProgress: pairsCreated += ${messages.length}, kickoff stamped for project ${projectId}`
@@ -849,7 +850,7 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
     console.error('Error in runImageRegistration:', error);
     const errorDetails = (() => {
       if (error instanceof Error) {
-        return { message: error.message, stack: error.stack, name: error.name };
+        return { message: getErrorDetails(error).message, stack: getErrorDetails(error).stack, name: getErrorDetails(error).name };
       }
       return { message: String(error) };
     })();
@@ -860,7 +861,7 @@ export const handler: RunImageRegistrationHandler = async (event, context) => {
       body: JSON.stringify({
         message: 'Error running image registration',
         error:
-          error instanceof Error ? error.message : 'Unknown error occurred',
+          error instanceof Error ? getErrorDetails(error).message : 'Unknown error occurred',
       }),
     };
   }

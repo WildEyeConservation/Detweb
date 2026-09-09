@@ -1,5 +1,5 @@
 /* tslint:disable */
-/* eslint-disable */
+
 // GraphQL queries for processTilingBatch lambda
 
 export const getTilingBatch = /* GraphQL */ `

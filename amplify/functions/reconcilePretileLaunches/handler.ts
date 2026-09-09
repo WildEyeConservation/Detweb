@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { Handler } from 'aws-lambda';
 import { env } from '$amplify/env/reconcilePretileLaunches';
 import { Amplify } from 'aws-amplify';
@@ -109,9 +110,9 @@ type PretileManifest = {
 
 async function executeGraphql<T>(
   query: string,
-  variables: Record<string, any>
+  variables: Record<string, unknown>
 ): Promise<T> {
-  const resp = (await client.graphql({ query, variables } as any)) as GraphQLResult<T>;
+  const resp = (await client.graphql<unknown>({ query, variables })) as GraphQLResult<T>;
   if (resp.errors && resp.errors.length > 0) {
     throw new Error(
       `GraphQL error: ${JSON.stringify(resp.errors.map((e) => e.message))}`
@@ -150,9 +151,9 @@ async function loadManifest(key: string): Promise<PretileManifest | null> {
     const body = await resp.Body?.transformToString();
     if (!body) return null;
     return JSON.parse(body) as PretileManifest;
-  } catch (err: any) {
-    const status = err?.$metadata?.httpStatusCode;
-    if (status === 404 || err?.name === 'NoSuchKey') return null;
+  } catch (err) {
+    const status = getErrorDetails(err)?.$metadata?.httpStatusCode;
+    if (status === 404 || getErrorDetails(err)?.name === 'NoSuchKey') return null;
     throw err;
   }
 }

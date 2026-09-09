@@ -1,5 +1,5 @@
-import { LambdaClient, UpdateFunctionConfigurationCommand } from "@aws-sdk/client-lambda";
-import { env } from '$amplify/env/postDeploy'
+
+
 
 exports.handler = async () => {
 

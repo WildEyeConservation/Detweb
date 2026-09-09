@@ -1,3 +1,4 @@
+import { getErrorMessages } from '../../shared/errorMessage';
 import type { Handler } from 'aws-lambda';
 import { env } from '$amplify/env/releaseIndividualIdTransects';
 import { Amplify } from 'aws-amplify';
@@ -84,12 +85,12 @@ type ListResult = {
 
 async function executeGraphql<T>(
   query: string,
-  variables: Record<string, any>
+  variables: Record<string, unknown>
 ): Promise<T> {
-  const resp = (await client.graphql({
+  const resp = (await client.graphql<unknown>({
     query,
     variables,
-  } as any)) as GraphQLResult<T>;
+  })) as GraphQLResult<T>;
   if (resp.errors && resp.errors.length > 0) {
     throw new Error(
       `GraphQL error: ${JSON.stringify(resp.errors.map((e) => e.message))}`
@@ -99,13 +100,8 @@ async function executeGraphql<T>(
   return resp.data;
 }
 
-function isConditionalCheckFailed(err: any): boolean {
-  const msgs: string[] = [];
-  if (err?.message) msgs.push(String(err.message));
-  if (Array.isArray(err?.errors)) {
-    for (const e of err.errors) if (e?.message) msgs.push(String(e.message));
-  }
-  return msgs.some((m) => m.includes('ConditionalCheckFailed'));
+function isConditionalCheckFailed(error: unknown): boolean {
+  return getErrorMessages(error).some(message => message.includes('ConditionalCheckFailed'));
 }
 
 export const handler: Handler = async () => {
@@ -141,7 +137,7 @@ export const handler: Handler = async () => {
         // Optimistic lock: only release if the row hasn't changed since we
         // read it (no heartbeat landed in between). Does NOT touch the job's
         // remainingTransects counter — only completion decrements that.
-        const condition: Record<string, any> = { status: { eq: 'assigned' } };
+        const condition: Record<string, unknown> = { status: { eq: 'assigned' } };
         if (row.lastActiveAt) {
           condition.lastActiveAt = { eq: row.lastActiveAt };
         } else {

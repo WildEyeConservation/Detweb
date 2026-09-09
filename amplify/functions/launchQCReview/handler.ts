@@ -1,15 +1,11 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { LaunchQCReviewHandler } from '../../data/resource';
 import { env } from '$amplify/env/launchQCReview';
 import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 import type { GraphQLResult } from '@aws-amplify/api-graphql';
 import { authorizeRequest } from '../shared/authorizeRequest';
-import {
-  CreateQueueCommand,
-  GetQueueAttributesCommand,
-  SendMessageBatchCommand,
-  SQSClient,
-} from '@aws-sdk/client-sqs';
+import { CreateQueueCommand, SendMessageBatchCommand, SQSClient } from '@aws-sdk/client-sqs';
 import {
   S3Client,
   PutObjectCommand,
@@ -199,10 +195,10 @@ export const handler: LaunchQCReviewHandler = async (event) => {
       await setProjectStatus(payload.projectId, 'launching', {
         status: { eq: 'active' },
       });
-    } catch (err: any) {
-      const msg = err?.message ?? '';
-      const errMsgs = Array.isArray(err?.errors)
-        ? err.errors.map((e: any) => e?.message ?? '').join(' ')
+    } catch (err) {
+      const msg = getErrorDetails(err)?.message ?? '';
+      const errMsgs = Array.isArray(getErrorDetails(err)?.errors)
+        ? getErrorDetails(err).errors.map((e) => e?.message ?? '').join(' ')
         : '';
       if (msg.includes('ConditionalCheckFailed') || errMsgs.includes('ConditionalCheckFailed')) {
         console.warn('Launch rejected: project is not in active status', {
@@ -233,13 +229,13 @@ export const handler: LaunchQCReviewHandler = async (event) => {
       statusCode: 200,
       body: JSON.stringify(result),
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error launching QC review job', error);
     return {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Failed to launch QC review job',
-        error: error?.message ?? 'Unknown error',
+        error: getErrorDetails(error)?.message ?? 'Unknown error',
       }),
     };
   }
@@ -426,7 +422,7 @@ async function fetchAnnotationsByCategory(
   const pageLimit = 10000;
 
   do {
-    const variables: Record<string, any> = {
+    const variables: Record<string, unknown> = {
       categoryId,
       filter: { setId: { eq: annotationSetId } },
       limit: pageLimit,
@@ -633,12 +629,12 @@ function parsePayload(request: unknown): LaunchQCReviewPayload {
 
 async function executeGraphql<T>(
   query: string,
-  variables: Record<string, any>
+  variables: Record<string, unknown>
 ): Promise<T> {
-  const response = (await client.graphql({
+  const response = (await client.graphql<unknown>({
     query,
     variables,
-  } as any)) as GraphQLResult<T>;
+  })) as GraphQLResult<T>;
   if (response.errors && response.errors.length > 0) {
     throw new Error(
       `GraphQL error: ${JSON.stringify(

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { workflowTaskFromObservation } from './observationAdapter';
+import { createRequire } from 'node:module';
+const backendModule = createRequire(import.meta.url)('../../../../amplify/functions/workflowStats/observationAdapter') as typeof import('../../../../amplify/functions/workflowStats/observationAdapter');
+const { workflowTaskFromObservation } = backendModule;
 
 const observation = {
   id: 'observation-1',

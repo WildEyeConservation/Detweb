@@ -78,20 +78,20 @@ function serializeError(err: unknown): string {
 
 async function executeGraphql<T>(
   query: string,
-  variables: Record<string, any>
+  variables: Record<string, unknown>
 ): Promise<T> {
   let response: GraphQLResult<T>;
   try {
-    response = (await gqlClient.graphql({
+    response = (await gqlClient.graphql<unknown>({
       query,
       variables,
-    } as any)) as GraphQLResult<T>;
+    })) as GraphQLResult<T>;
   } catch (thrown) {
     // Amplify throws the raw response object on AppSync errors
     const asResult = thrown as GraphQLResult<T>;
     if (asResult?.errors?.length) {
       const messages = asResult.errors.map(
-        (e) => (e as any).message ?? serializeError(e)
+        (e) => (e).message ?? serializeError(e)
       );
       throw new Error(`GraphQL error: ${messages.join('; ')}`);
     }
@@ -99,7 +99,7 @@ async function executeGraphql<T>(
   }
   if (response.errors && response.errors.length > 0) {
     const messages = response.errors.map(
-      (e) => (e as any).message ?? serializeError(e)
+      (e) => (e).message ?? serializeError(e)
     );
     throw new Error(`GraphQL error: ${messages.join('; ')}`);
   }
@@ -116,7 +116,7 @@ interface PagedList<T> {
 
 async function fetchAllPages<T, K extends string>(
   queryString: string,
-  variables: Record<string, any>,
+  variables: Record<string, unknown>,
   queryName: K
 ): Promise<T[]> {
   const allItems: T[] = [];

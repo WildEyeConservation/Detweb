@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { LaunchHomographyHandler } from '../../data/resource';
 import { env } from '$amplify/env/launchHomography';
 import { Amplify } from 'aws-amplify';
@@ -168,13 +169,13 @@ export const handler: LaunchHomographyHandler = async (event) => {
     ).catch((err) => console.warn('Failed to update project memberships', err));
 
     return { statusCode: 200, body: JSON.stringify(result) };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error launching homography job', error);
     return {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Failed to launch homography job',
-        error: error?.message ?? 'Unknown error',
+        error: getErrorDetails(error)?.message ?? 'Unknown error',
       }),
     };
   }
@@ -363,12 +364,12 @@ function parsePayload(request: unknown): LaunchHomographyPayload {
 
 async function executeGraphql<T>(
   query: string,
-  variables: Record<string, any>
+  variables: Record<string, unknown>
 ): Promise<T> {
-  const response = (await client.graphql({
+  const response = (await client.graphql<unknown>({
     query,
     variables,
-  } as any)) as GraphQLResult<T>;
+  })) as GraphQLResult<T>;
   if (response.errors && response.errors.length > 0) {
     throw new Error(
       `GraphQL error: ${JSON.stringify(response.errors.map((err) => err.message))}`

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cameraFootprintWidth, trimmedMean } from './math.js';
+import { cameraFootprintWidth, trimmedMean } from '../src/math.js';
 
 test('cameraFootprintWidth matches the nadir strip formula', () => {
   const fieldOfView = 2 * Math.atan(36 / (2 * 50));

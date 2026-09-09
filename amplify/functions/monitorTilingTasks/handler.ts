@@ -1,3 +1,5 @@
+import type { LocationManifestEntry } from '../../shared/locationManifest';
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { Handler } from 'aws-lambda';
 import { env } from '$amplify/env/monitorTilingTasks';
 import { Amplify } from 'aws-amplify';
@@ -191,13 +193,13 @@ export const handler: Handler = async () => {
         tasksChecked: processingTasks.length,
       }),
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error monitoring tiling tasks', error);
     return {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Failed to monitor tiling tasks',
-        error: error?.message ?? 'Unknown error',
+        error: getErrorDetails(error)?.message ?? 'Unknown error',
       }),
     };
   }
@@ -311,7 +313,7 @@ async function processTask(task: TilingTaskRecord) {
         allowedCount: allowedImageIds.size
       });
 
-      // We need to map back to image IDs. 
+      // We need to map back to image IDs.
       // The merged locations (allLocations) are raw objects from the tiling batch output.
       // They should contain imageId.
       const filteredLocations = allLocations.filter(l => allowedImageIds.has(l.imageId));
@@ -437,12 +439,12 @@ async function processTask(task: TilingTaskRecord) {
     // Mark task as completed
     await updateTaskCompleted(task.id);
     console.log('Task completed successfully', { taskId: task.id });
-  } catch (error: any) {
-    const errorMessage = error?.message ?? (typeof error === 'string' ? error : JSON.stringify(error));
+  } catch (error) {
+    const errorMessage = getErrorDetails(error)?.message ?? (typeof error === 'string' ? error : JSON.stringify(error));
     console.error('Error processing task', {
       taskId: task.id,
       error: errorMessage,
-      stack: error?.stack,
+      stack: getErrorDetails(error)?.stack,
     });
     await updateTaskFailed(task.id, errorMessage ?? 'Unknown error');
     await setProjectStatus(task.projectId, 'active');
@@ -461,7 +463,7 @@ async function fetchProcessingTasks(): Promise<TilingTaskRecord[]> {
         limit: 100,
         nextToken,
       },
-    } as any)) as GraphQLResult<{
+    })) as GraphQLResult<{
       tilingTasksByStatus?: {
         items?: Array<TilingTaskRecord>;
         nextToken?: string | null;
@@ -498,7 +500,7 @@ async function fetchBatchesForTask(taskId: string): Promise<TilingBatchRecord[]>
         limit: 10000,
         nextToken,
       },
-    } as any)) as GraphQLResult<{
+    })) as GraphQLResult<{
       tilingBatchesByTaskId?: {
         items?: Array<TilingBatchRecord>;
         nextToken?: string | null;
@@ -523,13 +525,13 @@ async function fetchBatchesForTask(taskId: string): Promise<TilingBatchRecord[]>
   return batches;
 }
 
-async function mergeLocations(batches: TilingBatchRecord[]): Promise<any[]> {
+async function mergeLocations(batches: TilingBatchRecord[]): Promise<LocationManifestEntry[]> {
   const bucketName = env.OUTPUTS_BUCKET_NAME;
   if (!bucketName) {
     throw new Error('OUTPUTS_BUCKET_NAME environment variable not set');
   }
 
-  const allLocations: any[] = [];
+  const allLocations: LocationManifestEntry[] = [];
   const limit = pLimit(10);
 
   const downloadTasks = batches.map((batch) =>
@@ -552,7 +554,7 @@ async function mergeLocations(batches: TilingBatchRecord[]): Promise<any[]> {
         return [];
       }
 
-      return JSON.parse(bodyStr) as any[];
+      return JSON.parse(bodyStr) as LocationManifestEntry[];
     })
   );
 
@@ -610,7 +612,7 @@ async function createQueue(
   launchConfig: LaunchConfig,
   annotationSetId: string,
   locationSetId: string,
-  locations: any[],
+  locations: LocationManifestEntry[],
   group: string
 ): Promise<QueueRecord> {
   const queueNameSeed = `${queueOptions.name}-${randomUUID()}`;
@@ -680,7 +682,7 @@ async function createQueue(
 }
 
 // Write location info to S3 manifest for requeue detection
-async function writeLocationManifest(key: string, locations: any[]): Promise<void> {
+async function writeLocationManifest(key: string, locations: LocationManifestEntry[]): Promise<void> {
   const bucketName = env.OUTPUTS_BUCKET_NAME;
   if (!bucketName) {
     throw new Error('OUTPUTS_BUCKET_NAME environment variable not set');
@@ -735,7 +737,7 @@ async function enqueueLocations(
           MessageBody: messageBody,
           MessageGroupId: groupId,
           MessageDeduplicationId: messageBody
-            .replace(/[^a-zA-Z0-9\-_\.]/g, '')
+            .replace(/[^a-zA-Z0-9_.-]/g, '')
             .substring(0, 128),
         };
       }
@@ -827,12 +829,12 @@ async function updateTaskFailed(taskId: string, errorMessage: string): Promise<v
 
 async function executeGraphql<T>(
   query: string,
-  variables: Record<string, any>
+  variables: Record<string, unknown>
 ): Promise<T> {
-  const response = (await client.graphql({
+  const response = (await client.graphql<unknown>({
     query,
     variables,
-  } as any)) as GraphQLResult<T>;
+  })) as GraphQLResult<T>;
 
   if (response.errors && response.errors.length > 0) {
     throw new Error(

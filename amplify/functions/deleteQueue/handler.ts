@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { DeleteQueueHandler } from '../../data/resource';
 import { env } from '$amplify/env/deleteQueue';
 import { Amplify } from 'aws-amplify';
@@ -78,12 +79,12 @@ const sqsClient = new SQSClient();
 
 async function executeGraphql<T>(
   query: string,
-  variables: Record<string, any>
+  variables: Record<string, unknown>
 ): Promise<T> {
-  const response = (await gqlClient.graphql({
+  const response = (await gqlClient.graphql<unknown>({
     query,
     variables,
-  } as any)) as GraphQLResult<T>;
+  })) as GraphQLResult<T>;
   if (response.errors && response.errors.length > 0) {
     throw new Error(
       `GraphQL error: ${JSON.stringify(response.errors.map((err) => err.message))}`
@@ -159,9 +160,9 @@ export const handler: DeleteQueueHandler = async (event) => {
       try {
         await sqsClient.send(new DeleteQueueCommand({ QueueUrl: queue.url }));
         console.log(`Deleted SQS queue: ${queue.url}`);
-      } catch (err: any) {
+      } catch (err) {
         // Queue may already be deleted (e.g. by cleanup) — log but don't fail
-        if (err.name === 'QueueDoesNotExist' || err.name === 'AWS.SimpleQueueService.NonExistentQueue') {
+        if (getErrorDetails(err).name === 'QueueDoesNotExist' || getErrorDetails(err).name === 'AWS.SimpleQueueService.NonExistentQueue') {
           console.warn(`SQS queue already gone: ${queue.url}`);
         } else {
           throw err;
@@ -186,7 +187,7 @@ export const handler: DeleteQueueHandler = async (event) => {
     const isFnQueue = queue.name === 'False Negatives';
     if (!isFnQueue && queue.annotationSetId) {
       try {
-        const functionName = (env as any).RECONCILE_FALSE_NEGATIVES_FUNCTION_NAME;
+        const functionName = (env).RECONCILE_FALSE_NEGATIVES_FUNCTION_NAME;
         if (functionName) {
           const lambdaClient = new LambdaClient({
             region: env.AWS_REGION,
@@ -217,7 +218,7 @@ export const handler: DeleteQueueHandler = async (event) => {
     // 7. Trigger homography reconciliation for homography queues
     if (queue.tag === 'homography' && queue.annotationSetId) {
       try {
-        const functionName = (env as any).RECONCILE_HOMOGRAPHIES_FUNCTION_NAME;
+        const functionName = (env).RECONCILE_HOMOGRAPHIES_FUNCTION_NAME;
         if (functionName) {
           const lambdaClient = new LambdaClient({
             region: env.AWS_REGION,
@@ -249,7 +250,7 @@ export const handler: DeleteQueueHandler = async (event) => {
     console.log(`Queue ${queueId} deleted successfully`);
     return JSON.stringify({ success: true });
   } catch (err) {
-    console.error('deleteQueue failed:', err instanceof Error ? err.message : String(err));
+    console.error('deleteQueue failed:', err instanceof Error ? getErrorDetails(err).message : String(err));
     throw err instanceof Error ? err : new Error(String(err));
   }
 };

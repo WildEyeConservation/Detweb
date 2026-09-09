@@ -1,4 +1,6 @@
-﻿import type { ClaimIndividualIdTransectHandler } from '../../data/resource';
+import type { AppSyncIdentityCognito } from 'aws-lambda';
+import { getErrorMessages, getErrorDetails } from '../../shared/errorMessage';
+import type { ClaimIndividualIdTransectHandler } from '../../data/resource';
 import { env } from '$amplify/env/claimIndividualIdTransect';
 import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
@@ -96,12 +98,12 @@ type TransectsByJobIdResult = {
 
 async function executeGraphql<T>(
   query: string,
-  variables: Record<string, any>
+  variables: Record<string, unknown>
 ): Promise<T> {
-  const resp = (await client.graphql({
+  const resp = (await client.graphql<unknown>({
     query,
     variables,
-  } as any)) as GraphQLResult<T>;
+  })) as GraphQLResult<T>;
   if (resp.errors && resp.errors.length > 0) {
     throw new Error(
       `GraphQL error: ${JSON.stringify(resp.errors.map((e) => e.message))}`
@@ -111,13 +113,8 @@ async function executeGraphql<T>(
   return resp.data;
 }
 
-function isConditionalCheckFailed(err: any): boolean {
-  const msgs: string[] = [];
-  if (err?.message) msgs.push(String(err.message));
-  if (Array.isArray(err?.errors)) {
-    for (const e of err.errors) if (e?.message) msgs.push(String(e.message));
-  }
-  return msgs.some((m) => m.includes('ConditionalCheckFailed'));
+function isConditionalCheckFailed(error: unknown): boolean {
+  return getErrorMessages(error).some(message => message.includes('ConditionalCheckFailed'));
 }
 
 export const handler: ClaimIndividualIdTransectHandler = async (event) => {
@@ -126,7 +123,7 @@ export const handler: ClaimIndividualIdTransectHandler = async (event) => {
     if (!jobId) return { none: true, message: 'jobId required' };
 
     const userId =
-      (event.identity as any)?.sub ?? (event.identity as any)?.username;
+      (event.identity as AppSyncIdentityCognito | null)?.sub ?? (event.identity as AppSyncIdentityCognito | null)?.username;
     if (!userId) return { none: true, message: 'No caller identity' };
 
     const jobData = await executeGraphql<{ getIndividualIdJob?: JobRow | null }>(
@@ -200,8 +197,8 @@ export const handler: ClaimIndividualIdTransectHandler = async (event) => {
     }
 
     return { none: true, message: 'No transects available' };
-  } catch (error: any) {
+  } catch (error) {
     console.error('claimIndividualIdTransect error', error);
-    return { none: true, error: error?.message ?? 'Unknown error' };
+    return { none: true, error: getErrorDetails(error)?.message ?? 'Unknown error' };
   }
 };

@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { Handler } from 'aws-lambda';
 import { env } from '$amplify/env/reconcileFalseNegatives';
 import { Amplify } from 'aws-amplify';
@@ -315,13 +316,13 @@ export const handler: Handler = async (event) => {
         newPoolSize: updatedPool.poolSize,
       }),
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in reconcileFalseNegatives', error);
     return {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Reconciliation failed',
-        error: error?.message ?? 'Unknown error',
+        error: getErrorDetails(error)?.message ?? 'Unknown error',
       }),
     };
   }
@@ -349,7 +350,7 @@ async function fetchNormalAnnotations(
         limit: 10000,
         nextToken,
       },
-    } as any)) as GraphQLResult<{
+    })) as GraphQLResult<{
       annotationsByAnnotationSetId?: {
         items?: Array<{
           imageId?: string | null;
@@ -406,7 +407,7 @@ async function fetchNormalObservations(
         limit: 10000,
         nextToken,
       },
-    } as any)) as GraphQLResult<{
+    })) as GraphQLResult<{
       observationsByAnnotationSetId?: {
         items?: Array<{
           locationId?: string | null;
@@ -490,7 +491,7 @@ async function deleteFnDataForTiles(
         limit: 10000,
         nextToken,
       },
-    } as any)) as GraphQLResult<{
+    })) as GraphQLResult<{
       annotationsByAnnotationSetId?: {
         items?: Array<{
           id?: string | null;
@@ -529,7 +530,7 @@ async function deleteFnDataForTiles(
             await client.graphql({
               query: deleteAnnotationMutation,
               variables: { input: { id: item!.id } },
-            } as any);
+            });
             deletedAnnotations++;
           } catch (err) {
             console.warn('Failed to delete annotation', {
@@ -557,7 +558,7 @@ async function deleteFnDataForTiles(
         limit: 10000,
         nextToken: nextTokenObs,
       },
-    } as any)) as GraphQLResult<{
+    })) as GraphQLResult<{
       observationsByAnnotationSetId?: {
         items?: Array<{
           id?: string | null;
@@ -589,7 +590,7 @@ async function deleteFnDataForTiles(
             await client.graphql({
               query: deleteObservationMutation,
               variables: { input: { id: item!.id } },
-            } as any);
+            });
             deletedObservations++;
           } catch (err) {
             console.warn('Failed to delete observation', {
@@ -625,9 +626,9 @@ async function loadFnPool(
     const bodyStr = await response.Body?.transformToString();
     if (!bodyStr) return null;
     return JSON.parse(bodyStr) as FnPool;
-  } catch (error: any) {
-    if (error?.name === 'NoSuchKey' || error?.Code === 'NoSuchKey') return null;
-    console.warn('Failed to load FN pool', { key, error: error?.message });
+  } catch (error) {
+    if (getErrorDetails(error)?.name === 'NoSuchKey' || getErrorDetails(error).code === 'NoSuchKey') return null;
+    console.warn('Failed to load FN pool', { key, error: getErrorDetails(error)?.message });
     return null;
   }
 }
@@ -645,9 +646,9 @@ async function loadFnHistory(
     const bodyStr = await response.Body?.transformToString();
     if (!bodyStr) return null;
     return JSON.parse(bodyStr) as FnHistory;
-  } catch (error: any) {
-    if (error?.name === 'NoSuchKey' || error?.Code === 'NoSuchKey') return null;
-    console.warn('Failed to load FN history', { key, error: error?.message });
+  } catch (error) {
+    if (getErrorDetails(error)?.name === 'NoSuchKey' || getErrorDetails(error).code === 'NoSuchKey') return null;
+    console.warn('Failed to load FN history', { key, error: getErrorDetails(error)?.message });
     return null;
   }
 }

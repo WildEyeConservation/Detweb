@@ -29,7 +29,7 @@ interface FieldDefinition {
 interface ModelDefinition {
   name: string;
   fields: Record<string, FieldDefinition>;
-  attributes?: Array<Record<string, any>>;
+  attributes?: Array<Record<string, unknown>>;
   primaryKeyInfo?: {
     primaryKeyFieldName: string;
     sortKeyFieldNames?: string[];
@@ -260,16 +260,6 @@ const READONLY_FIELD_NAMES = new Set(['createdat', 'updatedat']);
 
 const SINGLE_INDENT = '  ';
 
-function indent(text: string, depth = 1): string {
-  if (!text) {
-    return '';
-  }
-  const padding = SINGLE_INDENT.repeat(depth);
-  return text
-    .split('\n')
-    .map((line) => (line ? padding + line : line))
-    .join('\n');
-}
 
 function sortKeys<T>(record: Record<string, T> | undefined): string[] {
   return record ? Object.keys(record).sort((a, b) => a.localeCompare(b)) : [];
@@ -357,36 +347,6 @@ function shouldIncludeFieldInInput(field: FieldDefinition): boolean {
   return !field.association;
 }
 
-function buildObjectType(
-  fields: Array<[string, FieldDefinition]>,
-  options: FieldTypingOptions = {}
-): string {
-  if (!fields.length) {
-    return '{}';
-  }
-
-  const lines: string[] = ['{'];
-
-  for (const [fieldName, field] of fields) {
-    const { type, optional } = getFieldTyping(field, options);
-    lines.push(
-      `${SINGLE_INDENT}${fieldName}${optional ? '?' : ''}: ${type};`
-    );
-  }
-
-  lines.push('}');
-  return lines.join('\n');
-}
-
-function toPascalCase(value: string): string {
-  return value
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/[-_\s]+/g, ' ')
-    .split(' ')
-    .filter(Boolean)
-    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join('');
-}
 
 /* -------------------------------------------------------------------------- */
 /*                          Types File (types.ts)                             */
@@ -615,7 +575,7 @@ function buildTypesFile(intro: IntrospectionData): string {
 /* -------------------------------------------------------------------------- */
 function buildDataSchemaFile(intro: IntrospectionData): string {
   const modelNames = sortKeys(intro.models);
-  const enumNames = sortKeys(intro.enums);
+
   const queryNames = sortKeys(intro.queries);
   const mutationNames = sortKeys(intro.mutations);
   const subscriptionNames = sortKeys(intro.subscriptions);

@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { Handler } from 'aws-lambda';
 import { env } from '$amplify/env/monitorModelProgress';
 import { Amplify } from 'aws-amplify';
@@ -428,7 +429,7 @@ async function finalizeProjectActive(project: Project): Promise<void> {
   console.log(`Successfully updated project ${project.id} status to "active"`);
 }
 
-export const handler: Handler = async (event, context) => {
+export const handler: Handler = async () => {
   console.log('Starting monitorModelProgress function execution');
   try {
     console.log('Fetching projects with status "processing"');
@@ -638,18 +639,18 @@ export const handler: Handler = async (event, context) => {
         message: 'Project status monitoring completed successfully',
       }),
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in monitorModelProgress:', error);
     console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name,
+      message: getErrorDetails(error).message,
+      stack: getErrorDetails(error).stack,
+      name: getErrorDetails(error).name,
     });
     return {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Error monitoring project status',
-        error: error.message,
+        error: getErrorDetails(error).message,
       }),
     };
   }

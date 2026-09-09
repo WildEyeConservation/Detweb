@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import { env } from '$amplify/env/createChainShare';
 import { Amplify } from 'aws-amplify';
 import { generateClient, GraphQLResult } from 'aws-amplify/data';
@@ -9,7 +10,7 @@ import { authorizeRequest } from '../shared/authorizeRequest';
  * SharedChain* tables, stamped with group `chainshare-<shareId>`. Mirrors the
  * IAM data-client pattern used by deleteProject.
  *
- * Scope (see src/chain-viewer/utils/herdPairs.ts): the herd view only builds
+ * Scope (see src/features/chain-viewer/utils/herdPairs.ts): the herd view only builds
  * pairs among *annotated* images, and cross-camera crossovers require a direct
  * registered neighbour between annotated images. So we snapshot only annotated
  * images plus neighbours incident to them — bounded to the set's footprint, not
@@ -147,7 +148,7 @@ const createChainShare = /* GraphQL */ `
 `;
 
 // --- selectSourceKeyForImage (kept in sync with -------------------------------
-// --- src/chain-viewer/utils/imageSourceKey.ts; src cannot be imported here) ---
+// --- src/features/chain-viewer/utils/imageSourceKey.ts; src cannot be imported here) ---
 
 interface ImageFileRow {
   key?: string | null;
@@ -627,7 +628,7 @@ export const handler: CreateChainShareHandler = async (event) => {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Error creating chain share',
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? getErrorDetails(error).message : String(error),
       }),
     };
   }

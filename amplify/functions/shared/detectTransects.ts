@@ -1,6 +1,6 @@
 // Timestamp-gap transect detection.
 //
-// The old turf-based approach (src/survey/DefineTransects.tsx) simplifies the
+// The old turf-based approach (src/features/surveys/DefineTransects.tsx) simplifies the
 // GPS track and occasionally splits a straight line into two transects. For
 // the Individual ID workflow we only need a "good enough 99% of the time"
 // segmentation, so we use a far more robust signal: the time gap between

@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { DynamoDBStreamHandler } from "aws-lambda";
 import { Logger } from "@aws-lambda-powertools/logger";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
@@ -33,7 +34,7 @@ async function getOrganizationId(projectId: string): Promise<string | undefined>
   } catch (error) {
     logger.error("Failed to fetch organizationId for project", {
       projectId,
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? getErrorDetails(error).message : String(error),
     });
     return undefined;
   }
@@ -98,13 +99,13 @@ export const handler: DynamoDBStreamHandler = async (event) => {
             })
           );
           logger.info(`Set group for location ${locationId}`);
-        } catch (error: any) {
+        } catch (error) {
           // ConditionalCheckFailedException means group was already set (race condition) — safe to ignore
-          if (error.name === "ConditionalCheckFailedException") {
+          if (getErrorDetails(error).name === "ConditionalCheckFailedException") {
             logger.info(`Location ${locationId} already has group set, skipping`);
           } else {
             logger.error(`Failed to update location ${locationId}`, {
-              error: error instanceof Error ? error.message : String(error),
+              error: error instanceof Error ? getErrorDetails(error).message : String(error),
             });
           }
         }

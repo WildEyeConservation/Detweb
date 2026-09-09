@@ -24,7 +24,7 @@ function metricAutoscalingQueueDemand(
   });
 }
 
-function createUserData(inputqueue: any,outputqueue: any) {
+function createUserData(inputqueue: sqs.IQueue, outputqueue: sqs.IQueue) {
   const multipartUserData = new ec2.MultipartUserData();
   const commandsUserData = ec2.UserData.forLinux();
   multipartUserData.addUserDataPart(
@@ -138,7 +138,7 @@ export class AutoProcessor extends Construct {
     const taskDefinition = new ecs.Ec2TaskDefinition(this, 'ProcessorTaskDef',{ taskRole: ecsTaskRole });
 
     // Add container to task definition
-    const container = taskDefinition.addContainer('ProcessorContainer', {
+    taskDefinition.addContainer('ProcessorContainer', {
       image: ecsImage,
       memoryLimitMiB : memoryLimitMiB || 1024,
       gpuCount,

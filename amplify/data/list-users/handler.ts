@@ -28,7 +28,7 @@ async function listAllUsers(nextToken?: string | null) {
   })
   const response = await client.send(command)
   return {
-    Users: response.Users?.map(mapUser) as any,
+    Users: response.Users?.map(mapUser),
     NextToken: response.PaginationToken || null,
   }
 }
@@ -69,7 +69,7 @@ export const handler: Handler = async (event) => {
 
   // No org groups → empty list
   if (orgIds.length === 0) {
-    return { Users: [] as any, NextToken: null }
+    return { Users: [], NextToken: null }
   }
 
   // Fetch users from each org group and deduplicate
@@ -86,7 +86,7 @@ export const handler: Handler = async (event) => {
   }
 
   return {
-    Users: deduped.map(mapUser) as any,
+    Users: deduped.map(mapUser),
     NextToken: null,
   }
 }

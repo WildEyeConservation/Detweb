@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import { env } from '$amplify/env/deleteProject';
 import { Amplify } from 'aws-amplify';
 import type { DeleteProjectInFullHandler } from '../../data/resource';
@@ -26,7 +27,7 @@ import {
   Project,
   UserProjectMembership,
   Image,
-  Object,
+  Object as SchemaObject,
   TasksOnAnnotationSet,
   ImageSetMembership,
   ImageFile,
@@ -301,7 +302,9 @@ export const handler: DeleteProjectInFullHandler = async (event) => {
           },
         },
       })
-    ).data?.listImageSets.items;
+    ).data?.listImageSets.items ?? [];
+
+    if (!imageSet) throw new Error('Project image set was not found');
 
     // delete the image set for the project
     await client.graphql({
@@ -326,7 +329,7 @@ export const handler: DeleteProjectInFullHandler = async (event) => {
               },
             },
           })
-        ).data?.listImageSets.items;
+        ).data?.listImageSets.items ?? [];
 
         // can't delete S3 data since another project references it
         if (otherImageSet?.name === imageSet?.name) {
@@ -508,12 +511,12 @@ export const handler: DeleteProjectInFullHandler = async (event) => {
     );
 
     // delete all objects
-    const objects = await fetchAllPages<Object, 'listObjects'>(
+    const objects = await fetchAllPages<SchemaObject, 'listObjects'>(
       (nextToken) =>
         client.graphql({
           query: listObjects,
           variables: { filter: { projectId: { eq: projectId } }, nextToken },
-        }) as Promise<GraphQLResult<{ listObjects: PagedList<Object> }>>,
+        }) as Promise<GraphQLResult<{ listObjects: PagedList<SchemaObject> }>>,
       'listObjects'
     );
 
@@ -639,14 +642,14 @@ export const handler: DeleteProjectInFullHandler = async (event) => {
         message: 'Project deleted',
       }),
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error details:', error);
 
     return {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Error deleting project',
-        error: error.message,
+        error: getErrorDetails(error).message,
       }),
     };
   }

@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -135,7 +136,7 @@ export const handler: RecordWorkflowTaskHandler = async (event) => {
     logger.error('Failed to record workflow task', {
       workflowRunId: task.workflowRunId,
       workItemId: task.workItemId,
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? getErrorDetails(error).message : String(error),
     });
     throw error;
   }

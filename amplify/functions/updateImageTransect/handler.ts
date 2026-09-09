@@ -54,12 +54,12 @@ interface MessageBody {
 
 async function executeGraphql<T>(
   query: string,
-  variables: Record<string, any>
+  variables: Record<string, unknown>
 ): Promise<T> {
-  const resp = (await client.graphql({
+  const resp = (await client.graphql<unknown>({
     query,
     variables,
-  } as any)) as GraphQLResult<T>;
+  })) as GraphQLResult<T>;
   if (resp.errors && resp.errors.length > 0) {
     throw new Error(
       `GraphQL error: ${JSON.stringify(resp.errors.map((e) => e.message))}`

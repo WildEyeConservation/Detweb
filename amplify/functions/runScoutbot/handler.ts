@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { RunScoutbotHandler } from '../../data/resource';
 import { env } from '$amplify/env/runScoutbot';
 import { Amplify } from 'aws-amplify';
@@ -114,7 +115,7 @@ export const handler: RunScoutbotHandler = async (event, context) => {
             }),
           })
         );
-      } catch (err: any) {
+      } catch (err) {
         console.error(
           `Error sending SQS message for chunk starting at index ${processed}`,
           err
@@ -145,7 +146,7 @@ export const handler: RunScoutbotHandler = async (event, context) => {
               ),
             })
           );
-        } catch (err: any) {
+        } catch (err) {
           console.error(
             'Error re-invoking lambda with remaining images',
             err
@@ -167,18 +168,18 @@ export const handler: RunScoutbotHandler = async (event, context) => {
         count: images.length,
       }),
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in runScoutbot:', error);
     console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name,
+      message: getErrorDetails(error).message,
+      stack: getErrorDetails(error).stack,
+      name: getErrorDetails(error).name,
     });
     return {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Error running scoutbot',
-        error: error.message,
+        error: getErrorDetails(error).message,
       }),
     };
   }

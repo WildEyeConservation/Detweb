@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { LaunchInfoTagsHandler } from '../../data/resource';
 import { env } from '$amplify/env/launchInfoTags';
 import { Amplify } from 'aws-amplify';
@@ -176,10 +177,10 @@ export const handler: LaunchInfoTagsHandler = async (event) => {
       await setProjectStatus(payload.projectId, 'launching', {
         status: { eq: 'active' },
       });
-    } catch (err: any) {
-      const msg = err?.message ?? '';
-      const errorMessages = Array.isArray(err?.errors)
-        ? err.errors.map((item: any) => item?.message ?? '').join(' ')
+    } catch (err) {
+      const msg = getErrorDetails(err)?.message ?? '';
+      const errorMessages = Array.isArray(getErrorDetails(err)?.errors)
+        ? getErrorDetails(err).errors.map((item) => item?.message ?? '').join(' ')
         : '';
       if (
         msg.includes('ConditionalCheckFailed') ||
@@ -218,13 +219,13 @@ export const handler: LaunchInfoTagsHandler = async (event) => {
     );
 
     return { statusCode: 200, body: JSON.stringify(result) };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error launching informational tagging job', error);
     return {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Failed to launch informational tagging job',
-        error: error?.message ?? 'Unknown error',
+        error: getErrorDetails(error)?.message ?? 'Unknown error',
       }),
     };
   }
@@ -523,10 +524,10 @@ async function executeGraphql<T>(
   query: string,
   variables: Record<string, unknown>
 ): Promise<T> {
-  const response = (await client.graphql({
+  const response = (await client.graphql<unknown>({
     query,
     variables,
-  } as any)) as GraphQLResult<T>;
+  })) as GraphQLResult<T>;
   if (response.errors?.length) {
     throw new Error(
       `GraphQL error: ${JSON.stringify(

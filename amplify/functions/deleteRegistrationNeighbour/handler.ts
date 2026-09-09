@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { SQSEvent, SQSBatchResponse, SQSBatchItemFailure } from 'aws-lambda';
 import { env } from '$amplify/env/deleteRegistrationNeighbour';
 import { Amplify } from 'aws-amplify';
@@ -68,7 +69,7 @@ export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
         })) as GraphQLResult<unknown>;
       } catch (e) {
         // Already-deleted is the desired end state.
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = e instanceof Error ? (getErrorDetails(e).message ?? '') : String(e);
         const isNotFound =
           msg.includes('ConditionalCheckFailedException') ||
           msg.includes('Cannot return null') ||

@@ -6,7 +6,7 @@ import {
   composedOrientation,
   normalizeCorrection,
   normalizeImageOrientation,
-} from './orientation.mjs';
+} from '../../../../amplify/storage/handleS3Upload/orientation.mjs';
 
 test('normalizes supported correction values', () => {
   assert.equal(normalizeCorrection('90'), 90);

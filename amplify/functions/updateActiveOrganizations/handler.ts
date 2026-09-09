@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { UpdateActiveOrganizationsHandler } from '../../data/resource';
 import { env } from '$amplify/env/updateActiveOrganizations';
 import { Amplify } from 'aws-amplify';
@@ -70,12 +71,12 @@ const cognitoClient = new CognitoIdentityProviderClient();
 
 async function executeGraphql<T>(
   query: string,
-  variables: Record<string, any>
+  variables: Record<string, unknown>
 ): Promise<T> {
-  const response = (await gqlClient.graphql({
+  const response = (await gqlClient.graphql<unknown>({
     query,
     variables,
-  } as any)) as GraphQLResult<T>;
+  })) as GraphQLResult<T>;
   if (response.errors && response.errors.length > 0) {
     throw new Error(
       `GraphQL error: ${JSON.stringify(response.errors.map((err) => err.message))}`
@@ -209,7 +210,7 @@ export const handler: UpdateActiveOrganizationsHandler = async (event) => {
   } catch (err) {
     console.error(
       'updateActiveOrganizations failed:',
-      err instanceof Error ? err.message : String(err)
+      err instanceof Error ? getErrorDetails(err).message : String(err)
     );
     throw err instanceof Error ? err : new Error(String(err));
   }

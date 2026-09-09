@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { RespondToInviteHandler } from '../../data/resource';
 import { env } from '$amplify/env/respondToInvite';
 import { Amplify } from 'aws-amplify';
@@ -62,12 +63,12 @@ const cognitoClient = new CognitoIdentityProviderClient();
 
 async function executeGraphql<T>(
   query: string,
-  variables: Record<string, any>
+  variables: Record<string, unknown>
 ): Promise<T> {
-  const response = (await gqlClient.graphql({
+  const response = (await gqlClient.graphql<unknown>({
     query,
     variables,
-  } as any)) as GraphQLResult<T>;
+  })) as GraphQLResult<T>;
   if (response.errors && response.errors.length > 0) {
     throw new Error(
       `GraphQL error: ${JSON.stringify(response.errors.map((err) => err.message))}`
@@ -159,7 +160,7 @@ export const handler: RespondToInviteHandler = async (event) => {
     console.log(`Invite ${inviteId} accepted, user ${callerSub} added to org ${invite.organizationId} (cognitoGroup: ${addedToGroup})`);
     return JSON.stringify({ success: true, action: 'accepted', addedToGroup });
   } catch (err) {
-    console.error('respondToInvite failed:', err instanceof Error ? err.message : String(err));
+    console.error('respondToInvite failed:', err instanceof Error ? getErrorDetails(err).message : String(err));
     throw err instanceof Error ? err : new Error(String(err));
   }
 };

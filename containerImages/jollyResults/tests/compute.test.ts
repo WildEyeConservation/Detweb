@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SurveyAccumulator } from './compute.js';
+import { SurveyAccumulator } from '../src/compute.js';
 
 function createAccumulator(
   transectIds: string[] = ['transect-1']

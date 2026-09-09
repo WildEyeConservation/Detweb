@@ -1,3 +1,5 @@
+import type { LocationManifestEntry } from '../../shared/locationManifest';
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { Handler } from 'aws-lambda';
 import { env } from '$amplify/env/processTilingBatch';
 import { Amplify } from 'aws-amplify';
@@ -180,11 +182,11 @@ export const handler: Handler = async (event) => {
     // Chain to next batch for sequential processing
     try {
       await invokeNextBatch(batch.tilingTaskId, batch.batchIndex, depth);
-    } catch (chainError: any) {
+    } catch (chainError) {
       console.error('Failed to invoke next batch', {
         batchId,
         tilingTaskId: batch.tilingTaskId,
-        error: chainError?.message,
+        error: getErrorDetails(chainError)?.message,
       });
       // Don't fail the current batch if chaining fails - monitor will pick up
     }
@@ -197,9 +199,9 @@ export const handler: Handler = async (event) => {
         createdCount: createdLocationIds.length,
       }),
     };
-  } catch (error: any) {
-    const errorMessage = error?.message ?? (typeof error === 'string' ? error : JSON.stringify(error));
-    console.error('Error processing batch', { batchId, error: errorMessage, stack: error?.stack, raw: error });
+  } catch (error) {
+    const errorMessage = getErrorDetails(error)?.message ?? (typeof error === 'string' ? error : JSON.stringify(error));
+    console.error('Error processing batch', { batchId, error: errorMessage, stack: getErrorDetails(error)?.stack, raw: error });
 
     // Update batch as failed
     await updateBatchFailed(batchId, errorMessage ?? 'Unknown error');
@@ -215,7 +217,7 @@ export const handler: Handler = async (event) => {
   }
 };
 
-function parsePayload(event: any): ProcessBatchPayload {
+function parsePayload(event: { batchId?: string; depth?: number; arguments?: { batchId?: string; depth?: number }; body?: string }): ProcessBatchPayload {
   // Handle both direct invocation and Lambda event formats
   if (event.batchId) {
     return { batchId: event.batchId, depth: event.depth ?? 0 };
@@ -268,9 +270,9 @@ async function downloadLocationsFromS3(key: string): Promise<LocationInput[]> {
   return JSON.parse(bodyStr) as LocationInput[];
 }
 
-async function createLocationsInDb(locations: LocationInput[], organizationId: string): Promise<any[]> {
+async function createLocationsInDb(locations: LocationInput[], organizationId: string): Promise<LocationManifestEntry[]> {
   const limit = pLimit(100);
-  const createdLocations: any[] = [];
+  const createdLocations: LocationManifestEntry[] = [];
   let createdCount = 0;
 
   const tasks = locations.map((location) =>
@@ -334,7 +336,7 @@ async function deleteS3File(key: string): Promise<void> {
   );
 }
 
-async function writeOutputToS3(batchId: string, locations: any[]): Promise<string> {
+async function writeOutputToS3(batchId: string, locations: LocationManifestEntry[]): Promise<string> {
   const bucketName = env.OUTPUTS_BUCKET_NAME;
   if (!bucketName) {
     throw new Error('OUTPUTS_BUCKET_NAME environment variable not set');
@@ -457,12 +459,12 @@ async function invokeNextBatch(tilingTaskId: string, currentBatchIndex: number, 
 
 async function executeGraphql<T>(
   query: string,
-  variables: Record<string, any>
+  variables: Record<string, unknown>
 ): Promise<T> {
-  const response = (await client.graphql({
+  const response = (await client.graphql<unknown>({
     query,
     variables,
-  } as any)) as GraphQLResult<T>;
+  })) as GraphQLResult<T>;
 
   if (response.errors && response.errors.length > 0) {
     throw new Error(

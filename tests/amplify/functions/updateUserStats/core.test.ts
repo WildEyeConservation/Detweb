@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
+import { createRequire } from 'node:module';
+const backendModule = createRequire(import.meta.url)('../../../../amplify/functions/updateUserStats/core') as typeof import('../../../../amplify/functions/updateUserStats/core');
+const {
   buildQueueTransaction,
   buildStatsTransaction,
   isTransactionConflict,
@@ -8,7 +10,7 @@ import {
   statsDeltaFromObservation,
   statsReceiptId,
   transactionConflictDelayMs,
-} from './core';
+} = backendModule;
 
 const observation = {
   id: 'observation-1',

@@ -42,7 +42,7 @@ def _load_worker():
         'API_ENDPOINT': 'https://appsync.example/graphql',
     }
     spec = importlib.util.spec_from_file_location(
-        'owl_d_process_sqs_tested', Path(__file__).with_name('processSQS.py')
+        'owl_d_process_sqs_tested', Path(__file__).resolve().parents[1] / 'code' / 'processSQS.py'
     )
     module = importlib.util.module_from_spec(spec)
     with patch.dict(sys.modules, stubs), patch.dict(os.environ, environment, clear=False):

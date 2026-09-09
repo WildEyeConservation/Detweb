@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { Handler } from "aws-lambda";
 import { env } from "$amplify/env/cleanupJobs";
 import { Amplify } from "aws-amplify";
@@ -109,7 +110,7 @@ async function fetchAllPages<T, K extends string>(
   return allItems;
 }
 
-export const handler: Handler = async (event, context) => {
+export const handler: Handler = async () => {
   console.log("Starting cleanupJobs function execution");
   try {
     console.log("Fetching all queues");
@@ -344,7 +345,7 @@ export const handler: Handler = async (event, context) => {
         if (isHomographyQueue && queue.annotationSetId) {
           // Trigger homography reconciliation — pass manifest key for targeted dedup
           try {
-            const functionName = (env as any).RECONCILE_HOMOGRAPHIES_FUNCTION_NAME;
+            const functionName = (env).RECONCILE_HOMOGRAPHIES_FUNCTION_NAME;
             if (functionName) {
               const lambdaClient = new LambdaClient({
                 region: env.AWS_REGION,
@@ -378,7 +379,7 @@ export const handler: Handler = async (event, context) => {
         } else if (!isFnQueue && !isHomographyQueue && queue.annotationSetId) {
           // Trigger FN pool reconciliation for species labelling queues
           try {
-            const functionName = (env as any).RECONCILE_FALSE_NEGATIVES_FUNCTION_NAME;
+            const functionName = (env).RECONCILE_FALSE_NEGATIVES_FUNCTION_NAME;
             if (functionName) {
               const lambdaClient = new LambdaClient({
                 region: env.AWS_REGION,
@@ -433,7 +434,7 @@ export const handler: Handler = async (event, context) => {
       (client.graphql({
         query: updateProjectMembershipsMutation,
         variables: { projectId },
-      }) as Promise<any>).catch((err: any) => console.warn('Failed to update project memberships', err));
+      }) as Promise<unknown>).catch((err: unknown) => console.warn('Failed to update project memberships', err));
     }
 
     console.log("Job status monitoring completed successfully");
@@ -443,18 +444,18 @@ export const handler: Handler = async (event, context) => {
         message: "Job status monitoring completed successfully",
       }),
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error in cleanupJobs:", error);
     console.error("Error details:", {
-      message: error.message,
-      stack: error.stack,
-      name: error.name,
+      message: getErrorDetails(error).message,
+      stack: getErrorDetails(error).stack,
+      name: getErrorDetails(error).name,
     });
     return {
       statusCode: 500,
       body: JSON.stringify({
         message: "Error monitoring job status",
-        error: error.message,
+        error: getErrorDetails(error).message,
       }),
     };
   }

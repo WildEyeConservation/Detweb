@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { LaunchFalseNegativesHandler } from '../../data/resource';
 import { env } from '$amplify/env/launchFalseNegatives';
 import { Amplify } from 'aws-amplify';
@@ -24,11 +25,7 @@ import {
   createShadowWorkflowRun,
   workflowLaunchUserId,
 } from '../workflowStats/runWriter';
-import {
-  locationsBySetIdAndConfidence,
-  annotationsByAnnotationSetId,
-  imagesByProjectId,
-} from './graphql/queries';
+import { annotationsByAnnotationSetId, imagesByProjectId } from './graphql/queries';
 
 // Inline minimal mutations – return key fields + `group` to avoid nested-resolver
 // auth failures while still enabling subscription delivery via groupDefinedIn('group').
@@ -56,11 +53,6 @@ const updateLocationSetMutation = /* GraphQL */ `
   }
 `;
 
-const createLocationMutation = /* GraphQL */ `
-  mutation CreateLocation($input: CreateLocationInput!) {
-    createLocation(input: $input) { id group }
-  }
-`;
 
 const createTasksOnAnnotationSetMutation = /* GraphQL */ `
   mutation CreateTasksOnAnnotationSet($input: CreateTasksOnAnnotationSetInput!) {
@@ -318,10 +310,10 @@ export const handler: LaunchFalseNegativesHandler = async (event) => {
       await setProjectStatus(payload.projectId, 'launching', {
         status: { eq: 'active' },
       });
-    } catch (err: any) {
-      const msg = err?.message ?? '';
-      const errMsgs = Array.isArray(err?.errors)
-        ? err.errors.map((e: any) => e?.message ?? '').join(' ')
+    } catch (err) {
+      const msg = getErrorDetails(err)?.message ?? '';
+      const errMsgs = Array.isArray(getErrorDetails(err)?.errors)
+        ? getErrorDetails(err).errors.map((e) => e?.message ?? '').join(' ')
         : '';
       if (msg.includes('ConditionalCheckFailed') || errMsgs.includes('ConditionalCheckFailed')) {
         console.warn('Launch rejected: project is not in active status', {
@@ -357,7 +349,7 @@ export const handler: LaunchFalseNegativesHandler = async (event) => {
       statusCode: 200,
       body: JSON.stringify(result),
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error launching false negatives job', error);
     // Attempt to clean up even on error to avoid orphaned files.
     if (payloadS3Key) {
@@ -371,7 +363,7 @@ export const handler: LaunchFalseNegativesHandler = async (event) => {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Failed to launch false negatives job',
-        error: error?.message ?? 'Unknown error',
+        error: getErrorDetails(error)?.message ?? 'Unknown error',
       }),
     };
   }
@@ -1288,9 +1280,9 @@ async function loadFnPool(
     const bodyStr = await response.Body?.transformToString();
     if (!bodyStr) return null;
     return JSON.parse(bodyStr) as FnPool;
-  } catch (error: any) {
-    if (error?.name === 'NoSuchKey' || error?.Code === 'NoSuchKey') return null;
-    console.warn('Failed to load FN pool', { key, error: error?.message });
+  } catch (error) {
+    if (getErrorDetails(error)?.name === 'NoSuchKey' || getErrorDetails(error).code === 'NoSuchKey') return null;
+    console.warn('Failed to load FN pool', { key, error: getErrorDetails(error)?.message });
     return null;
   }
 }
@@ -1319,7 +1311,7 @@ async function saveFnPool(
   } catch (error) {
     console.warn('Failed to save FN pool to S3', {
       key,
-      error: error instanceof Error ? error.message : 'unknown error',
+      error: error instanceof Error ? getErrorDetails(error).message : 'unknown error',
     });
   }
 }
@@ -1340,9 +1332,9 @@ async function loadFnHistory(
     const bodyStr = await response.Body?.transformToString();
     if (!bodyStr) return null;
     return JSON.parse(bodyStr) as FnHistory;
-  } catch (error: any) {
-    if (error?.name === 'NoSuchKey' || error?.Code === 'NoSuchKey') return null;
-    console.warn('Failed to load FN history', { key, error: error?.message });
+  } catch (error) {
+    if (getErrorDetails(error)?.name === 'NoSuchKey' || getErrorDetails(error).code === 'NoSuchKey') return null;
+    console.warn('Failed to load FN history', { key, error: getErrorDetails(error)?.message });
     return null;
   }
 }
@@ -1375,7 +1367,7 @@ async function saveFnHistory(
   } catch (error) {
     console.warn('Failed to save FN history to S3', {
       key,
-      error: error instanceof Error ? error.message : 'unknown error',
+      error: error instanceof Error ? getErrorDetails(error).message : 'unknown error',
     });
   }
 }
@@ -1441,7 +1433,7 @@ async function fetchObservationPoints(annotationSetId: string) {
         limit: 10000,
         nextToken,
       },
-    } as any)) as GraphQLResult<{
+    })) as GraphQLResult<{
       observationsByAnnotationSetId?: {
         items?: Array<{
           locationId?: string | null;
@@ -1722,7 +1714,7 @@ async function enqueueTiles(
           MessageBody: body,
           MessageGroupId: groupId,
           MessageDeduplicationId: body
-            .replace(/[^a-zA-Z0-9\-_\.]/g, '')
+            .replace(/[^a-zA-Z0-9_.-]/g, '')
             .substring(0, 128),
         };
       }
@@ -1772,154 +1764,17 @@ async function getQueueType(queueUrl: string): Promise<'FIFO' | 'Standard'> {
 }
 
 // Derive a location set from tiled launch parameters (synchronous version for small sets).
-async function createTiledLocationSetSync(
-  projectId: string,
-  tiledRequest: TiledLaunchRequest,
-  organizationId: string
-) {
-  if (!tiledRequest) {
-    throw new Error('tiledRequest is required when no location set is provided');
-  }
-  if (!tiledRequest.images || tiledRequest.images.length === 0) {
-    throw new Error('Tiled launch requires at least one image');
-  }
 
-  console.log('Creating tiled location set (sync)', {
-    projectId,
-    name: tiledRequest.name,
-    imageCount: tiledRequest.images.length,
-    locationCount: tiledRequest.locationCount,
-  });
-
-  const creationStart = Date.now();
-  const locationSetData = await executeGraphql<{
-    createLocationSet?: { id: string };
-  }>(createLocationSetMutation, {
-    input: {
-      name: tiledRequest.name,
-      projectId,
-      description: tiledRequest.description,
-      locationCount: tiledRequest.locationCount,
-      group: organizationId,
-    },
-  });
-
-  const locationSetId = locationSetData.createLocationSet?.id;
-  if (!locationSetId) {
-    throw new Error('Unable to create location set');
-  }
-
-  const creationConcurrency = 100;
-  const creationLimit = pLimit(creationConcurrency);
-  const creationTasks: Array<Promise<void>> = [];
-  let createdCount = 0;
-
-  const baselineWidth = Math.max(0, tiledRequest.maxX - tiledRequest.minX);
-  const baselineHeight = Math.max(0, tiledRequest.maxY - tiledRequest.minY);
-  const baselineIsLandscape = baselineWidth >= baselineHeight;
-
-  for (const image of tiledRequest.images) {
-    const imageIsLandscape = image.width >= image.height;
-    const swapTileForImage = baselineIsLandscape !== imageIsLandscape;
-    const tileWidthForImage = swapTileForImage
-      ? tiledRequest.height
-      : tiledRequest.width;
-    const tileHeightForImage = swapTileForImage
-      ? tiledRequest.width
-      : tiledRequest.height;
-    const horizontalTilesForImage = swapTileForImage
-      ? tiledRequest.verticalTiles
-      : tiledRequest.horizontalTiles;
-    const verticalTilesForImage = swapTileForImage
-      ? tiledRequest.horizontalTiles
-      : tiledRequest.verticalTiles;
-    const roiMinXForImage = swapTileForImage
-      ? tiledRequest.minY
-      : tiledRequest.minX;
-    const roiMinYForImage = swapTileForImage
-      ? tiledRequest.minX
-      : tiledRequest.minY;
-    const roiMaxXForImage = swapTileForImage
-      ? tiledRequest.maxY
-      : tiledRequest.maxX;
-    const roiMaxYForImage = swapTileForImage
-      ? tiledRequest.maxX
-      : tiledRequest.maxY;
-
-    const effectiveW = Math.max(0, roiMaxXForImage - roiMinXForImage);
-    const effectiveH = Math.max(0, roiMaxYForImage - roiMinYForImage);
-    const xStepSize =
-      horizontalTilesForImage > 1
-        ? (effectiveW - tileWidthForImage) / (horizontalTilesForImage - 1)
-        : 0;
-    const yStepSize =
-      verticalTilesForImage > 1
-        ? (effectiveH - tileHeightForImage) / (verticalTilesForImage - 1)
-        : 0;
-
-    for (let xStep = 0; xStep < horizontalTilesForImage; xStep++) {
-      for (let yStep = 0; yStep < verticalTilesForImage; yStep++) {
-        const x = Math.round(
-          roiMinXForImage +
-          (horizontalTilesForImage > 1 ? xStep * xStepSize : 0) +
-          tileWidthForImage / 2
-        );
-        const y = Math.round(
-          roiMinYForImage +
-          (verticalTilesForImage > 1 ? yStep * yStepSize : 0) +
-          tileHeightForImage / 2
-        );
-
-        creationTasks.push(
-          creationLimit(async () => {
-            await executeGraphql<{
-              createLocation?: { id: string };
-            }>(createLocationMutation, {
-              input: {
-                x,
-                y,
-                width: tileWidthForImage,
-                height: tileHeightForImage,
-                imageId: image.id,
-                projectId,
-                confidence: 1,
-                source: 'manual',
-                setId: locationSetId,
-                group: organizationId,
-              },
-            });
-            createdCount += 1;
-            if (createdCount % 1000 === 0) {
-              console.log('Created tiled locations progress', {
-                locationSetId,
-                createdCount,
-              });
-            }
-          })
-        );
-      }
-    }
-  }
-
-  await Promise.all(creationTasks);
-  console.log('Created tiled locations', {
-    locationSetId,
-    total: creationTasks.length,
-    durationMs: Date.now() - creationStart,
-    concurrency: creationConcurrency,
-  });
-  return locationSetId;
-}
 
 // GraphQL helper that raises detailed errors when AppSync fails.
 async function executeGraphql<T>(
   query: string,
-  variables: Record<string, any>
+  variables: Record<string, unknown>
 ): Promise<T> {
-  const response = (await client.graphql({
+  const response = (await client.graphql<unknown>({
     query,
     variables,
-  } as any)) as GraphQLResult<T>;
+  })) as GraphQLResult<T>;
   if (response.errors && response.errors.length > 0) {
     throw new Error(
       `GraphQL error: ${JSON.stringify(

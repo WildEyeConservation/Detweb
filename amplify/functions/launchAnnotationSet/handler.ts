@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { LaunchAnnotationSetHandler } from '../../data/resource';
 import { env } from '$amplify/env/launchAnnotationSet';
 import { Amplify } from 'aws-amplify';
@@ -50,11 +51,6 @@ const createLocationSetMutation = /* GraphQL */ `
   }
 `;
 
-const createLocationMutation = /* GraphQL */ `
-  mutation CreateLocation($input: CreateLocationInput!) {
-    createLocation(input: $input) { id group }
-  }
-`;
 
 const createTasksOnAnnotationSetMutation = /* GraphQL */ `
   mutation CreateTasksOnAnnotationSet($input: CreateTasksOnAnnotationSetInput!) {
@@ -93,11 +89,6 @@ const updateLocationSetMutation = /* GraphQL */ `
   }
 `;
 
-const deleteLocationMutation = /* GraphQL */ `
-  mutation DeleteLocation($input: DeleteLocationInput!) {
-    deleteLocation(input: $input) { id group }
-  }
-`;
 
 const deleteAnnotationMutation = /* GraphQL */ `
   mutation DeleteAnnotation($input: DeleteAnnotationInput!) {
@@ -134,24 +125,6 @@ const annotationSetsByProjectIdQuery = /* GraphQL */ `
   }
 `;
 
-const locationsBySetIdAndConfidence = /* GraphQL */ `
-  query LocationsBySetIdAndConfidence(
-    $setId: ID!
-    $limit: Int
-    $nextToken: String
-  ) {
-    locationsBySetIdAndConfidence(
-      setId: $setId
-      limit: $limit
-      nextToken: $nextToken
-    ) {
-      items {
-        id
-      }
-      nextToken
-    }
-  }
-`;
 
 const queuesByProjectIdQuery = /* GraphQL */ `
   query QueuesByProjectId($projectId: ID!, $limit: Int) {
@@ -389,10 +362,10 @@ export const handler: LaunchAnnotationSetHandler = async (event) => {
         isTilingOnly ? 'processing' : 'launching',
         { status: { eq: 'active' } }
       );
-    } catch (err: any) {
-      const msg = err?.message ?? '';
-      const errMsgs = Array.isArray(err?.errors)
-        ? err.errors.map((e: any) => e?.message ?? '').join(' ')
+    } catch (err) {
+      const msg = getErrorDetails(err)?.message ?? '';
+      const errMsgs = Array.isArray(getErrorDetails(err)?.errors)
+        ? getErrorDetails(err).errors.map((e) => e?.message ?? '').join(' ')
         : '';
       if (msg.includes('ConditionalCheckFailed') || errMsgs.includes('ConditionalCheckFailed')) {
         console.warn('Launch rejected: project is not in active status', {
@@ -427,7 +400,7 @@ export const handler: LaunchAnnotationSetHandler = async (event) => {
       statusCode: 200,
       body: JSON.stringify(result),
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error launching annotation set', error);
     // Attempt to clean up even on error to avoid orphaned files.
     if (payloadS3Key) {
@@ -441,7 +414,7 @@ export const handler: LaunchAnnotationSetHandler = async (event) => {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Failed to launch annotation set',
-        error: error?.message ?? 'Unknown error',
+        error: getErrorDetails(error)?.message ?? 'Unknown error',
       }),
     };
   }
@@ -709,7 +682,7 @@ async function handleDistributedTiling(
       },
     });
 
-    locationSetId = newLocationSetData.createLocationSet?.id!;
+    locationSetId = newLocationSetData.createLocationSet?.id ?? '';
     if (!locationSetId) {
       throw new Error('Unable to create replacement location set');
     }
@@ -742,7 +715,7 @@ async function handleDistributedTiling(
       },
     });
 
-    locationSetId = locationSetData.createLocationSet?.id!;
+    locationSetId = locationSetData.createLocationSet?.id ?? '';
     if (!locationSetId) {
       throw new Error('Unable to create location set');
     }
@@ -1032,86 +1005,7 @@ async function invokeTilingBatchLambda(batchId: string): Promise<void> {
   );
 }
 
-// Clear all existing locations from a location set
-async function clearLocationSetLocations(locationSetId: string): Promise<void> {
-  console.log('Clearing existing locations from location set', {
-    locationSetId,
-  });
 
-  // Type for the query response
-  type LocationQueryResponse = {
-    locationsBySetIdAndConfidence?: {
-      items: Array<{ id: string }>;
-      nextToken?: string | null;
-    };
-  };
-
-  // Query all locations in the set using pagination
-  let nextToken: string | null | undefined = undefined;
-  let totalDeleted = 0;
-  const deleteLimit = pLimit(50); // Limit concurrent deletions
-
-  do {
-    const response: LocationQueryResponse =
-      await executeGraphql<LocationQueryResponse>(
-        locationsBySetIdAndConfidence,
-        {
-          setId: locationSetId,
-          confidence: { between: [0, 2] }, // Get all confidence levels
-          limit: 10000,
-          nextToken,
-        }
-      );
-
-    const items: Array<{ id: string }> =
-      response.locationsBySetIdAndConfidence?.items ?? [];
-    nextToken = response.locationsBySetIdAndConfidence?.nextToken ?? null;
-
-    if (items.length === 0) {
-      break;
-    }
-
-    // Delete locations in parallel with concurrency limit
-    const deleteTasks = items.map((item: { id: string }) =>
-      deleteLimit(async () => {
-        try {
-          await executeGraphql<{ deleteLocation?: { id: string } }>(
-            deleteLocationMutation,
-            { input: { id: item.id } }
-          );
-        } catch (err) {
-          console.warn('Failed to delete location', {
-            id: item.id,
-            error: err,
-          });
-        }
-      })
-    );
-
-    await Promise.all(deleteTasks);
-    totalDeleted += items.length;
-    console.log('Deleted locations batch', {
-      deleted: items.length,
-      totalDeleted,
-    });
-  } while (nextToken);
-
-  console.log('Finished clearing location set', {
-    locationSetId,
-    totalDeleted,
-  });
-
-  // Update the location set count to 0
-  await executeGraphql<{ updateLocationSet?: { id: string } }>(
-    updateLocationSetMutation,
-    {
-      input: {
-        id: locationSetId,
-        locationCount: 0,
-      },
-    }
-  );
-}
 
 // Ensure the resolver input is a stringified payload.
 function parsePayload(request: unknown): LaunchLambdaPayload {
@@ -1317,7 +1211,7 @@ async function enqueueLocations(
           MessageBody: messageBody,
           MessageGroupId: groupId,
           MessageDeduplicationId: messageBody
-            .replace(/[^a-zA-Z0-9\-_\.]/g, '')
+            .replace(/[^a-zA-Z0-9_.-]/g, '')
             .substring(0, 128),
         };
       }
@@ -1368,12 +1262,12 @@ async function getQueueType(queueUrl: string): Promise<'FIFO' | 'Standard'> {
 // Shared GraphQL helper that surfaces descriptive errors.
 async function executeGraphql<T>(
   query: string,
-  variables: Record<string, any>
+  variables: Record<string, unknown>
 ): Promise<T> {
-  const response = (await client.graphql({
+  const response = (await client.graphql<unknown>({
     query,
     variables,
-  } as any)) as GraphQLResult<T>;
+  })) as GraphQLResult<T>;
   if (response.errors && response.errors.length > 0) {
     throw new Error(
       `GraphQL error: ${JSON.stringify(
@@ -1505,8 +1399,8 @@ async function deleteFnManifest(annotationSetId: string): Promise<void> {
         })
       );
       console.log('Deleted FN manifest from S3', { key });
-    } catch (error: any) {
-      if (error?.name === 'NoSuchKey' || error?.Code === 'NoSuchKey') {
+    } catch (error) {
+      if (getErrorDetails(error)?.name === 'NoSuchKey' || getErrorDetails(error).code === 'NoSuchKey') {
         console.log('FN manifest does not exist, nothing to delete', { key });
         continue;
       }

@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -159,7 +160,7 @@ export const handler: Handler<
       logger.error('Failed to project Observation into workflow statistics', {
         eventId: record.eventID,
         sequenceNumber,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? getErrorDetails(error).message : String(error),
       });
       if (!sequenceNumber) throw error;
       // DynamoDB Streams checkpoints at the lowest failed sequence number, so

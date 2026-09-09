@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { Handler } from 'aws-lambda';
 import { env } from '$amplify/env/requeueProjectQueues';
 import { Amplify } from 'aws-amplify';
@@ -129,17 +130,17 @@ export const handler: Handler = async () => {
           url: queue.url,
           requeued: summary.requeued,
         });
-      } catch (error: any) {
+      } catch (error) {
         const errorMessage =
           error instanceof Error
-            ? error.message
+            ? getErrorDetails(error).message
             : typeof error === 'string'
             ? error
             : JSON.stringify(error);
         console.error('Failed to requeue queue', {
           queueId: queue.id,
           error: errorMessage,
-          stack: error instanceof Error ? error.stack : undefined,
+          stack: error instanceof Error ? getErrorDetails(error).stack : undefined,
         });
       }
     }
@@ -151,11 +152,11 @@ export const handler: Handler = async () => {
         queuesRequeued: results.length,
       }),
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Unhandled error in requeueProjectQueues', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ message: 'Failed to requeue queues', error: error?.message }),
+      body: JSON.stringify({ message: 'Failed to requeue queues', error: getErrorDetails(error)?.message }),
     };
   }
 };
@@ -469,7 +470,7 @@ async function executeGraphql<T>(
   query: string,
   variables: Record<string, unknown>
 ): Promise<T> {
-  const response = (await (client.graphql as any)({
+  const response = (await client.graphql<unknown>({
     query,
     variables,
   })) as GraphQLResult<T>;

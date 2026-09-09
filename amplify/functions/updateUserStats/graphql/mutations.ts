@@ -1,5 +1,5 @@
 /* tslint:disable */
-/* eslint-disable */
+
 // this is an auto generated file. This will be overwritten
 
 import * as APITypes from "./API";
@@ -3582,7 +3582,7 @@ export const processImages = /* GraphQL */ `mutation ProcessImages($model: Strin
   APITypes.ProcessImagesMutation
 >;
 export const publish = /* GraphQL */ `mutation Publish($channelName: String!, $content: String!) {
-  publish(channelName: $channelName, content: $content) 
+  publish(channelName: $channelName, content: $content)
 }
 ` as GeneratedMutation<
   APITypes.PublishMutationVariables,

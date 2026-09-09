@@ -1,20 +1,19 @@
 import  fs  from 'node:fs/promises'
 import  path  from 'node:path'
 // import exifr from 'exifr'
-import { DateTime } from 'luxon'
+
 import pLimit from 'p-limit'
-import { S3Client, GetObjectCommand, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
-import { marshall } from '@aws-sdk/util-dynamodb'
+import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+
 const s3 = new S3Client();
 import { STSClient, AssumeRoleCommand } from '@aws-sdk/client-sts';
 //import {doAppsyncQueryWithPagination, doAppsyncQuery} from './appsync.js'
-import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
+
 import sharp from 'sharp';
 import { S3Event } from 'aws-lambda';
 import { Readable } from 'stream';
-const dynamoDb = new DynamoDBClient();
 
-const TABLE_NAME = process.env.IMAGETABLE;
+
 async function uploadDir(localDir : string, s3Prefix: string) {
   const files = await fs.readdir(localDir);
 
@@ -45,33 +44,16 @@ async function uploadDir(localDir : string, s3Prefix: string) {
 }
 
 /* This function was created because I had a bug in my lambda function at one stage that caused it to terminate early.
-This meant that in many cases there were some tiles missing from the output, even though most were uploaded. I obviously 
+This meant that in many cases there were some tiles missing from the output, even though most were uploaded. I obviously
 had to rerun the lambda function, but limits on scaling and processing a very large dataset meant that this took a long time
 to complete, whic was a shame because missing files were really quite rare and most files didn't need to be reprocessed at all.
 
 Unfortunately there is no perfect mechanism (that I can think of), to check whether a particular image pyramid is complete in general.
-I came up with the following hack that checks for a certain number of files in zoom level 5. Because all my images were the same size, 
-this would work, but it is not a general solution. 
+I came up with the following hack that checks for a certain number of files in zoom level 5. Because all my images were the same size,
+this would work, but it is not a general solution.
 
 I don't expect to need this code again, but leave it here for future reference.*/
-async function existsOnS3(client: S3Client, bucket: string, prefix: string) {
-  try {
-    const data = await client.send(
-      new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix }),
-    );
-    const exists = (data.Contents?.length || 0) >= 494;
-    return exists;
-  } catch (error) {
-    if (
-      (error as any).$metadata?.httpStatusCode === 404 ||
-      (error as any).$metadata?.httpStatusCode === 403
-    ) {
-      return false;
-    } else {
-      throw error;
-    }
-  }
-}
+
 
 const assumeRole = async (roleArn: string) => {
   const stsClient = new STSClient({ region: process.env.AWS_REGION });
@@ -110,16 +92,16 @@ export async function lambdaHandler(event:S3Event) {
   console.log("Starting");
   console.log(`EVENT: ${JSON.stringify(event)}`);
   for (const record of event.Records) {
-    var {
+    const {
       s3: {
         bucket: { name: Bucket },
-        object: { key: Key },
+        object: { key: encodedKey },
       },
       eventName,
     } = record;
-    Key = decodeURIComponent(Key.replace(/\+/g, " "));
+    const Key = decodeURIComponent(encodedKey.replace(/\+/g, " "));
     const upperkey = Key.toUpperCase();
-    // Check if the event is an object creation event and if the object is an image that we can read. 
+    // Check if the event is an object creation event and if the object is an image that we can read.
     // TODO: We can probably allready support a range of other input formats (bmp, png, tiff, gif, webp etc) allready. Confirm that these
     // work and add them to the list of supported input formats.
     // TODO: there are some other formats that we definitely don't support yet, but should be quite useful. I'm thinking here mainly of the raw formats
@@ -139,7 +121,7 @@ export async function lambdaHandler(event:S3Event) {
       const getObjectResponse = await s3.send(
         new GetObjectCommand({ Bucket, Key }),
       );
-      const chunks = [];    
+      const chunks = [];
       if (getObjectResponse.Body instanceof Readable) {
         for await (const chunk of getObjectResponse.Body) {
           chunks.push(chunk);
@@ -148,9 +130,7 @@ export async function lambdaHandler(event:S3Event) {
       const buffer = Buffer.concat(chunks);
       const localTmpPath = "/tmp/tiles";
       // Ensure a clean temp directory per image to avoid cross-image contamination
-      try {
-        await fs.rm(localTmpPath, { recursive: true, force: true } as any);
-      } catch {}
+      await fs.rm(localTmpPath, { recursive: true, force: true });
       await fs.mkdir(localTmpPath, { recursive: true });
       // Read the exif data from the image stored in buffer.
       // const tags = await exifr.parse(buffer, {
@@ -167,7 +147,7 @@ export async function lambdaHandler(event:S3Event) {
       //     'GPSLongitude',
       //     'GPSAltitude',
       //   ],
-      // } as any);
+      // });
     //   Object.keys(tags).forEach(key => { tagsDD[key] = tags[key]?.description })
     //   tagsDD['key'] = Key.substring('public/images/'.length)
     //   /*tags.DateTimeOriginal.value[0]
@@ -204,20 +184,18 @@ export async function lambdaHandler(event:S3Event) {
       //   orientation: tags.Orientation.value,
       //   dateTime: DateTime.fromJSDate(tags.DateTimeOriginal.value).toISO(),
       //   /*tags.DateTimeOriginal.value[0]
-      //   '2023:11:14 09:52:39' 
+      //   '2023:11:14 09:52:39'
       //   so parse to ISO as follows*/
       //   dateTime: DateTime.fromFormat(tags.DateTimeOriginal.value[0], 'yyyy:MM:dd HH:mm:ss').toISO(),
-               
+
 
       //     "key": Key
       //   },
       //   "exif": tags
       // }
       // const query = `
-      
-      // `
 
-      
+      // `
 
 
       /* Sharp is causing me a little bit of pain in my local testing environment. I know that this part of the
@@ -229,7 +207,7 @@ export async function lambdaHandler(event:S3Event) {
         await sharp(buffer)
           .png()
           .tile({ layout: "google" })
-          .toFile(localTmpPath);  
+          .toFile(localTmpPath);
       } else {
         console.log('Running in local testing mode, sharp module not loaded');
         // Create a fake output directory for testing purposes
@@ -241,4 +219,4 @@ export async function lambdaHandler(event:S3Event) {
       console.log("Done");
     }
   }
-};
+}

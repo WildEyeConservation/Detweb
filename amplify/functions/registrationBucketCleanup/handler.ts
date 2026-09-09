@@ -1,3 +1,4 @@
+import { getErrorDetails } from '../../shared/errorMessage';
 import type { Handler } from 'aws-lambda';
 import { env } from '$amplify/env/registrationBucketCleanup';
 import { Amplify } from 'aws-amplify';
@@ -154,7 +155,7 @@ function pickWinningBucket(stats: BucketStatRow[]): number {
   return bestIndex;
 }
 
-export const handler: Handler = async (event, _context) => {
+export const handler: Handler = async (event) => {
   const projectId = (event as { projectId?: string }).projectId;
   if (!projectId) {
     console.error('registrationBucketCleanup invoked without projectId');
@@ -286,7 +287,7 @@ export const handler: Handler = async (event, _context) => {
     return {
       statusCode: 500,
       body: JSON.stringify({
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? getErrorDetails(error).message : 'Unknown error',
       }),
     };
   }

@@ -1,5 +1,5 @@
 /* tslint:disable */
-/* eslint-disable */
+
 // GraphQL mutations for processTilingBatch lambda
 
 export const createLocation = /* GraphQL */ `

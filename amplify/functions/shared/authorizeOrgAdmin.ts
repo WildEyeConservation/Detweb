@@ -17,7 +17,7 @@ const getOrganizationMembershipQuery = /* GraphQL */ `
 export async function authorizeOrgAdmin(
   identity: { sub?: string; groups?: string[] | null } | null | undefined,
   organizationId: string,
-  executeGraphql: <T>(query: string, variables: Record<string, any>) => Promise<T>
+  executeGraphql: <T>(query: string, variables: Record<string, unknown>) => Promise<T>
 ): Promise<void> {
   if (!identity?.sub) return; // IAM / API key call
 

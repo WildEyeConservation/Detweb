@@ -3,15 +3,17 @@ import test from 'node:test';
 import {
   WORKFLOW_REGISTRY,
   WORKFLOW_TYPES,
-} from '../../../shared/workflowStats';
-import {
+} from '../../../../shared/workflowStats';
+import { createRequire } from 'node:module';
+const backendModule = createRequire(import.meta.url)('../../../../amplify/functions/workflowStats/core') as typeof import('../../../../amplify/functions/workflowStats/core');
+const {
   buildCreateWorkflowRunPut,
   buildFinishWorkflowRunUpdate,
   buildRecordWorkflowTaskEventTransaction,
   parseRecordWorkflowTaskEventInput,
   parseWorkflowActor,
   prepareWorkflowTaskEvent,
-} from './core';
+} = backendModule;
 
 const actor = parseWorkflowActor({
   userId: 'user-1',
