@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import type { Schema } from '../api/client-schema';
 import { useSession } from '../auth/session';
 import { client } from '../api/appClient';
@@ -86,23 +85,17 @@ export function useIsOrganizationAdmin() {
 }
 
 export function useCurrentMembership(projectId: string | undefined) {
-  const { user } = useSession();
-  const userId = user.userId;
+  const { data: memberships, meta } = useMyMemberships();
 
-  return useQuery({
-    queryKey: ['currentPM', userId, projectId],
-    queryFn: async () => {
-      if (!userId || !projectId) return null;
-      const {
-        data: [membership],
-      } =
-        await client.models.UserProjectMembership.userProjectMembershipsByUserId(
-          { userId },
-          { filter: { projectId: { eq: projectId } } }
-        );
-      return membership ?? null;
-    },
-    enabled: Boolean(userId && projectId),
-    staleTime: 30_000,
-  });
+  // Read the same cache that optimistic writes and live events update.
+  // The list defaults to [], so preserve its initial loading state separately.
+  return {
+    data: meta.isPending
+      ? undefined
+      : memberships.find((membership) => membership.projectId === projectId) ?? null,
+    isPending: meta.isPending,
+    isLoading: meta.isLoading,
+    isError: meta.isError,
+    error: meta.error,
+  };
 }

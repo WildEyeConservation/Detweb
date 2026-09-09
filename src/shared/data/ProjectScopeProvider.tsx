@@ -11,14 +11,14 @@ export function ProjectScope({
   projectId: string | undefined;
   children: React.ReactNode;
 }) {
-  const { data: currentPM } = useCurrentMembership(projectId);
+  const { data: currentPM, isPending: membershipPending } = useCurrentMembership(projectId);
   const { data: project } = useProject(projectId);
 
   useEffect(() => {
     if (projectId) resetAnnotatorUi(projectId);
   }, [projectId]);
 
-  if (!projectId || !currentPM || !project) return null;
+  if (!projectId || membershipPending || !currentPM || !project) return null;
 
   return (
     <ProjectIdContext.Provider value={projectId}>

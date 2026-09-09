@@ -18,7 +18,7 @@ type TaskState = {
   isAnnotatePath: boolean;
 };
 
-export const taskStore = new Store<TaskState>({
+const createInitialTaskState = (): TaskState => ({
   jobsCompleted: 0,
   unannotatedJobs: 0,
   currentTaskTag: '',
@@ -26,6 +26,12 @@ export const taskStore = new Store<TaskState>({
   sessionTestsResults: [],
   isAnnotatePath: false,
 });
+
+export const taskStore = new Store<TaskState>(createInitialTaskState());
+
+export function resetTaskStoreAction() {
+  taskStore.setState(() => createInitialTaskState());
+}
 
 function setKey<K extends keyof TaskState>(
   key: K,

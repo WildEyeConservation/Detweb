@@ -3,7 +3,7 @@ import { useDialogGuard } from '../../shared/routing/useDialogGuard';
 import { Form, Button, Spinner } from 'react-bootstrap';
 import { Modal, Body, Header, Footer, Title } from '../../shared/components/Modal';
 import { Schema } from '../../shared/api/client-schema';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { client } from '../../shared/api/appClient';
 import LabelEditor from './LabelEditor';
 
@@ -41,6 +41,14 @@ export default function AddAnnotationSetModal({
     Schema['Category']['type'][]
   >([]);
   const [loadingLabels, setLoadingLabels] = useState(false);
+  const labelsToImport = useMemo(
+    () => importedLabels.map((label) => ({
+      ...label,
+      shortcutKey: label.shortcutKey ?? '',
+      color: label.color ?? '',
+    })),
+    [importedLabels]
+  );
 
   const finishNavigation = useDialogGuard({
     busy: busy,
@@ -192,7 +200,7 @@ export default function AddAnnotationSetModal({
                 color: '#ff2643',
               },
             ]}
-            importLabels={importedLabels.map(label => ({ ...label, shortcutKey: label.shortcutKey ?? '', color: label.color ?? '' }))}
+            importLabels={labelsToImport}
             setHandleSave={setSaveLabels}
             onDirtyChange={setDirty}
             onStatusChange={setStatusMessage}

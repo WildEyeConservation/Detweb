@@ -56,13 +56,17 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
         location.pathname === '/surveys' ||
         location.pathname === '/jobs')
     ) {
-      navigate(
-        myAdminProjects?.length > 0 || isOrganizationAdmin
+      const pathname = myAdminProjects?.length > 0 || isOrganizationAdmin
           ? '/surveys'
-          : '/jobs'
-      );
+          : '/jobs';
+      if (pathname !== location.pathname) {
+        navigate(
+          { pathname, search: location.search, hash: location.hash },
+          { state: location.state }
+        );
+      }
     }
-  }, [isOrganizationAdmin, myAdminProjects?.length, belongsToOrganization, location.pathname, navigate]);
+  }, [isOrganizationAdmin, myAdminProjects?.length, belongsToOrganization, location.pathname, location.search, location.hash, location.state, navigate]);
 
   useEffect(() => {
     async function checkToken() {
@@ -128,9 +132,12 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
 
   useEffect(() => {
     if (isOrganizationAdmin && location.pathname === '/jobs') {
-      navigate('/surveys');
+      navigate(
+        { pathname: '/surveys', search: location.search, hash: location.hash },
+        { state: location.state }
+      );
     }
-  }, [isOrganizationAdmin, location.pathname, navigate]);
+  }, [isOrganizationAdmin, location.pathname, location.search, location.hash, location.state, navigate]);
 
   const expand = 'lg';
   return (

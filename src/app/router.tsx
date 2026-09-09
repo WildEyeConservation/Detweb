@@ -23,7 +23,9 @@ export const router = createBrowserRouter([
     element: (
       <PersistQueryClientProvider
         client={queryClient}
-        persistOptions={{ persister }}
+        // Bump when a persisted query's cached shape changes so restored
+        // entries from an older build are discarded instead of served.
+        persistOptions={{ persister, buster: 'v2' }}
       >
         <ReactQueryDevtools initialIsOpen={false} />
         <AppWithAuthenticator />
@@ -31,7 +33,6 @@ export const router = createBrowserRouter([
     ),
     errorElement: <ErrorPage />,
     children: [
-      { path: 'settings/:tab?', element: null },
       {
         path: 'jobs',
         lazy: async () => ({ Component: (await import('../features/account/Jobs')).default }),

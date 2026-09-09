@@ -23,7 +23,7 @@ function PolledIndividualIdProgress({ projectId }: { projectId: string }) {
     queryKey: ['individualIdProgress', projectId],
     queryFn: async () => {
       try {
-        const { data } = await (
+        const { data, errors } = await (
           client.models
         ).IndividualIdJob.individualIdJobsByProjectId(
           { projectId },
@@ -36,6 +36,9 @@ function PolledIndividualIdProgress({ projectId }: { projectId: string }) {
             ],
           }
         );
+        if (errors?.length) {
+          throw new Error(errors.map((error) => error.message).join('; '));
+        }
         const jobs = data || [];
         const job =
           jobs.find((j) => j.status === 'active') ??
@@ -50,10 +53,14 @@ function PolledIndividualIdProgress({ projectId }: { projectId: string }) {
           : null;
       } catch (e) {
         console.warn('IndividualIdProgress load failed', e);
-        return null;
+        throw e;
       }
     },
+    retry: false,
     refetchInterval: (query) => {
+      // Failed requests retain the last successful data; an initial failure
+      // has no data yet and must also keep polling.
+      if (query.state.data === undefined) return 10000;
       const status = query.state.data?.status;
       return status === 'active' || status === 'launching' ? 10000 : false;
     },

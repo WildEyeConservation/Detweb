@@ -170,13 +170,12 @@ export function HomographyWorkbench({
   const numPairs = Math.min(points1.length, points2.length);
   useEffect(() => {
     if (
-      !previewHomography &&
       numPairs === MIN_HOMOGRAPHY_POINTS &&
       points1.length === points2.length
     ) {
       setPreviewHomography(true);
     }
-  }, [numPairs, points1.length, points2.length, previewHomography]);
+  }, [numPairs, points1.length, points2.length]);
 
   const previewTransforms = useMemo(() => {
     if (!previewHomography) return null;
