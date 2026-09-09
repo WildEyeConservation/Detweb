@@ -1,4 +1,5 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { authorizeWorkflowStatsItem, requireWorkflowStatsUser } from '../workflowStats/readAuthorization';
 import {
   BatchGetCommand,
   DynamoDBDocumentClient,
@@ -137,7 +138,8 @@ function eventFromItem(item: Record<string, unknown>): WorkflowEvent {
 // another survey's work into an export.
 async function assertRunsBelongToProject(
   runIds: string[],
-  projectId: string
+  projectId: string,
+  identity: unknown
 ): Promise<void> {
   const found = new Set<string>();
   for (let start = 0; start < runIds.length; start += 100) {
@@ -151,12 +153,13 @@ async function assertRunsBelongToProject(
           RequestItems: Object.fromEntries(
             Object.entries(request).map(([table, value]) => [
               table,
-              { ...value, ProjectionExpression: 'runId, projectId' },
+              { ...value, ProjectionExpression: 'runId, projectId, organizationId' },
             ])
           ),
         })
       );
       for (const item of response.Responses?.[tables.runs] ?? []) {
+        authorizeWorkflowStatsItem(identity, item);
         if (item.projectId === projectId) found.add(String(item.runId));
       }
       request = response.UnprocessedKeys as typeof request;
@@ -174,6 +177,7 @@ export const handler: AppSyncResolverHandler<
   QueryWorkflowEventsArguments,
   QueryWorkflowEventsResult
 > = async (event) => {
+  requireWorkflowStatsUser(event.identity);
   const projectId = assertIdentifier(event.arguments.projectId, 'projectId');
   const startAt = optionalTimestamp(event.arguments.startAt, 'startAt');
   const endAt = optionalTimestamp(event.arguments.endAt, 'endAt');
@@ -197,7 +201,7 @@ export const handler: AppSyncResolverHandler<
   if (runIds.length > MAX_RUNS) {
     throw new Error(`At most ${MAX_RUNS} runs can be queried at once`);
   }
-  await assertRunsBelongToProject(runIds, projectId);
+  await assertRunsBelongToProject(runIds, projectId, event.identity);
 
   const cursor = decodeCursor(event.arguments.nextToken);
   if (cursor.runIndex >= runIds.length) return { events: [], nextToken: null };
@@ -236,6 +240,7 @@ export const handler: AppSyncResolverHandler<
       })
     );
     for (const item of response.Items ?? []) {
+      authorizeWorkflowStatsItem(event.identity, item);
       events.push(eventFromItem(item as Record<string, unknown>));
     }
 

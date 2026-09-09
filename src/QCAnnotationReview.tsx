@@ -21,6 +21,8 @@ import {
   infoTagNamesFor,
 } from './infoTags';
 import { findShortcutMatch, formatShortcutKey } from './utils/hotkeys';
+import { recordWorkflowTask } from './recordWorkflowTask';
+import { reviewWorkflowTask } from './reviewWorkflowTask';
 
 // ── Constants ──
 
@@ -103,6 +105,12 @@ export default function QCAnnotationReview({
   const cancelledRef = useRef(false);
   const mainMarkerRef = useRef<maplibregl.Marker | null>(null);
   const hoverPopupRef = useRef<maplibregl.Popup | null>(null);
+  const visibleAtRef = useRef<number | null>(null);
+  const readyAtRef = useRef<number | null>(null);
+  const statsMapRef = useRef<maplibregl.Map | null>(null);
+  useEffect(() => {
+    if (visible) visibleAtRef.current = Date.now();
+  }, [visible]);
 
   // ── Marker position (draggable) ──
   const [markerPosition, setMarkerPosition] = useState<{ x: number; y: number }>({
@@ -338,6 +346,8 @@ export default function QCAnnotationReview({
       const cols = Math.ceil(image.width / tileCoverage);
       const rows = Math.ceil(image.height / tileCoverage);
       const bounds = m.getBounds();
+      const pendingTiles: Promise<void>[] = [];
+      let addedTiles = 0;
 
       for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
@@ -366,7 +376,7 @@ export default function QCAnnotationReview({
           if (isVisible) {
             loadedTilesRef.current.add(sourceId);
             const path = `slippymaps/${sourceKey}/${z}/${row}/${col}.png`;
-            getTileBlob(path)
+            pendingTiles.push(getTileBlob(path)
               .then((blob) => {
                 if (cancelledRef.current) return;
                 const url = URL.createObjectURL(blob);
@@ -405,11 +415,22 @@ export default function QCAnnotationReview({
                   },
                   beforeId
                 );
+                addedTiles += 1;
               })
               .catch(() => {
                 loadedTilesRef.current.delete(sourceId);
-              });
+              }));
           }
+        }
+      }
+      if (pendingTiles.length > 0 && readyAtRef.current === null) {
+        await Promise.all(pendingTiles);
+        if (addedTiles > 0 && statsMapRef.current === m && readyAtRef.current === null) {
+          m.once('idle', () => {
+            if (statsMapRef.current === m && readyAtRef.current === null) {
+              readyAtRef.current = Date.now();
+            }
+          });
         }
       }
     },
@@ -453,6 +474,7 @@ export default function QCAnnotationReview({
 
     m.touchZoomRotate.disableRotation();
 
+    statsMapRef.current = m;
     m.on('load', () => {
       // Annotation marker source + layers
       m.addSource(SOURCE_MARKER, {
@@ -623,6 +645,7 @@ export default function QCAnnotationReview({
 
     return () => {
       cancelledRef.current = true;
+      statsMapRef.current = null;
       if (mainMarkerRef.current) {
         mainMarkerRef.current.remove();
         mainMarkerRef.current = null;
@@ -702,7 +725,18 @@ export default function QCAnnotationReview({
   // Acknowledging alongside the write meant a failed write still discarded the
   // task, losing the review silently instead of letting it be redelivered.
   const commitReview = useCallback(
-    async (reviewCatId: string) => {
+    async (reviewCatId: string, falsePositive = false) => {
+      // Capture at the decision, before persistence or navigation adds latency.
+      const task = reviewWorkflowTask({
+        queueId,
+        annotationId: annotation.id,
+        originalCategoryId: annotation.categoryId,
+        reviewCategoryId: reviewCatId,
+        falsePositive: falsePositive || reviewCatId === existingFpCategory?.id,
+        visibleAt: visibleAtRef.current,
+        readyAt: readyAtRef.current,
+        submittedAt: Date.now(),
+      });
       const existingReviewer = await fetchExistingReviewer();
       // Re-review by the same user is legitimate (an undo, or a redelivery
       // after a failed acknowledgement); another user's review is not.
@@ -735,11 +769,15 @@ export default function QCAnnotationReview({
         await incrementObservedCount();
       }
 
+      await recordWorkflowTask(client, task);
       await ack?.();
     },
     [
       client,
       annotation.id,
+      annotation.categoryId,
+      queueId,
+      existingFpCategory?.id,
       ack,
       user.userId,
       markerPosition,
@@ -893,7 +931,7 @@ export default function QCAnnotationReview({
 
     setReviewedCatId(fpCatId);
 
-    void commitReview(fpCatId).catch((err) =>
+    void commitReview(fpCatId, true).catch((err) =>
       console.error('Failed to mark as false positive', err)
     );
 

@@ -558,6 +558,9 @@ workflowRunsTable.addGlobalSecondaryIndex({
 for (const launchResource of [
   backend.launchAnnotationSet,
   backend.launchFalseNegatives,
+  backend.launchQCReview,
+  backend.launchInfoTags,
+  backend.launchHomography,
   backend.monitorTilingTasks,
   backend.launchIndividualId,
 ]) {
@@ -703,7 +706,7 @@ const eventsArnForWriter = recordWorkflowTaskStack.formatArn({
 });
 recordWorkflowTaskFunction.addToRolePolicy(
   new iam.PolicyStatement({
-    actions: ['dynamodb:GetItem'],
+    actions: ['dynamodb:GetItem', 'dynamodb:ConditionCheckItem'],
     resources: [
       recordWorkflowTaskStack.formatArn({
         service: 'dynamodb',

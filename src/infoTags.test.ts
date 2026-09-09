@@ -10,13 +10,71 @@ import {
 
 type Call = { name: string; input: Record<string, unknown> };
 
+test('image queue progress is not repeated after an ack retry', async () => {
+  const steps: string[] = [];
+  const progress = { counted: false, acknowledged: false };
+  let failAck = true;
+  const options = {
+    commits: [Promise.resolve().then(() => { steps.push('saved'); })],
+    progress,
+    countCompletion: true,
+    incrementCount: async () => { steps.push('count'); },
+    acknowledge: async () => {
+      steps.push('ack');
+      if (failAck) throw new Error('ack failed');
+    },
+  };
+  await assert.rejects(finalizeInfoTagImage(options), /ack failed/);
+  failAck = false;
+  await finalizeInfoTagImage(options);
+  assert.deepEqual(steps, ['saved', 'count', 'ack', 'ack']);
+});
+
+test('failed annotation saves do not report statistics', async () => {
+  let statistics = 0;
+  const { client } = fakeClient({ updateAnnotation: { errors: [{ message: 'save failed' }] } });
+  await assert.rejects(commitInfoTagsForAnnotation(client, {
+    ...commit, recordStatistics: async () => { statistics++; },
+  }), /save failed/);
+  assert.equal(statistics, 0);
+});
+
+test('partial-image work reports each saved annotation without finishing the image', async () => {
+  const { client, calls } = fakeClient();
+  const reported: string[] = [];
+  for (const annotationId of ['first', 'second']) {
+    await commitInfoTagsForAnnotation(client, {
+      ...commit, annotationId,
+      recordStatistics: async () => {
+        assert.equal(calls.at(-1)?.name, 'updateAnnotation');
+        reported.push(annotationId);
+      },
+    });
+  }
+  assert.deepEqual(reported, ['first', 'second']);
+});
+
+test('last annotation reports before image progress and acknowledgement', async () => {
+  const { client } = fakeClient();
+  const order: string[] = [];
+  await finalizeInfoTagImage({
+    commits: [commitInfoTagsForAnnotation(client, {
+      ...commit, recordStatistics: async () => { order.push('annotation'); },
+    })],
+    progress: { counted: false, acknowledged: false }, countCompletion: true,
+    incrementCount: async () => { order.push('image'); },
+    acknowledge: async () => { order.push('ack'); },
+  });
+  assert.deepEqual(order, ['annotation', 'image', 'ack']);
+});
+
 function fakeClient(
   responses: Record<string, { errors?: Array<{ message: string }> }> = {}
 ) {
   const calls: Call[] = [];
   const respond = (name: string) => async (input: Record<string, unknown>) => {
     calls.push({ name, input });
-    return { data: null, ...(responses[name] ?? {}) };
+    return { data: {}, ...(responses[name] ?? {}) };
   };
   const client = {
     models: {

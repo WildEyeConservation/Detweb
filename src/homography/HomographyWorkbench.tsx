@@ -18,6 +18,7 @@ type Props = {
   images: [ImageType, ImageType];
   onSave: (H: Matrix) => void;
   onSkip?: () => void;
+  onImagesReady?: () => void;
   isSaving?: boolean;
   isSkipping?: boolean;
   annotationSetId?: string;
@@ -48,6 +49,7 @@ export function HomographyWorkbench({
   images,
   onSave,
   onSkip,
+  onImagesReady,
   isSaving = false,
   isSkipping = false,
   annotationSetId,
@@ -279,6 +281,7 @@ export function HomographyWorkbench({
           </div>
         </div>
         <MapLibrePairViewer
+          onImagesReady={onImagesReady}
           key={`maplibre-${images[0].id}::${images[1].id}`}
           images={images}
           points={[points1, points2]}

@@ -1,4 +1,5 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { authorizeWorkflowStatsItem, requireWorkflowStatsUser } from '../workflowStats/readAuthorization';
 import {
   DynamoDBDocumentClient,
   QueryCommand,
@@ -135,6 +136,7 @@ export const handler: AppSyncResolverHandler<
   QueryWorkflowStatsArguments,
   QueryWorkflowStatsResult
 > = async (event) => {
+  requireWorkflowStatsUser(event.identity);
   const projectId = assertIdentifier(event.arguments.projectId, 'projectId');
   const startDate = optionalDate(event.arguments.startDate, 'startDate');
   const endDate = optionalDate(event.arguments.endDate, 'endDate');
@@ -185,6 +187,7 @@ export const handler: AppSyncResolverHandler<
         MAX_BUCKETS - buckets.length
       );
       for (const item of items) {
+        authorizeWorkflowStatsItem(event.identity, item);
         const bucket = bucketFromItem(item, workflowType, annotationSetId);
         // The sort key starts with the date, so the upper bound is applied here
         // rather than as a second key condition.
@@ -209,6 +212,7 @@ export const handler: AppSyncResolverHandler<
     2_000
   );
   const wantedSets = new Set(annotationSetIds);
+  runItems.forEach((item) => authorizeWorkflowStatsItem(event.identity, item));
   const runs: WorkflowRunSummary[] = runItems
     .filter(
       (item) =>

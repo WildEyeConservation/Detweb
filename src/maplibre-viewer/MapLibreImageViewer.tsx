@@ -96,6 +96,7 @@ type Props = {
   savedTransform?: (c: [number, number]) => [number, number];
   otherImage?: ImageType;
   onMapInstance?: (map: maplibregl.Map | null, px2lngLat: (x: number, y: number) => [number, number], lngLat2px: (lng: number, lat: number) => { x: number; y: number }) => void;
+  onInitialTilesReady?: () => void;
   menuItems?: MapLibreMenuItem[];
 };
 
@@ -119,6 +120,7 @@ export function MapLibreImageViewer({
   savedTransform,
   otherImage,
   onMapInstance,
+  onInitialTilesReady,
   menuItems,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -129,6 +131,10 @@ export function MapLibreImageViewer({
   const cancelledRef = useRef(false);
   const loadedTilesRef = useRef<Set<string>>(new Set());
   const blobUrlsRef = useRef<string[]>([]);
+  const readyCallbackRef = useRef(onInitialTilesReady);
+  readyCallbackRef.current = onInitialTilesReady;
+  const readyMapRef = useRef<maplibregl.Map | null>(null);
+  const initialTilesReadyRef = useRef(false);
 
   const scale = useMemo(() => getScale(image.width, image.height), [image.width, image.height]);
 
@@ -166,6 +172,8 @@ export function MapLibreImageViewer({
     const rows = Math.ceil(image.height / tileCoverage);
 
     const bounds = m.getBounds();
+    const pendingTiles: Promise<void>[] = [];
+    let addedTiles = 0;
 
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
@@ -194,16 +202,28 @@ export function MapLibreImageViewer({
         if (isVisible && !isCoveredByHigherRes(z, row, col, maxZ, loadedTilesRef.current)) {
           loadedTilesRef.current.add(sourceId);
           const path = `slippymaps/${sourceKey}/${z}/${row}/${col}.png`;
-          getTileBlob(path).then((blob) => {
+          pendingTiles.push(getTileBlob(path).then((blob) => {
             if (cancelledRef.current) return;
             const url = URL.createObjectURL(blob);
             blobUrlsRef.current.push(url);
             addTileToMap(m, url, z, row, col, tileCoverage, px2lngLat);
+            addedTiles += 1;
           }).catch(() => {
             // Silently fail, tile will remain in 'visible' check for later
             loadedTilesRef.current.delete(sourceId);
-          });
+          }));
         }
+      }
+    }
+    if (pendingTiles.length && !initialTilesReadyRef.current) {
+      await Promise.all(pendingTiles);
+      if (addedTiles > 0 && readyMapRef.current === m) {
+        m.once('idle', () => {
+          if (readyMapRef.current === m && !initialTilesReadyRef.current) {
+            initialTilesReadyRef.current = true;
+            readyCallbackRef.current?.();
+          }
+        });
       }
     }
   }, [sourceKey, image, px2lngLat, scale]);
@@ -214,6 +234,7 @@ export function MapLibreImageViewer({
     cancelledRef.current = false;
     loadedTilesRef.current = new Set();
     blobUrlsRef.current = [];
+    initialTilesReadyRef.current = false;
 
     const m = new maplibregl.Map({
       container: containerRef.current,
@@ -357,11 +378,13 @@ export function MapLibreImageViewer({
       setMap(m);
     });
 
+    readyMapRef.current = m;
     const onMoveEnd = () => updateVisibleTiles(m);
     m.on('moveend', onMoveEnd);
 
     return () => {
       cancelledRef.current = true;
+      readyMapRef.current = null;
       m.remove();
       setMap(null);
       blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
