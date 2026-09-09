@@ -38,6 +38,66 @@ rather than time elapsed.
 
 ## Physical storage
 
+Workflow Statistics is the main navigation statistics page for signed-in users.
+The daily-statistics and event queries require a Cognito user identity and check
+the stored organizationId on every returned aggregate, run, and event against
+that user's organization groups. Sysadmins retain cross-organization access.
+Snapshots and exports use those same protected queries. The legacy Annotation
+Statistics page remains available at `/annotation-statistics`.
+
+Homographies (`homographies`) creates a run with its Queue ID before enqueueing
+pairs. Save and Skip persist the ImageNeighbour change, check API errors, record
+queue progress, submit a task event, then acknowledge the message. A failed save
+or acknowledgement leaves the user on the pair with an error. Queue progress is
+not repeated on an acknowledgement retry within the mounted task.
+
+Each resolved pair adds one completed unit; skipped units are a subset of that
+total. Saved pairs contribute `saved`, `controlPointPairs`, and
+`suggestedPointsRetained` (complete matching suggested-ID pairs). Skipped pairs
+carry time but zero saved/point metrics. The pair key is stable within its run:
+revisits count once, retaining the first recorded outcome.
+
+Waiting includes loading suggested points and both images' initial tiles, capped
+at 10 minutes. Once both images are ready, the interaction-based clock excludes
+gaps over 90 seconds and pauses during save/skip requests. Time is captured before
+the request. Back/forward navigation alone does not report completion. As with
+the other browser adapters, statistics are best-effort and old runs are not
+backfilled. This integration is for queued homography work, not standalone edits.
+
+Info Tags (`info-tags`) records one event per annotation after its tag links and
+infoTaggedBy update succeed. The event uses the annotation ID within the run,
+so retries and revisits count once and retain the first recorded outcome.
+Partial-image work is credited immediately; the last annotation follows the
+same path. Finishing the image only increments queue progress and acknowledges
+the message after all pending annotation commits finish.
+
+Each event contributes one annotationsProcessed, including unchanged tags.
+annotationsTagged and tagsAdded describe the first committed tag change.
+Removed tags and marker repositioning are not tracked. Reports use processed
+counts, including those on legacy image events, rather than mixing old image
+units with new annotation units. Missing historical counts remain unavailable.
+
+The interaction-based clock resets for each annotation and excludes gaps over
+90 seconds, preloading and initial loading. Time is captured before saving.
+The initial image wait is assigned only to the first submitted annotation in
+that image visit, capped at 10 minutes; retries reuse the same payload. No event
+is recorded for an unfinished annotation. Statistics remain best-effort and old
+queues without runs are not backfilled.
+
+Review (`qc-review`) also uses the authenticated `recordWorkflowTask` adapter.
+Its launch creates a run using the Queue ID before enqueueing annotations.
+After saving a review, the browser records one annotation with exactly one of
+`approved`, `relabelled`, or `falsePositive`, then acknowledges the message.
+Reviews already owned by another user are acknowledged without recording credit.
+The annotation ID is the idempotency key within the run: undo and redelivery do
+not add completions or replace the first event's outcome. Statistics writes are
+best-effort, as for ChainLinker; old queues without runs are not backfilled.
+
+Review timing starts when the task becomes visible, excluding buffer preloading.
+The first loaded tile batch reaching map idle ends initial waiting; elapsed time
+after that is active review time, captured before the save begins. Active time
+is capped at 15 minutes and waiting at 10 minutes. Review has no skip action.
+
 The Amplify data stack is close to its CloudFormation change-set resource cap.
 The following concepts are therefore standalone DynamoDB tables in the sibling
 `DetwebWorkflowStats` stack rather than Amplify Data models:

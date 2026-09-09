@@ -192,8 +192,6 @@ const router = createBrowserRouter([
         lazy: async () => ({ Component: (await import('./UserStats')).default }),
       },
       {
-        // The screen itself also checks the sysadmin group, so reaching this
-        // path directly shows a notice rather than an empty report.
         path: 'workflow-statistics',
         lazy: async () => ({ Component: (await import('./WorkflowStatistics')).default }),
       },

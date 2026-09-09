@@ -199,16 +199,16 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                   >
                     Jobs
                   </Nav.Link>
-                  <Nav.Link
-                    as={NavLink}
-                    eventKey={`annotation-statistics`}
-                    to={`annotation-statistics`}
-                    className='px-2'
-                  >
-                    Annotation Statistics
-                  </Nav.Link>
                 </>
               )}
+              <Nav.Link
+                as={NavLink}
+                eventKey='workflow-statistics'
+                to='workflow-statistics'
+                className='px-2'
+              >
+                Workflow Statistics
+              </Nav.Link>
               {isOrganizationAdmin && (
                 <>
                   <Nav.Link
@@ -246,14 +246,6 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
                     className='px-2'
                   >
                     Chain Shares
-                  </Nav.Link>
-                  <Nav.Link
-                    as={NavLink}
-                    eventKey={`workflow-statistics`}
-                    to={`workflow-statistics`}
-                    className='px-2'
-                  >
-                    Workflow Statistics
                   </Nav.Link>
                   {process.env.NODE_ENV === 'development' && (
                     <Nav.Link
@@ -314,6 +306,7 @@ export default function MainNavigation({ signOut }: { signOut: () => void }) {
         {(!belongsToOrganization &&
           location.pathname === '/SSRegisterOrganization') ||
           belongsToOrganization ||
+          location.pathname === '/workflow-statistics' ||
           location.pathname.startsWith('/jolly') ||
           location.pathname.startsWith('/shared-results') ||
           location.pathname.startsWith('/shared-chains') ||

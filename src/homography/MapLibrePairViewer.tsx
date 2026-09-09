@@ -7,6 +7,7 @@ import { client } from '../stores/appClient';
 import { useParams } from 'react-router-dom';
 
 type Props = {
+  onImagesReady?: () => void;
   images: [ImageType, ImageType];
   points: [Point[], Point[]];
   setPoints: [
@@ -156,6 +157,7 @@ function PointContextMenu({
 }
 
 export function MapLibrePairViewer({
+  onImagesReady,
   images,
   points,
   setPoints,
@@ -164,6 +166,11 @@ export function MapLibrePairViewer({
   onAction,
   annotationSetId: annotationSetIdProp,
 }: Props) {
+  const readyImagesRef = useRef(new Set<number>());
+  const markImageReady = useCallback((index: number) => {
+    readyImagesRef.current.add(index);
+    if (readyImagesRef.current.size === 2) onImagesReady?.();
+  }, [onImagesReady]);
   const { surveyId, annotationSetId: annotationSetIdParam } = useParams();
   const annotationSetId = annotationSetIdProp || annotationSetIdParam;
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -424,6 +431,7 @@ export function MapLibrePairViewer({
           style={{ position: 'relative', height: '100%', minHeight: 400 }}
         >
           <MapLibreImageViewer
+            onInitialTilesReady={() => markImageReady(i)}
             image={image}
             sourceKey={sourceKeys[i]}
             points={points[i]}

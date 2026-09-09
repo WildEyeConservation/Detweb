@@ -33,7 +33,7 @@ export interface WorkflowSection {
   headings: TableHeading[];
   /** One row per user; cells are already formatted for display. */
   rows: { id: string; userId: string; cells: (string | number)[] }[];
-  footer: (string | number)[];
+  footer: (string | number)[] | null;
 }
 
 export function formatDuration(ms: number): string {
@@ -131,6 +131,7 @@ export const COMMON_COLUMN_DESCRIPTIONS = {
 };
 
 interface Totals {
+  processedCountComplete: boolean;
   completedUnits: number;
   skippedUnits: number;
   activeTimeMs: number;
@@ -140,6 +141,7 @@ interface Totals {
 
 function emptyTotals(): Totals {
   return {
+    processedCountComplete: true,
     completedUnits: 0,
     skippedUnits: 0,
     activeTimeMs: 0,
@@ -149,6 +151,9 @@ function emptyTotals(): Totals {
 }
 
 function accumulate(totals: Totals, contribution: WorkflowContribution) {
+  if (contribution.completedUnits > 0 && contribution.metrics.annotationsProcessed === undefined) {
+    totals.processedCountComplete = false;
+  }
   totals.completedUnits += contribution.completedUnits;
   totals.skippedUnits += contribution.skippedUnits;
   totals.activeTimeMs += contribution.activeTimeMs;
@@ -182,6 +187,7 @@ export function buildWorkflowSections(
         : undefined;
       const metricKeys = definition
         ? definition.metricKeys.filter((key) =>
+            key !== (workflowType === 'info-tags' ? 'annotationsProcessed' : '') &&
             items.some((item) => item.metrics[key] !== undefined)
           )
         : [...new Set(items.flatMap((item) => Object.keys(item.metrics)))].sort();
@@ -189,6 +195,8 @@ export function buildWorkflowSections(
       const unitPlural = definition?.unit.plural ?? 'units';
       const unitSingular = definition?.unit.singular ?? 'unit';
       const showSearchAverage = workflowType === 'species-labelling';
+      const showSkipped = workflowType === 'homographies';
+      const isInfoTags = workflowType === 'info-tags';
 
       const byUser = new Map<string, Totals>();
       const overall = emptyTotals();
@@ -200,13 +208,23 @@ export function buildWorkflowSections(
       });
 
       const cellsFor = (totals: Totals): (string | number)[] => [
-        totals.completedUnits,
-        totals.skippedUnits,
+        isInfoTags
+          ? totals.processedCountComplete ? totals.metrics.annotationsProcessed ?? 0 : '—'
+          : totals.completedUnits,
+        ...(showSkipped ? [totals.skippedUnits] : []),
         formatDuration(totals.activeTimeMs),
-        perUnitAverage(totals.activeTimeMs, totals.completedUnits),
+        isInfoTags
+          ? totals.processedCountComplete
+            ? perUnitAverage(totals.activeTimeMs, totals.metrics.annotationsProcessed ?? 0)
+            : '—'
+          : perUnitAverage(totals.activeTimeMs, totals.completedUnits),
         ...(showSearchAverage ? [searchAverage(totals.metrics)] : []),
         formatDuration(totals.waitingTimeMs),
-        ...metricKeys.map((key) => formatMetric(key, totals.metrics[key] ?? 0)),
+        ...metricKeys.map((key) =>
+          key === 'annotationsProcessed' && !totals.processedCountComplete
+            ? '—'
+            : formatMetric(key, totals.metrics[key] ?? 0)
+        ),
       ];
 
       const rows = [...byUser.entries()]
@@ -227,18 +245,22 @@ export function buildWorkflowSections(
             description: COMMON_COLUMN_DESCRIPTIONS.username,
           },
           {
-            content: `${unitPlural} completed`,
+            content: isInfoTags ? 'Annotations processed' : `${unitPlural} completed`,
             sort: true,
             description: COMMON_COLUMN_DESCRIPTIONS.completed(unitPlural),
           },
-          { content: 'Skipped', description: COMMON_COLUMN_DESCRIPTIONS.skipped },
+          ...(showSkipped
+            ? [{ content: 'Skipped', description: COMMON_COLUMN_DESCRIPTIONS.skipped }]
+            : []),
           {
             content: 'Time spent',
             description: COMMON_COLUMN_DESCRIPTIONS.timeSpent,
           },
           {
-            content: `Seconds per ${unitSingular}`,
-            description: COMMON_COLUMN_DESCRIPTIONS.average(unitPlural),
+            content: isInfoTags ? 'Seconds per annotation processed' : `Seconds per ${unitSingular}`,
+            description: isInfoTags
+              ? 'Active time divided by annotations processed, including unchanged annotations. Unavailable when the selection includes older completions without processed counts.'
+              : COMMON_COLUMN_DESCRIPTIONS.average(unitPlural),
           },
           ...(showSearchAverage
             ? [
@@ -258,7 +280,7 @@ export function buildWorkflowSections(
           })),
         ],
         rows,
-        footer: ['All users', ...cellsFor(overall)],
+        footer: rows.length > 1 ? ['All users', ...cellsFor(overall)] : null,
       };
     });
 }
@@ -268,7 +290,10 @@ export function sectionToCsvRows(
   section: WorkflowSection
 ): Record<string, string | number>[] {
   const keys = section.headings.map((heading) => heading.content);
-  return [...section.rows.map((row) => row.cells), section.footer].map(
+  return [
+    ...section.rows.map((row) => row.cells),
+    ...(section.footer ? [section.footer] : []),
+  ].map(
     (cells) => Object.fromEntries(keys.map((key, index) => [key, cells[index]]))
   );
 }

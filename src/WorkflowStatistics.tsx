@@ -9,11 +9,11 @@ import {
 } from 'react';
 import { Alert, Button, Card, Col, Row, Spinner } from 'react-bootstrap';
 import Select from 'react-select';
+import { RefreshCw } from 'lucide-react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import exportFromJSON from 'export-from-json';
 import MyTable from './Table';
-import { useSession } from './session';
 import { client } from './stores/appClient';
 import { useUsers } from './apiInterface';
 import { fetchAllPaginatedResults } from './utils';
@@ -38,11 +38,11 @@ import {
  * per-workflow metrics for every instrumented workflow, read from the durable
  * Workflow Run / Daily Stats tables rather than from Observations.
  *
- * Sysadmin-only for now. The columns come from the shared workflow registry,
+ * Organization members can read their organization's statistics. Columns come from the shared workflow registry,
  * so newly instrumented workflows appear here without changes.
  *
  * Layout: inputs (survey, annotation sets, date range) in a filter bar;
- * results below it, with the run filter beside them because it narrows what
+ * results below it, with the workflow filter beside them because it narrows what
  * is shown rather than what is fetched; exports in the card footer.
  */
 
@@ -126,14 +126,15 @@ interface ProjectOption {
 
 type SelectOption = { label: string; value: string };
 
+const AUTO_REFRESH_S = 30;
+const MANUAL_REFRESH_COOLDOWN_MS = 5_000;
+
 function startOfLocalDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
 export default function WorkflowStatistics() {
-  const { cognitoGroups } = useSession();
   const { users: allUsers } = useUsers();
-  const isSysadmin = cognitoGroups.includes('sysadmin');
 
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [organizationNames, setOrganizationNames] = useState<
@@ -146,7 +147,7 @@ export default function WorkflowStatistics() {
   // Until the user touches the dates, the range follows the survey: from its
   // earliest run launch to today, so an older survey never opens empty.
   const [dateRangeIsAuto, setDateRangeIsAuto] = useState(true);
-  const [selectedRun, setSelectedRun] = useState<SelectOption | null>(null);
+  const [selectedWorkflow, setSelectedWorkflow] = useState<SelectOption | null>(null);
 
   const [buckets, setBuckets] = useState<StatsBucket[]>([]);
   const [runs, setRuns] = useState<RunSummary[]>([]);
@@ -160,11 +161,15 @@ export default function WorkflowStatistics() {
   const snapshotRunIds = dialogIds(dialog.get('runs'));
   const snapshotStart = dialogDate(dialog.get('start'));
   const snapshotEnd = dialogDate(dialog.get('end'));
+  const [refreshCooldown, setRefreshCooldown] = useState(false);
+  const [secondsUntilSync, setSecondsUntilSync] = useState(AUTO_REFRESH_S);
+  const [pageVisible, setPageVisible] = useState(
+    () => document.visibilityState === 'visible'
+  );
   // Selections can change faster than queries return; only the latest wins.
   const requestSequence = useRef(0);
 
   useEffect(() => {
-    if (!isSysadmin) return;
     let cancelled = false;
 
     async function loadProjects() {
@@ -214,7 +219,7 @@ export default function WorkflowStatistics() {
     return () => {
       cancelled = true;
     };
-  }, [isSysadmin]);
+  }, []);
 
   const projectOptions = useMemo(
     () =>
@@ -249,19 +254,13 @@ export default function WorkflowStatistics() {
   // Buckets are small (one per user, day and run), so the whole history for
   // the selected sets is fetched once and the date range is applied here.
   // Changing dates is then instant and needs no round trip.
-  useEffect(() => {
-    if (!project || selectedSets.length === 0) {
-      setBuckets([]);
-      setRuns([]);
-      setHasLoaded(false);
-      return;
-    }
-    const sequence = ++requestSequence.current;
-    const projectId = project.value;
-    const annotationSetIds = selectedSets.map((set) => set.value);
-
-    async function load() {
-      setLoading(true);
+  const loadStats = useCallback(
+    async (background: boolean) => {
+      if (!project || selectedSets.length === 0) return;
+      const sequence = ++requestSequence.current;
+      const projectId = project.value;
+      const annotationSetIds = selectedSets.map((set) => set.value);
+      if (!background) setLoading(true);
       setError(null);
       try {
         const statsQuery = resolveStatsQuery(client);
@@ -287,7 +286,7 @@ export default function WorkflowStatistics() {
         setRuns(parsed.runs ?? []);
         setTruncated(parsed.truncated === true);
         setHasLoaded(true);
-        setSelectedRun(null);
+        if (!background) setSelectedWorkflow(null);
       } catch (queryError) {
         if (sequence !== requestSequence.current) return;
         setError(
@@ -295,14 +294,73 @@ export default function WorkflowStatistics() {
             ? queryError.message
             : 'Failed to load workflow statistics'
         );
-        setBuckets([]);
-        setRuns([]);
+        if (!background) {
+          setBuckets([]);
+          setRuns([]);
+        }
       } finally {
-        if (sequence === requestSequence.current) setLoading(false);
+        if (sequence === requestSequence.current && !background) {
+          setLoading(false);
+        }
       }
+    },
+    [client, project, selectedSets]
+  );
+
+  useEffect(() => {
+    if (!project || selectedSets.length === 0) {
+      requestSequence.current += 1;
+      setBuckets([]);
+      setRuns([]);
+      setHasLoaded(false);
+      return;
     }
-    load();
-  }, [project, selectedSets]);
+    setSecondsUntilSync(AUTO_REFRESH_S);
+    loadStats(false);
+  }, [project, selectedSets, loadStats]);
+
+  // Auto-sync countdown; paused while the tab is hidden.
+  useEffect(() => {
+    function onVisibilityChange() {
+      const visible = document.visibilityState === 'visible';
+      setPageVisible(visible);
+      if (visible) setSecondsUntilSync(0);
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () =>
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoaded || !pageVisible) return;
+    const timer = setInterval(
+      () => setSecondsUntilSync((seconds) => Math.max(0, seconds - 1)),
+      1000
+    );
+    return () => clearInterval(timer);
+  }, [hasLoaded, pageVisible]);
+
+  useEffect(() => {
+    if (!hasLoaded || !pageVisible || secondsUntilSync > 0) return;
+    setSecondsUntilSync(AUTO_REFRESH_S);
+    loadStats(true);
+  }, [hasLoaded, pageVisible, secondsUntilSync, loadStats]);
+
+  useEffect(() => {
+    if (!refreshCooldown) return;
+    const timeout = setTimeout(
+      () => setRefreshCooldown(false),
+      MANUAL_REFRESH_COOLDOWN_MS
+    );
+    return () => clearTimeout(timeout);
+  }, [refreshCooldown]);
+
+  function refreshNow() {
+    if (refreshCooldown) return;
+    setRefreshCooldown(true);
+    setSecondsUntilSync(AUTO_REFRESH_S);
+    loadStats(true);
+  }
 
   useEffect(() => {
     if (!dateRangeIsAuto || !hasLoaded) return;
@@ -321,7 +379,7 @@ export default function WorkflowStatistics() {
 
   function selectProject(option: SelectOption | null) {
     setProject(option);
-    setSelectedRun(null);
+    setSelectedWorkflow(null);
     setDateRangeIsAuto(true);
     const sets =
       projects
@@ -372,22 +430,37 @@ export default function WorkflowStatistics() {
     [runOptions]
   );
 
+  const workflowOptions = useMemo(
+    () => [...new Set([...runs, ...buckets].map((item) => item.workflowType))]
+      .map((value) => ({
+        value,
+        label: WORKFLOW_REGISTRY[value as WorkflowType]?.label ?? value,
+      }))
+      .sort((left, right) => left.label.localeCompare(right.label)),
+    [runs, buckets]
+  );
+
   const visibleBuckets = useMemo(
     () =>
-      selectedRun
+      selectedWorkflow
         ? bucketsInRange.filter(
-            (bucket) => bucket.workflowRunId === selectedRun.value
+            (bucket) => bucket.workflowType === selectedWorkflow.value
           )
         : bucketsInRange,
-    [bucketsInRange, selectedRun]
+    [bucketsInRange, selectedWorkflow]
   );
 
   const visibleRunIds = useMemo(
     () =>
-      selectedRun
-        ? [selectedRun.value]
-        : runOptions.map((option) => option.value),
-    [selectedRun, runOptions]
+      [...new Set([
+        ...runs
+          .filter((run) => !selectedWorkflow || run.workflowType === selectedWorkflow.value)
+          .map((run) => run.runId),
+        ...buckets
+          .filter((bucket) => !selectedWorkflow || bucket.workflowType === selectedWorkflow.value)
+          .map((bucket) => bucket.workflowRunId),
+      ])],
+    [selectedWorkflow, runs, buckets]
   );
 
   const workflowSections = useMemo(
@@ -401,11 +474,11 @@ export default function WorkflowStatistics() {
       completionsByRun.set(
         bucket.workflowRunId,
         (completionsByRun.get(bucket.workflowRunId) ?? 0) +
-          bucket.completedUnits
+          (bucket.workflowType === 'info-tags' ? bucket.metrics.annotationsProcessed ?? 0 : bucket.completedUnits)
       );
     });
     return runs
-      .filter((run) => !selectedRun || run.runId === selectedRun.value)
+      .filter((run) => !selectedWorkflow || run.workflowType === selectedWorkflow.value)
       .sort((left, right) => right.launchedAt.localeCompare(left.launchedAt))
       .map((run) => ({
         id: run.runId,
@@ -419,7 +492,7 @@ export default function WorkflowStatistics() {
           completionsByRun.get(run.runId) ?? 0,
         ],
       }));
-  }, [runs, bucketsInRange, selectedRun]);
+  }, [runs, bucketsInRange, selectedWorkflow]);
 
   const exportBaseName = `${project?.label ?? 'survey'}_${startString ?? 'all'}_${
     endString ?? 'all'
@@ -438,7 +511,8 @@ export default function WorkflowStatistics() {
       annotationSetId: bucket.annotationSetId,
       run: runName(bucket.workflowRunId),
       workflowRunId: bucket.workflowRunId,
-      completedUnits: bucket.completedUnits,
+      completedUnits: bucket.workflowType === 'info-tags'
+        ? bucket.metrics.annotationsProcessed ?? '' : bucket.completedUnits,
       skippedUnits: bucket.skippedUnits,
       activeTimeMs: bucket.activeTimeMs,
       waitingTimeMs: bucket.waitingTimeMs,
@@ -489,14 +563,6 @@ export default function WorkflowStatistics() {
     } finally {
       setExportProgress(null);
     }
-  }
-
-  if (!isSysadmin) {
-    return (
-      <div className='p-4 text-light'>
-        Workflow statistics are restricted to sysadmins.
-      </div>
-    );
   }
 
   const hasResults = workflowSections.length > 0;
@@ -621,21 +687,42 @@ export default function WorkflowStatistics() {
           ) : (
             <>
               <div className='d-flex justify-content-between align-items-center flex-wrap gap-2'>
-                <h5 className='mb-0'>Results</h5>
-                {runOptions.length > 1 && (
+                <div className='d-flex align-items-center gap-2'>
+                  <h5 className='mb-0'>Results</h5>
+                  <small className='text-muted ms-2'>
+                    Syncs in {secondsUntilSync} s
+                  </small>
+                  <Button
+                    variant='link'
+                    size='sm'
+                    style={{
+                      padding: 0,
+                      color: 'var(--ss-text-muted)',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                    onClick={refreshNow}
+                    disabled={refreshCooldown}
+                    title='Refresh now'
+                    aria-label='Refresh now'
+                  >
+                    <RefreshCw size={14} />
+                  </Button>
+                </div>
+                {workflowOptions.length > 0 && (
                   <div className='d-flex align-items-center gap-2'>
-                    <label htmlFor='workflow-run' className='mb-0'>
-                      Run:
+                    <label htmlFor='workflow-type' className='mb-0'>
+                      Workflow:
                     </label>
                     <div style={{ minWidth: '320px' }}>
                       <Select
-                        inputId='workflow-run'
+                        inputId='workflow-type'
                         className='text-black'
-                        value={selectedRun}
-                        options={runOptions}
-                        onChange={(option) => setSelectedRun(option)}
+                        value={selectedWorkflow}
+                        options={workflowOptions}
+                        onChange={(option) => setSelectedWorkflow(option)}
                         isClearable
-                        placeholder='All runs'
+                        placeholder='All workflows'
                       />
                     </div>
                   </div>
@@ -653,12 +740,16 @@ export default function WorkflowStatistics() {
                           id: row.id,
                           rowData: row.cells,
                         })),
-                        {
-                          id: `${section.workflowType}:__total`,
-                          rowData: section.footer.map((cell, index) => (
-                            <strong key={index}>{cell}</strong>
-                          )),
-                        },
+                        ...(section.footer
+                          ? [
+                              {
+                                id: `${section.workflowType}:__total`,
+                                rowData: section.footer.map((cell, index) => (
+                                  <strong key={index}>{cell}</strong>
+                                )),
+                              },
+                            ]
+                          : []),
                       ]}
                     />
                   </div>

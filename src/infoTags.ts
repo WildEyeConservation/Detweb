@@ -279,6 +279,7 @@ export type InfoTagCommit = {
   after: Iterable<string>;
   position: { x: number; y: number };
   taggedBy: string;
+  recordStatistics?: () => Promise<void>;
 };
 
 // The links are written first and `infoTaggedBy` only once they all succeed:
@@ -314,15 +315,15 @@ export async function commitInfoTagsForAnnotation(
     ),
   ]);
 
-  assertNoGraphqlErrors(
-    await client.models.Annotation.update({
+  const saved = await client.models.Annotation.update({
       id: commit.annotationId,
       infoTaggedBy: commit.taggedBy,
       x: commit.position.x,
       y: commit.position.y,
-    }),
-    'Failed to record informational tagging'
-  );
+    });
+  assertNoGraphqlErrors(saved, 'Failed to record informational tagging');
+  if (!saved.data) throw new Error('Failed to record informational tagging: no annotation returned');
+  await commit.recordStatistics?.();
 }
 
 export type InfoTagImageProgress = { counted: boolean; acknowledged: boolean };

@@ -3,13 +3,17 @@ import { client } from '../stores/appClient';
 import { HomographyWorkbench } from './HomographyWorkbench';
 import type { Matrix } from 'mathjs';
 import { inv } from 'mathjs';
+import { Alert } from 'react-bootstrap';
+import { recordWorkflowTask } from '../recordWorkflowTask';
+import { useActiveTimeTracker } from '../useActiveTimeTracker';
+import { SUGGESTED_POINT_ID_PREFIX, countSuggestedPointsKept, homographyWorkflowTask, finalizeHomographyTask } from './homographyWorkflowStats';
 import {
   type Point,
   MIN_HOMOGRAPHY_POINTS,
   solveHomography,
 } from './ManualHomographyEditor';
 
-export const SUGGESTED_POINT_ID_PREFIX = 'suggested-';
+export { SUGGESTED_POINT_ID_PREFIX, countSuggestedPointsKept } from './homographyWorkflowStats';
 
 export function flatToPoints(flat: (number | null | undefined)[] | null | undefined): Point[] {
   if (!flat || flat.length < 2) return [];
@@ -21,23 +25,6 @@ export function flatToPoints(flat: (number | null | undefined)[] | null | undefi
     out.push({ id: `${SUGGESTED_POINT_ID_PREFIX}${i / 2}`, x, y });
   }
   return out;
-}
-
-export function countSuggestedPointsKept(points: { p1: Point[]; p2: Point[] }): number {
-  const n = Math.min(points.p1.length, points.p2.length);
-  let kept = 0;
-  for (let i = 0; i < n; i++) {
-    const a = points.p1[i];
-    const b = points.p2[i];
-    if (
-      a.id.startsWith(SUGGESTED_POINT_ID_PREFIX) &&
-      b.id.startsWith(SUGGESTED_POINT_ID_PREFIX) &&
-      a.id === b.id
-    ) {
-      kept += 1;
-    }
-  }
-  return kept;
 }
 
 export type HomographyImageMeta = {
@@ -138,6 +125,13 @@ export function HomographyWorkbenchWorker({
 }: Props) {
   const [isSaving, setIsSaving] = useState(false);
   const [isSkipping, setIsSkipping] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const shownAtRef = useRef(Date.now());
+  const [imagesReadyAt, setImagesReadyAt] = useState<number | null>(null);
+  const progressRef = useRef({ counted: isSaved });
+  const activeTime = useActiveTimeTracker({ enabled: imagesReadyAt !== null && !isSaving && !isSkipping && !isSaved });
+  const handleImagesReady = useCallback(() => setImagesReadyAt((previous) => previous ?? Date.now()), []);
+  const decisionInFlightRef = useRef(false);
   const currentPointsRef = useRef<{ p1: Point[]; p2: Point[] }>({ p1: [], p2: [] });
   // Points suggested by the lightglue container when its automatic attempt failed.
   // Used as the initial state when the user hasn't already edited this pair in-session.
@@ -196,6 +190,14 @@ export function HomographyWorkbenchWorker({
 
   const handleSave = useCallback(
     async (H: Matrix) => {
+      if (decisionInFlightRef.current) return false;
+      decisionInFlightRef.current = true;
+      const task = homographyWorkflowTask({
+        runId: queueId, pairKey: pair.pairKey, skipped: false,
+        points: currentPointsRef.current, activeTimeMs: activeTime.read(),
+        waitingTimeMs: Math.min(600_000, Math.max(0, (imagesReadyAt ?? Date.now()) - shownAtRef.current)),
+      });
+      setSaveError(null);
       setIsSaving(true);
       try {
         const flat: number[] = (H.toArray() as number[][]).flat();
@@ -211,28 +213,36 @@ export function HomographyWorkbenchWorker({
           ? countSuggestedPointsKept(currentPointsRef.current)
           : undefined;
 
-        await (client.models.ImageNeighbour.update as any)({
-          image1Id: dir.image1Id,
-          image2Id: dir.image2Id,
-          homography: dir.isForward ? flat : flatInverse,
-          homographySource: 'manual',
-          ...(kept !== undefined ? { suggestedPointsKept: kept } : {}),
+        await finalizeHomographyTask({
+          persist: () => client.models.ImageNeighbour.update({
+            image1Id: dir.image1Id,
+            image2Id: dir.image2Id,
+            homography: dir.isForward ? flat : flatInverse,
+            homographySource: 'manual',
+            ...(kept !== undefined ? { suggestedPointsKept: kept } : {}),
+          }),
+          progress: progressRef.current,
+          incrementCount: () => client.mutations.incrementQueueCount({ id: queueId }),
+          recordStatistics: () => recordWorkflowTask(client, task),
+          acknowledge: pair.ack,
         });
-
-        await (client as any).mutations.incrementQueueCount({ id: queueId });
-        await pair.ack();
         onSavePoints(pair.pairKey, currentPointsRef.current);
         onComplete(pair.pairKey);
+        return true;
       } catch (error) {
         console.error('Failed to save homography', error);
+        setSaveError(error instanceof Error ? error.message : 'Failed to save homography');
+        return false;
       } finally {
+        decisionInFlightRef.current = false;
         setIsSaving(false);
       }
     },
-    [pair, queueId, onComplete, onSavePoints]
+    [activeTime, imagesReadyAt, pair, queueId, onComplete, onSavePoints]
   );
 
   const handleSkip = useCallback(async () => {
+    if (decisionInFlightRef.current) return;
     if (
       !window.confirm(
         "Are you sure you want to skip this pair? The images will remain neighbours but won't require registration."
@@ -240,6 +250,13 @@ export function HomographyWorkbenchWorker({
     )
       return;
 
+    decisionInFlightRef.current = true;
+    const task = homographyWorkflowTask({
+      runId: queueId, pairKey: pair.pairKey, skipped: true,
+      points: currentPointsRef.current, activeTimeMs: activeTime.read(),
+      waitingTimeMs: Math.min(600_000, Math.max(0, (imagesReadyAt ?? Date.now()) - shownAtRef.current)),
+    });
+    setSaveError(null);
     setIsSkipping(true);
     try {
       const dir = await resolveNeighbourDirection(
@@ -248,22 +265,27 @@ export function HomographyWorkbenchWorker({
         pair.secondaryImage.id
       );
 
-      await (client.models.ImageNeighbour.update as any)({
-        image1Id: dir.image1Id,
-        image2Id: dir.image2Id,
-        skipped: true,
+      await finalizeHomographyTask({
+        persist: () => client.models.ImageNeighbour.update({
+          image1Id: dir.image1Id,
+          image2Id: dir.image2Id,
+          skipped: true,
+        }),
+        progress: progressRef.current,
+        incrementCount: () => client.mutations.incrementQueueCount({ id: queueId }),
+        recordStatistics: () => recordWorkflowTask(client, task),
+        acknowledge: pair.ack,
       });
-
-      await (client as any).mutations.incrementQueueCount({ id: queueId });
-      await pair.ack();
       onSavePoints(pair.pairKey, currentPointsRef.current);
       onComplete(pair.pairKey);
     } catch (error) {
       console.error('Failed to skip pair', error);
+      setSaveError(error instanceof Error ? error.message : 'Failed to skip pair');
     } finally {
+      decisionInFlightRef.current = false;
       setIsSkipping(false);
     }
-  }, [pair, queueId, onComplete, onSavePoints]);
+  }, [activeTime, imagesReadyAt, pair, queueId, onComplete, onSavePoints]);
 
   const handleSaveAndExit = useCallback(async () => {
     if (!onExit) return;
@@ -278,7 +300,7 @@ export function HomographyWorkbenchWorker({
       if (shouldSave) {
         const H = solveHomography(p1, p2);
         if (H) {
-          await handleSave(H);
+          if (!(await handleSave(H))) return;
         }
       }
     }
@@ -304,10 +326,13 @@ export function HomographyWorkbenchWorker({
   }
 
   return (
+    <>
+    {saveError && <Alert variant='danger'>{saveError}. Please retry; this task has not advanced.</Alert>}
     <HomographyWorkbench
       images={[pair.primaryImage as any, pair.secondaryImage as any]}
       onSave={handleSave}
       onSkip={handleSkip}
+      onImagesReady={handleImagesReady}
       isSaving={isSaving}
       isSkipping={isSkipping}
       annotationSetId={pair.annotationSetId}
@@ -349,5 +374,6 @@ export function HomographyWorkbenchWorker({
         ) : undefined
       }
     />
+    </>
   );
 }
